@@ -41,9 +41,14 @@
                         
                         <div id="examSection" class="hidden mb-4 text-start">
                             <label class="form-label fw-bold text-primary">Select Test Questionnaire (PDF)</label>
-                            <input class="form-control" type="file" name="examCreated">
+                            <input class="form-control mb-3" type="file" name="examCreated" accept=".pdf" required>
+                            
+                            <label class="form-label fw-bold text-warning">Select Answer Key (PDF) - Optional</label>
+                            <input class="form-control" type="file" name="answerKeyPdf" accept=".pdf">
                             <div class="form-text">
-                                System will randomize questions and choices, then separate the Answer Key.
+                                <strong>Two Options:</strong><br>
+                                1. <strong>Single PDF</strong>: Questions with "Answer: ..." lines included<br>
+                                2. <strong>Two PDFs</strong>: Upload questions PDF + separate answer key PDF
                             </div>
                         </div>
 

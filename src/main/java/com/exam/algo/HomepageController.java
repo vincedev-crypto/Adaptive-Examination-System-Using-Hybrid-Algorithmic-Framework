@@ -90,17 +90,88 @@ public class HomepageController {
 
     @PostMapping("/process-exams")
     public String processExams(@RequestParam(value = "examCreated", required = false) MultipartFile examCreated,
+                               @RequestParam(value = "answerKeyPdf", required = false) MultipartFile answerKeyPdf,
                                HttpSession session, Model model) throws Exception {
         if (examCreated != null && !examCreated.isEmpty()) {
-            List<String> randomizedLines = processFisherYates(examCreated, session);
+            Map<Integer, String> answerKey = new HashMap<>();
+            
+            // Check if separate answer key PDF is provided
+            if (answerKeyPdf != null && !answerKeyPdf.isEmpty()) {
+                // Parse separate answer key PDF
+                answerKey = parseAnswerKeyPdf(answerKeyPdf);
+                model.addAttribute("message", "Exam and Answer Key processed successfully!");
+            }
+            
+            // Process exam (with or without embedded answers)
+            List<String> randomizedLines = processFisherYates(examCreated, session, answerKey);
             session.setAttribute("shuffledExam", randomizedLines);
-            model.addAttribute("message", "Exam Randomized. Ready for distribution.");
             model.addAttribute("type", "exam");
         }
         return "results";
     }
+    
+    /**
+     * Parse a separate answer key PDF
+     * Expected format:
+     * 1. Mars
+     * 2. Leonardo da Vinci
+     * 3. Gold
+     * OR
+     * Question 1: Mars
+     * Question 2: Leonardo da Vinci
+     */
+    private Map<Integer, String> parseAnswerKeyPdf(MultipartFile file) throws IOException {
+        Map<Integer, String> answerKey = new HashMap<>();
+        List<String> lines = new ArrayList<>();
+        
+        try (PDDocument document = Loader.loadPDF(file.getBytes())) {
+            PDFTextStripper stripper = new PDFTextStripper();
+            lines = Arrays.stream(stripper.getText(document).split("\\r?\\n"))
+                         .filter(line -> !line.trim().isEmpty())
+                         .collect(Collectors.toList());
+        }
+        
+        int questionNumber = 1;
+        for (String line : lines) {
+            String trimmed = line.trim();
+            
+            // Skip headers
+            if (trimmed.toLowerCase().contains("answer key") || 
+                trimmed.toLowerCase().contains("answer sheet") ||
+                trimmed.equalsIgnoreCase("answers")) {
+                continue;
+            }
+            
+            // Format 1: "1. Mars" or "1) Mars"
+            if (trimmed.matches("^\\d+[\\.\\)]\\s+.+")) {
+                String[] parts = trimmed.split("[\\.\\)]", 2);
+                if (parts.length == 2) {
+                    int qNum = Integer.parseInt(parts[0].trim());
+                    String answer = parts[1].trim();
+                    answerKey.put(qNum, answer);
+                }
+            }
+            // Format 2: "Question 1: Mars" or "Q1: Mars"
+            else if (trimmed.matches("(?i)^(question|q)\\s*\\d+\\s*:\\s*.+")) {
+                String[] parts = trimmed.split(":", 2);
+                if (parts.length == 2) {
+                    String numPart = parts[0].replaceAll("[^0-9]", "");
+                    int qNum = Integer.parseInt(numPart);
+                    String answer = parts[1].trim();
+                    answerKey.put(qNum, answer);
+                }
+            }
+            // Format 3: Just answers listed line by line (1st line = Q1, 2nd = Q2, etc.)
+            else if (!trimmed.matches("^\\d+$")) { // Not just a number
+                answerKey.put(questionNumber++, trimmed);
+            }
+        }
+        
+        return answerKey;
+    }
 
-    private List<String> processFisherYates(MultipartFile file, HttpSession session) throws IOException {
+    private List<String> processFisherYates(MultipartFile file, HttpSession session, 
+                                           Map<Integer, String> externalAnswerKey) throws IOException {
         List<String> rawLines = new ArrayList<>();
         try (PDDocument document = Loader.loadPDF(file.getBytes())) {
             PDFTextStripper stripper = new PDFTextStripper();
