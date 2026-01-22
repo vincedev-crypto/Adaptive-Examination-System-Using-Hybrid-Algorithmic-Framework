@@ -1,4 +1,4 @@
-package com.exam.algo;
+package com.exam.algo.Model;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
