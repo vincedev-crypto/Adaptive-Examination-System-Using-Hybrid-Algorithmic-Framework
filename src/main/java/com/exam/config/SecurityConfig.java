@@ -28,14 +28,14 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/login**", "/register**", "/css/**", "/js/**", "/images/**").permitAll()
+                .requestMatchers("/", "/login**", "/register**", "/css/**", "/js/**", "/images/**", "/error").permitAll()
                 .requestMatchers("/teacher/**").hasAuthority("TEACHER")
                 .requestMatchers("/student/**").hasAuthority("STUDENT")
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form
                 .loginPage("/login")
-                .loginProcessingUrl("/login")
+                .loginProcessingUrl("/perform-login")
                 .usernameParameter("username")
                 .passwordParameter("password")
                 .defaultSuccessUrl("/dashboard", true)
