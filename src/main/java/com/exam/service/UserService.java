@@ -22,9 +22,9 @@ public class UserService {
     @Autowired
     private EmailService emailService;
     
-    // School email domain pattern (customize for your school)
+    // School email domain pattern - accepts any .edu or .edu.xx domain
     private static final Pattern SCHOOL_EMAIL_PATTERN = 
-        Pattern.compile("^[A-Za-z0-9._%+-]+@(student\\.school\\.edu|school\\.edu)$");
+        Pattern.compile("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.edu(\\.[a-z]{2})?$", Pattern.CASE_INSENSITIVE);
     
     /**
      * Register a new student (must use school email)
@@ -32,7 +32,7 @@ public class UserService {
     public String registerStudent(String email, String password, String fullName) {
         // Validate school email
         if (!isValidSchoolEmail(email)) {
-            return "ERROR: Please use your school email address (@student.school.edu)";
+            return "ERROR: Students must use a school email address (@student.school.edu)";
         }
         
         // Check if email already exists
