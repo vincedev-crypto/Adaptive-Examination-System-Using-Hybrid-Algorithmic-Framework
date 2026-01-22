@@ -80,52 +80,108 @@ public class HomepageController {
         for (String line : rawLines) {
             String trimmed = line.trim();
 
-            // Strict Noise Filter: Ignore page numbers, standalone quiz titles, and empty headers
+            // Skip headers, page numbers, and metadata
             if (trimmed.toLowerCase().contains("page") || 
-                trimmed.equalsIgnoreCase("General Knowledge Quiz") ||
-                trimmed.equalsIgnoreCase("NAME:") || 
-                trimmed.equalsIgnoreCase("DATE:")) continue;
+                trimmed.toLowerCase().contains("examination paper") ||
+                trimmed.toUpperCase().startsWith("NAME:") || 
+                trimmed.toUpperCase().startsWith("DATE:") ||
+                trimmed.isEmpty()) {
+                continue;
+            }
 
-            // Strict Question Detection: Matches "1. 1.", "2. 6.", etc.
-            if (trimmed.matches("^\\d+\\.\\s*\\d+\\..*")) {
+            // Detect new question: starts with number followed by period (e.g., "1.", "2.", "10.")
+            if (trimmed.matches("^\\d+\\.\\s+.*")) {
+                // Save previous question block if exists
                 if (currentBlock.length() > 0) {
-                    String processed = extractAnswerAndShuffle(currentBlock.toString(), rand, answerKey, ++qID);
-                    if (!processed.isEmpty()) questionBlocks.add(processed);
+                    String processed = extractAnswerAndShuffle(currentBlock.toString(), rand, answerKey, qID);
+                    if (!processed.isEmpty()) {
+                        questionBlocks.add(processed);
+                        qID++;
+                    }
                 }
-                // Strip the double numbering (e.g. "1. 1. ")
-                currentBlock = new StringBuilder(trimmed.replaceFirst("^(\\d+\\.\\s*\\d+\\.\\s*)", ""));
+                // Start new question block (remove the number prefix like "1. ")
+                currentBlock = new StringBuilder(trimmed.replaceFirst("^\\d+\\.\\s+", ""));
             } else {
-                currentBlock.append("\n").append(trimmed);
+                // Add to current question block
+                if (currentBlock.length() > 0) {
+                    currentBlock.append("\n").append(trimmed);
+                }
             }
         }
         
+        // Don't forget the last question
         if (currentBlock.length() > 0) {
-            String processed = extractAnswerAndShuffle(currentBlock.toString(), rand, answerKey, ++qID);
-            if (!processed.isEmpty()) questionBlocks.add(processed);
+            String processed = extractAnswerAndShuffle(currentBlock.toString(), rand, answerKey, qID);
+            if (!processed.isEmpty()) {
+                questionBlocks.add(processed);
+                qID++;
+            }
         }
 
         session.setAttribute("correctAnswerKey", answerKey);
+        
+        // Shuffle the order of questions
         Collections.shuffle(questionBlocks, rand);
+        
         return questionBlocks;
     }
 
     private String extractAnswerAndShuffle(String block, SecureRandom rand, Map<Integer, String> key, int id) {
         String[] lines = block.split("\n");
-        if (lines.length <= 1) return ""; // Guard against blocks without choices
+        if (lines.length <= 1) return ""; // Need at least question + 1 choice
 
-        String questionText = lines[0];
+        String questionText = lines[0].trim();
         List<String> choices = new ArrayList<>();
+        String correctAnswer = null;
+
         for (int i = 1; i < lines.length; i++) {
-            if (lines[i].toLowerCase().startsWith("answer:")) {
-                String ans = lines[i].replaceFirst("(?i)answer:\\s*", "").trim();
-                if (!ans.isEmpty()) key.put(id, ans);
-            } else {
-                choices.add(lines[i]);
+            String line = lines[i].trim();
+            
+            // Check if this line indicates the correct answer
+            if (line.toLowerCase().startsWith("answer:") || 
+                line.toLowerCase().startsWith("correct:") ||
+                line.toLowerCase().startsWith("correct answer:")) {
+                // Extract the answer (e.g., "Answer: A" or "Answer: Paris")
+                correctAnswer = line.replaceFirst("(?i)(answer|correct|correct answer):\\s*", "").trim();
+                continue;
+            }
+            
+            // Check if it's an answer choice (A), B), C), D) or just add as choice
+            if (!line.isEmpty() && !line.equalsIgnoreCase("choices:") && !line.equalsIgnoreCase("options:")) {
+                // Remove choice labels like "A)", "B)", etc. for storage
+                String cleanedChoice = line.replaceFirst("^[A-Za-z]\\)\\s*", "").trim();
+                if (!cleanedChoice.isEmpty()) {
+                    choices.add(cleanedChoice);
+                    
+                    // If this choice matches the correct answer, remember it
+                    if (correctAnswer != null && 
+                        (line.startsWith(correctAnswer + ")") || cleanedChoice.equalsIgnoreCase(correctAnswer))) {
+                        key.put(id + 1, cleanedChoice); // Store as cleaned choice
+                    }
+                }
             }
         }
 
+        // If no choices found, skip this question
         if (choices.isEmpty()) return "";
+        
+        // If correct answer was just a letter like "A", "B", etc., we already stored it above
+        // Otherwise store the literal answer text
+        if (correctAnswer != null && !key.containsKey(id + 1)) {
+            key.put(id + 1, correctAnswer);
+        }
+
+        // Shuffle the answer choices (Fisher-Yates randomization)
         Collections.shuffle(choices, rand);
-        return questionText + "\n" + String.join("\n", choices);
+        
+        // Format: Question text followed by shuffled choices with new labels
+        StringBuilder result = new StringBuilder(questionText);
+        char label = 'A';
+        for (String choice : choices) {
+            result.append("\n").append(label).append(") ").append(choice);
+            label++;
+        }
+        
+        return result.toString();
     }
 }
