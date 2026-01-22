@@ -40,7 +40,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 radarBtn.textContent = 'Loading...';
                 
                 // Fetch REAL Random Forest predictions from backend
-                const response = await fetch('/api/student-analytics', {
+                const response = await fetch('/student/api/student-analytics', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
