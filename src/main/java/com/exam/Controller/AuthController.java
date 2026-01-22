@@ -66,6 +66,17 @@ public class AuthController {
         }
     }
     
+    @GetMapping("/verify")
+    public String verifyEmail(@RequestParam String token, Model model) {
+        boolean verified = userService.verifyEmail(token);
+        
+        if (verified) {
+            return "verification-success";
+        } else {
+            return "verification-failure";
+        }
+    }
+    
     @GetMapping("/dashboard")
     public String dashboard(java.security.Principal principal) {
         // Redirect based on role

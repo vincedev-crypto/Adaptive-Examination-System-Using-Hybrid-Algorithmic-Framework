@@ -19,6 +19,9 @@ public class UserService {
     @Autowired
     private BCryptPasswordEncoder passwordEncoder;
     
+    @Autowired
+    private EmailService emailService;
+    
     // School email domain pattern (customize for your school)
     private static final Pattern SCHOOL_EMAIL_PATTERN = 
         Pattern.compile("^[A-Za-z0-9._%+-]+@(student\\.school\\.edu|school\\.edu)$");
@@ -43,12 +46,15 @@ public class UserService {
         student.setPassword(passwordEncoder.encode(password));
         student.setFullName(fullName);
         student.setRole(User.Role.STUDENT);
-        student.setEnabled(true); // Auto-enable or set false for email verification
+        student.setEnabled(false); // User must verify email first
         student.setVerificationToken(UUID.randomUUID().toString());
         
         userRepository.save(student);
         
-        return "SUCCESS: Student registered successfully!";
+        // Send verification email
+        emailService.sendVerificationEmail(email, fullName, student.getVerificationToken());
+        
+        return "SUCCESS: Registration successful! Please check your email to verify your account.";
     }
     
     /**
@@ -66,11 +72,32 @@ public class UserService {
         teacher.setPassword(passwordEncoder.encode(password));
         teacher.setFullName(fullName);
         teacher.setRole(User.Role.TEACHER);
-        teacher.setEnabled(true);
+        teacher.setEnabled(false); // Teachers also need email verification
+        teacher.setVerificationToken(UUID.randomUUID().toString());
         
         userRepository.save(teacher);
         
-        return "SUCCESS: Teacher registered successfully!";
+        // Send verification email
+        emailService.sendVerificationEmail(email, fullName, teacher.getVerificationToken());
+        
+        return "SUCCESS: Registration successful! Please check your email to verify your account.";
+    }
+    
+    /**
+     * Verify user email with token
+     */
+    public boolean verifyEmail(String token) {
+        Optional<User> userOpt = userRepository.findByVerificationToken(token);
+        
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            user.setEnabled(true);
+            user.setVerificationToken(null); // Clear the token after verification
+            userRepository.save(user);
+            return true;
+        }
+        
+        return false;
     }
     
     /**
