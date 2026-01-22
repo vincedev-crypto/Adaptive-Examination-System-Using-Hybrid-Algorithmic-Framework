@@ -19,7 +19,7 @@
 
     <div class="container">
         <div class="row justify-content-center">
-            <div class="col-md-6 text-center">
+            <div class="col-md-8 text-center">
                 <div class="card dashboard-card p-5">
                     <h3 class="mb-4">Available Examinations</h3>
                     <div th:if="${hasExam}">
@@ -28,6 +28,42 @@
                     </div>
                     <div th:unless="${hasExam}">
                         <p class="text-muted">No examinations have been distributed to you yet.</p>
+                    </div>
+                </div>
+                
+                <!-- Exam Submissions Section -->
+                <div class="card dashboard-card p-5 mt-4" th:if="${hasSubmission}">
+                    <h3 class="mb-4">Your Exam Submissions</h3>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Exam</th>
+                                    <th>Submitted</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="submission : ${submissions}">
+                                    <td th:text="${submission.examName}"></td>
+                                    <td th:text="${#temporals.format(submission.submittedAt, 'MMM dd, yyyy HH:mm')}"></td>
+                                    <td>
+                                        <span th:if="${submission.resultsReleased}" class="badge bg-success">Released</span>
+                                        <span th:unless="${submission.resultsReleased}" class="badge bg-warning">Pending Review</span>
+                                    </td>
+                                    <td>
+                                        <a th:if="${submission.resultsReleased}" 
+                                           th:href="@{/student/results/{id}(id=${submission.id})}" 
+                                           class="btn btn-sm btn-primary">View Results</a>
+                                        <button th:unless="${submission.resultsReleased}" 
+                                                class="btn btn-sm btn-secondary" disabled>
+                                            Awaiting Release
+                                        </button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

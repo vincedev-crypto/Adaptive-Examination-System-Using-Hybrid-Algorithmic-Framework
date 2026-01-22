@@ -1,6 +1,10 @@
 package com.exam.algo;
 
+import com.exam.entity.EnrolledStudent;
+import com.exam.entity.ExamSubmission;
 import com.exam.entity.User;
+import com.exam.repository.EnrolledStudentRepository;
+import com.exam.repository.ExamSubmissionRepository;
 import com.exam.repository.UserRepository;
 import com.exam.service.AnswerKeyService;
 import com.lowagie.text.Document;
@@ -18,12 +22,14 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 import jakarta.servlet.http.HttpSession;
 import java.io.*;
 import java.security.SecureRandom;
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -37,8 +43,13 @@ public class HomepageController {
     
     @Autowired
     private UserRepository userRepository;
+    
+    @Autowired
+    private EnrolledStudentRepository enrolledStudentRepository;
+    
+    @Autowired
+    private ExamSubmissionRepository examSubmissionRepository;
 
-    private static List<String> enrolledStudents = new ArrayList<>();
     private static Map<String, List<String>> distributedExams = new HashMap<>();
 
     // Public getter for accessing distributed exams from other controllers
@@ -55,16 +66,58 @@ public class HomepageController {
             .filter(user -> user.getRole() == User.Role.STUDENT)
             .collect(Collectors.toList());
         
+        // Fetch enrolled students for this teacher
+        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
+        
+        // Fetch exam submissions
+        List<ExamSubmission> submissions = examSubmissionRepository.findAll();
+        
         model.addAttribute("teacherEmail", teacherEmail);
         model.addAttribute("enrolledStudents", enrolledStudents);
         model.addAttribute("allStudents", allStudents);
+        model.addAttribute("submissions", submissions);
         return "homepage";
     }
 
     @PostMapping("/enroll-student")
-    public String enrollStudent(@RequestParam String studentId) {
-        if (!enrolledStudents.contains(studentId)) {
-            enrolledStudents.add(studentId);
+    public String enrollStudent(@RequestParam String studentEmail, java.security.Principal principal) {
+        String teacherEmail = principal.getName();
+        
+        // Check if already enrolled
+        Optional<EnrolledStudent> existing = enrolledStudentRepository
+            .findByTeacherEmailAndStudentEmail(teacherEmail, studentEmail);
+        
+        if (existing.isEmpty()) {
+            // Get student name
+            Optional<User> studentOpt = userRepository.findByEmail(studentEmail);
+            if (studentOpt.isPresent()) {
+                EnrolledStudent enrollment = new EnrolledStudent(
+                    teacherEmail,
+                    studentEmail,
+                    studentOpt.get().getFullName()
+                );
+                enrolledStudentRepository.save(enrollment);
+            }
+        }
+        
+        return "redirect:/teacher/homepage";
+    }
+    
+    @PostMapping("/remove-student")
+    @Transactional
+    public String removeStudent(@RequestParam Long enrollmentId) {
+        enrolledStudentRepository.deleteById(enrollmentId);
+        return "redirect:/teacher/homepage";
+    }
+    
+    @PostMapping("/release-results")
+    public String releaseResults(@RequestParam Long submissionId) {
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
+        if (submissionOpt.isPresent()) {
+            ExamSubmission submission = submissionOpt.get();
+            submission.setResultsReleased(true);
+            submission.setReleasedAt(LocalDateTime.now());
+            examSubmissionRepository.save(submission);
         }
         return "redirect:/teacher/homepage";
     }

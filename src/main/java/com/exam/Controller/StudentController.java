@@ -1,6 +1,8 @@
 package com.exam.Controller;
 
 import Service.RandomForestService;
+import com.exam.entity.ExamSubmission;
+import com.exam.repository.ExamSubmissionRepository;
 import com.exam.service.AnswerKeyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -8,6 +10,7 @@ import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import jakarta.servlet.http.HttpSession;
 
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Controller
@@ -19,6 +22,9 @@ public class StudentController {
     
     @Autowired
     private AnswerKeyService answerKeyService;
+    
+    @Autowired
+    private ExamSubmissionRepository examSubmissionRepository;
 
     // This would normally be injected from a service, but for now we'll reference the static map
     // In production, this should be stored in database
@@ -32,7 +38,70 @@ public class StudentController {
         String studentId = principal.getName();
         model.addAttribute("studentEmail", studentId);
         model.addAttribute("hasExam", getDistributedExams().containsKey(studentId));
+        
+        // Check if student has submitted exams
+        List<ExamSubmission> submissions = examSubmissionRepository.findByStudentEmail(studentId);
+        model.addAttribute("hasSubmission", !submissions.isEmpty());
+        model.addAttribute("submissions", submissions);
+        
         return "student-dashboard";
+    }
+    
+    @GetMapping("/results/{submissionId}")
+    public String viewResults(@PathVariable Long submissionId, Model model, java.security.Principal principal) {
+        String studentId = principal.getName();
+        
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
+        
+        if (submissionOpt.isEmpty() || !submissionOpt.get().getStudentEmail().equals(studentId)) {
+            model.addAttribute("error", "Submission not found");
+            return "redirect:/student/dashboard";
+        }
+        
+        ExamSubmission submission = submissionOpt.get();
+        
+        if (!submission.isResultsReleased()) {
+            model.addAttribute("error", "Results not yet released by teacher");
+            return "redirect:/student/dashboard";
+        }
+        
+        // Parse answer details
+        List<Map<String, Object>> answerDetails = new ArrayList<>();
+        if (submission.getAnswerDetailsJson() != null && !submission.getAnswerDetailsJson().isEmpty()) {
+            String[] details = submission.getAnswerDetailsJson().split(";");
+            for (String detail : details) {
+                if (!detail.trim().isEmpty()) {
+                    String[] parts = detail.split("\\|");
+                    if (parts.length == 4) {
+                        Map<String, Object> detailMap = new HashMap<>();
+                        detailMap.put("questionNumber", Integer.parseInt(parts[0]));
+                        detailMap.put("studentAnswer", parts[1]);
+                        detailMap.put("correctAnswer", parts[2]);
+                        detailMap.put("isCorrect", Boolean.parseBoolean(parts[3]));
+                        answerDetails.add(detailMap);
+                    }
+                }
+            }
+        }
+        
+        // Create analytics object
+        RandomForestService.StudentAnalytics analytics = new RandomForestService.StudentAnalytics(
+            studentId,
+            submission.getTopicMastery(),
+            submission.getDifficultyResilience(),
+            submission.getAccuracy(),
+            submission.getTimeEfficiency(),
+            submission.getConfidence(),
+            submission.getPerformanceCategory()
+        );
+        
+        model.addAttribute("score", submission.getScore());
+        model.addAttribute("total", submission.getTotalQuestions());
+        model.addAttribute("percentage", submission.getPercentage());
+        model.addAttribute("answerDetails", answerDetails);
+        model.addAttribute("analytics", analytics);
+        
+        return "student-results";
     }
 
     @GetMapping("/take-exam")
@@ -79,6 +148,8 @@ public class StudentController {
         List<String> answerList = new ArrayList<>();
         List<Map<String, Object>> answerDetails = new ArrayList<>();
         int score = 0;
+        double percentage = 0;
+        RandomForestService.StudentAnalytics analytics = null;
         
         if (key != null) {
             for (int i = 1; i <= key.size(); i++) {
@@ -100,7 +171,7 @@ public class StudentController {
                 System.out.println("  Result: " + (isCorrect ? "✓ CORRECT" : "✗ WRONG"));
                 System.out.println();
                 
-                // Store details for displaying on results page
+                // Store details for displaying on results page (when released)
                 Map<String, Object> detail = new HashMap<>();
                 detail.put("questionNumber", i);
                 detail.put("studentAnswer", studentAns != null ? studentAns.trim() : "No Answer");
@@ -109,29 +180,57 @@ public class StudentController {
                 answerDetails.add(detail);
             }
             
+            percentage = (score * 100.0 / key.size());
+            
             System.out.println("----------------------------------------");
             System.out.println("FINAL SCORE: " + score + " / " + key.size());
-            System.out.println("PERCENTAGE: " + String.format("%.2f", (score * 100.0 / key.size())) + "%");
+            System.out.println("PERCENTAGE: " + String.format("%.2f", percentage) + "%");
             System.out.println("========================================\n");
             
             // Calculate Random Forest Analytics
-            RandomForestService.StudentAnalytics analytics = 
-                randomForestService.calculateStudentAnalytics(studentId, answerList, key, null);
+            analytics = randomForestService.calculateStudentAnalytics(studentId, answerList, key, null);
             
-            model.addAttribute("analytics", analytics);
+            // Save submission to database (not released yet)
+            ExamSubmission submission = new ExamSubmission();
+            submission.setStudentEmail(studentId);
+            submission.setExamName("General Exam"); // You can make this dynamic
+            submission.setScore(score);
+            submission.setTotalQuestions(key.size());
+            submission.setPercentage(percentage);
+            submission.setResultsReleased(false); // Teacher must release manually
+            submission.setSubmittedAt(LocalDateTime.now());
             
-            // Store analytics in session for later retrieval
-            session.setAttribute("studentAnalytics", analytics);
+            // Store analytics
+            if (analytics != null) {
+                submission.setTopicMastery(analytics.getTopicMastery());
+                submission.setDifficultyResilience(analytics.getDifficultyResilience());
+                submission.setAccuracy(analytics.getAccuracy());
+                submission.setTimeEfficiency(analytics.getTimeEfficiency());
+                submission.setConfidence(analytics.getConfidence());
+                submission.setPerformanceCategory(analytics.getPerformanceCategory());
+            }
+            
+            // Store answer details as simple string (can be JSON later)
+            StringBuilder detailsStr = new StringBuilder();
+            for (Map<String, Object> detail : answerDetails) {
+                detailsStr.append(detail.get("questionNumber")).append("|")
+                         .append(detail.get("studentAnswer")).append("|")
+                         .append(detail.get("correctAnswer")).append("|")
+                         .append(detail.get("isCorrect")).append(";");
+            }
+            submission.setAnswerDetailsJson(detailsStr.toString());
+            
+            examSubmissionRepository.save(submission);
+            System.out.println("Submission saved to database. Results pending release by teacher.");
+            
         } else {
             System.out.println("ERROR: No answer key found for student " + studentId);
             System.out.println("========================================\n");
         }
         
-        model.addAttribute("score", score);
-        model.addAttribute("total", key != null ? key.size() : 0);
-        model.addAttribute("percentage", key != null && key.size() > 0 ? (score * 100.0 / key.size()) : 0);
-        model.addAttribute("answerDetails", answerDetails);
-        return "student-results";
+        // Don't show score yet - just confirmation
+        model.addAttribute("submitted", true);
+        return "student-submission-confirmation";
     }
     
     /**
