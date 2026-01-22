@@ -31,6 +31,8 @@ import java.io.*;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 @Controller
@@ -54,6 +56,19 @@ public class HomepageController {
     // Public getter for accessing distributed exams from other controllers
     public static Map<String, List<String>> getDistributedExams() {
         return distributedExams;
+    }
+    
+    // Inner class for Question
+    private static class Question {
+        int id;
+        String text;
+        List<String> choices;
+        
+        Question(int id, String text) {
+            this.id = id;
+            this.text = text;
+            this.choices = new ArrayList<>();
+        }
     }
 
     @GetMapping("/homepage")
@@ -171,24 +186,37 @@ public class HomepageController {
                          .collect(Collectors.toList());
         }
         
+        System.out.println("=== PARSING ANSWER KEY PDF ===");
+        System.out.println("Total lines: " + lines.size());
+        
+        // Improved skipPattern: Skip metadata, headers, page numbers, etc.
+        Pattern skipPattern = Pattern.compile(
+            "(?i)(page\\s*\\d+|examination\\s+paper|name:|date:|answer\\s+key|confidential|date\\s+generated|instructions?|total\\s+marks)", 
+            Pattern.CASE_INSENSITIVE
+        );
+        
         int questionNumber = 1;
         for (String line : lines) {
             String trimmed = line.trim();
             
-            // Skip headers
-            if (trimmed.toLowerCase().contains("answer key") || 
-                trimmed.toLowerCase().contains("answer sheet") ||
-                trimmed.equalsIgnoreCase("answers")) {
+            // Skip headers/metadata
+            if (skipPattern.matcher(trimmed).find()) {
+                System.out.println("Skipping header/metadata: " + trimmed);
                 continue;
             }
+            
+            // Skip very short lines that are likely metadata
+            if (trimmed.length() < 2) continue;
+            
+            String answer = null;
+            int qNum = 0;
             
             // Format 1: "1. Mars" or "1) Mars"
             if (trimmed.matches("^\\d+[\\.\\)]\\s+.+")) {
                 String[] parts = trimmed.split("[\\.\\)]", 2);
                 if (parts.length == 2) {
-                    int qNum = Integer.parseInt(parts[0].trim());
-                    String answer = parts[1].trim();
-                    answerKey.put(qNum, answer);
+                    qNum = Integer.parseInt(parts[0].trim());
+                    answer = parts[1].trim();
                 }
             }
             // Format 2: "Question 1: Mars" or "Q1: Mars"
@@ -196,15 +224,31 @@ public class HomepageController {
                 String[] parts = trimmed.split(":", 2);
                 if (parts.length == 2) {
                     String numPart = parts[0].replaceAll("[^0-9]", "");
-                    int qNum = Integer.parseInt(numPart);
-                    String answer = parts[1].trim();
-                    answerKey.put(qNum, answer);
+                    qNum = Integer.parseInt(numPart);
+                    answer = parts[1].trim();
                 }
             }
             // Format 3: Just answers listed line by line (1st line = Q1, 2nd = Q2, etc.)
             else if (!trimmed.matches("^\\d+$")) { // Not just a number
-                answerKey.put(questionNumber++, trimmed);
+                qNum = questionNumber++;
+                answer = trimmed;
             }
+            
+            // Clean up the answer: remove choice letter prefixes like "a) ", "b) ", "c) "
+            if (answer != null) {
+                answer = answer.replaceFirst("^[A-Da-d]\\)\\s*", "").trim();
+                
+                // Double-check it's not a header that slipped through
+                if (!answer.isEmpty() && !skipPattern.matcher(answer).find()) {
+                    answerKey.put(qNum, answer);
+                    System.out.println("Parsed Q" + qNum + " -> " + answer);
+                }
+            }
+        }
+        
+        System.out.println("=== ANSWER KEY PARSED: " + answerKey.size() + " answers ===");
+        if (answerKey.isEmpty()) {
+            System.out.println("WARNING: No answers were extracted from the answer key PDF!");
         }
         
         return answerKey;
@@ -219,6 +263,15 @@ public class HomepageController {
                              .filter(line -> !line.trim().isEmpty()).collect(Collectors.toList());
         }
 
+        System.out.println("=== PROCESSING EXAM PDF ===");
+        System.out.println("Total lines: " + rawLines.size());
+        
+        // Improved skipPattern: Skip metadata, headers, page numbers, etc.
+        Pattern skipPattern = Pattern.compile(
+            "(?i)(page\\s*\\d+|examination\\s+paper|name:|date:|confidential|date\\s+generated|instructions?|total\\s+marks)", 
+            Pattern.CASE_INSENSITIVE
+        );
+
         List<String> questionBlocks = new ArrayList<>();
         Map<Integer, String> answerKey = new HashMap<>();
         StringBuilder currentBlock = new StringBuilder();
@@ -228,12 +281,9 @@ public class HomepageController {
         for (String line : rawLines) {
             String trimmed = line.trim();
 
-            // Skip headers, page numbers, and metadata
-            if (trimmed.toLowerCase().contains("page") || 
-                trimmed.toLowerCase().contains("examination paper") ||
-                trimmed.toUpperCase().startsWith("NAME:") || 
-                trimmed.toUpperCase().startsWith("DATE:") ||
-                trimmed.isEmpty()) {
+            // Skip headers, page numbers, and metadata using improved pattern
+            if (skipPattern.matcher(trimmed).find() || trimmed.isEmpty()) {
+                System.out.println("Skipping: " + trimmed);
                 continue;
             }
 
@@ -244,6 +294,7 @@ public class HomepageController {
                     String processed = extractAnswerAndShuffle(currentBlock.toString(), rand, answerKey, qID);
                     if (!processed.isEmpty()) {
                         questionBlocks.add(processed);
+                        System.out.println("Processed Q" + (qID + 1));
                         qID++;
                     }
                 }
@@ -262,13 +313,28 @@ public class HomepageController {
             String processed = extractAnswerAndShuffle(currentBlock.toString(), rand, answerKey, qID);
             if (!processed.isEmpty()) {
                 questionBlocks.add(processed);
+                System.out.println("Processed Q" + (qID + 1));
                 qID++;
             }
         }
 
+        System.out.println("=== EXAM PARSED: " + questionBlocks.size() + " questions ===");
+
         // Merge external answer key if provided (external answers override embedded ones)
         if (externalAnswerKey != null && !externalAnswerKey.isEmpty()) {
+            System.out.println("Using external answer key with " + externalAnswerKey.size() + " answers");
             answerKey.putAll(externalAnswerKey);
+        }
+        
+        // Print final answer key for debugging
+        System.out.println("=== FINAL ANSWER KEY ===");
+        for (int i = 1; i <= Math.max(questionBlocks.size(), answerKey.size()); i++) {
+            String answer = answerKey.get(i);
+            if (answer != null) {
+                System.out.println("Q" + i + " -> " + answer);
+            } else {
+                System.out.println("Q" + i + " -> NO ANSWER FOUND!");
+            }
         }
 
         session.setAttribute("correctAnswerKey", answerKey);
@@ -296,6 +362,8 @@ public class HomepageController {
                 line.toLowerCase().startsWith("correct answer:")) {
                 // Extract the answer (e.g., "Answer: A" or "Answer: Paris")
                 correctAnswer = line.replaceFirst("(?i)(answer|correct|correct answer):\\s*", "").trim();
+                // Remove choice prefix if present
+                correctAnswer = correctAnswer.replaceFirst("^[A-Da-d]\\)\\s*", "").trim();
                 continue;
             }
             
