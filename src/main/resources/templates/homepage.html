@@ -37,7 +37,7 @@
                         </select>
                     </div>
 
-                    <form th:action="@{/process-exams}" method="post" enctype="multipart/form-data" id="uploadForm" class="hidden">
+                    <form th:action="@{/teacher/process-exams}" method="post" enctype="multipart/form-data" id="uploadForm" class="hidden">
                         
                         <div id="examSection" class="hidden mb-4 text-start">
                             <label class="form-label fw-bold text-primary">Select Test Questionnaire (PDF)</label>
@@ -66,7 +66,7 @@
                 <h5 class="text-primary mb-3">Student Enrollment</h5>
                 <p class="small text-muted">Enroll students to distribute processed exams directly to their accounts.</p>
                 
-                <form th:action="@{/enroll-student}" method="post" class="input-group mb-4">
+                <form th:action="@{/teacher/enroll-student}" method="post" class="input-group mb-4">
                     <input type="text" name="studentId" class="form-control" placeholder="ID Format: 00-0-00000" required>
                     <button class="btn btn-primary fw-bold" type="submit">Enroll Student</button>
                 </form>
@@ -82,7 +82,7 @@
                             <span class="badge bg-info text-dark me-2">STUDENT</span>
                             <span th:text="${id}" class="fw-bold">00-0-00000</span>
                         </div>
-                        <form th:action="@{/distribute}" method="post">
+                        <form th:action="@{/teacher/distribute}" method="post">
                             <input type="hidden" name="targetStudent" th:value="${id}">
                             <button type="submit" class="btn btn-sm btn-success fw-bold" 
                                     th:disabled="${session.shuffledExam == null}">
