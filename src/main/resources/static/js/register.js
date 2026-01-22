@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Validate student email
         if (roleStudent.checked) {
-            const schoolEmailPattern = /@(student\.school\.edu|school\.edu)$/;
+            const schoolEmailPattern = /\.edu(\.[a-z]{2})?$/i;
             if (!schoolEmailPattern.test(email.value)) {
                 e.preventDefault();
                 alert('⚠️ Students must use a school email address (@student.school.edu)');
