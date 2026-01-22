@@ -28,21 +28,27 @@ public class SecurityConfig {
         http
             .csrf(csrf -> csrf.disable())
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/", "/login", "/register", "/css/**", "/js/**", "/images/**").permitAll()
-                .requestMatchers("/teacher/**", "/homepage", "/process-exams", "/enroll-student", "/distribute").hasAuthority("TEACHER")
+                .requestMatchers("/", "/login**", "/register**", "/css/**", "/js/**", "/images/**").permitAll()
+                .requestMatchers("/teacher/**").hasAuthority("TEACHER")
                 .requestMatchers("/student/**").hasAuthority("STUDENT")
                 .anyRequest().authenticated()
             )
             .formLogin(form -> form
                 .loginPage("/login")
+                .loginProcessingUrl("/login")
+                .usernameParameter("username")
+                .passwordParameter("password")
                 .defaultSuccessUrl("/dashboard", true)
-                .failureUrl("/login?error=true")
+                .failureUrl("/login?error")
                 .permitAll()
             )
             .logout(logout -> logout
                 .logoutUrl("/logout")
-                .logoutSuccessUrl("/login?logout=true")
+                .logoutSuccessUrl("/login?logout")
                 .permitAll()
+            )
+            .exceptionHandling(ex -> ex
+                .accessDeniedPage("/login?error")
             );
         
         return http.build();
