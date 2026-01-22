@@ -66,9 +66,20 @@
                 <h5 class="text-primary mb-3">Student Enrollment</h5>
                 <p class="small text-muted">Enroll students to distribute processed exams directly to their accounts.</p>
                 
-                <form th:action="@{/teacher/enroll-student}" method="post" class="input-group mb-4">
-                    <input type="text" name="studentId" class="form-control" placeholder="ID Format: 00-0-00000" required>
-                    <button class="btn btn-primary fw-bold" type="submit">Enroll Student</button>
+                <form th:action="@{/teacher/enroll-student}" method="post" class="mb-4">
+                    <div class="input-group">
+                        <select name="studentId" class="form-select" required>
+                            <option value="" disabled selected>Select a student...</option>
+                            <option th:each="student : ${allStudents}" 
+                                    th:value="${student.email}" 
+                                    th:text="${student.fullName + ' (' + student.email + ')'}">
+                            </option>
+                        </select>
+                        <button class="btn btn-primary fw-bold" type="submit">Enroll Student</button>
+                    </div>
+                    <div th:if="${#lists.isEmpty(allStudents)}" class="form-text text-warning mt-2">
+                        ⚠️ No registered students found. Students must register first.
+                    </div>
                 </form>
 
                 <h5 class="text-secondary border-bottom pb-2">Enrolled Students</h5>
