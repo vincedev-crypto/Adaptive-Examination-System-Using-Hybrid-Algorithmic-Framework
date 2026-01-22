@@ -12,6 +12,15 @@
             font-size: 1.2rem;
             padding: 0.5rem 1rem;
         }
+        .accordion-button:not(.collapsed) {
+            background-color: #e7f1ff;
+        }
+        .answer-correct {
+            border-left: 4px solid #198754;
+        }
+        .answer-incorrect {
+            border-left: 4px solid #dc3545;
+        }
     </style>
 </head>
 <body class="bg-light">
@@ -27,6 +36,53 @@
                     <div class="py-4">
                         <h4 class="text-secondary">Your Final Score</h4>
                         <h1 class="display-2 fw-bold text-primary" th:text="${score + ' / ' + total}"></h1>
+                    </div>
+                    
+                    <!-- Answer Review Section -->
+                    <div th:if="${answerDetails}" class="mt-4 mb-4">
+                        <h4 class="text-start mb-3">📝 Answer Review</h4>
+                        <div class="accordion" id="answerAccordion">
+                            <div class="accordion-item" th:each="detail, iterStat : ${answerDetails}">
+                                <h2 class="accordion-header" th:id="'heading' + ${iterStat.index}">
+                                    <button class="accordion-button collapsed" type="button" 
+                                            data-bs-toggle="collapse" 
+                                            th:data-bs-target="'#collapse' + ${iterStat.index}" 
+                                            aria-expanded="false" 
+                                            th:aria-controls="'collapse' + ${iterStat.index}">
+                                        <span th:if="${detail.isCorrect}" class="text-success me-2">✓</span>
+                                        <span th:if="${!detail.isCorrect}" class="text-danger me-2">✗</span>
+                                        <strong>Question <span th:text="${detail.questionNumber}"></span></strong>
+                                        <span th:if="${detail.isCorrect}" class="badge bg-success ms-2">Correct</span>
+                                        <span th:if="${!detail.isCorrect}" class="badge bg-danger ms-2">Incorrect</span>
+                                    </button>
+                                </h2>
+                                <div th:id="'collapse' + ${iterStat.index}" 
+                                     class="accordion-collapse collapse" 
+                                     th:aria-labelledby="'heading' + ${iterStat.index}" 
+                                     data-bs-parent="#answerAccordion">
+                                    <div class="accordion-body text-start">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <p class="mb-2"><strong>Your Answer:</strong></p>
+                                                <div class="alert" 
+                                                     th:classappend="${detail.isCorrect ? 'alert-success' : 'alert-danger'}">
+                                                    <span th:text="${detail.studentAnswer}"></span>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <p class="mb-2"><strong>Correct Answer:</strong></p>
+                                                <div class="alert alert-info">
+                                                    <span th:text="${detail.correctAnswer}"></span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div th:if="${!detail.isCorrect}" class="alert alert-warning mt-2">
+                                            <strong>💡 Tip:</strong> Review this topic to improve your understanding.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                     
                     <!-- Random Forest Analytics Section -->
@@ -47,6 +103,21 @@
                         
                         <div id="chartSection" class="hidden mt-4">
                             <canvas id="radarChartCanvas" width="400" height="400"></canvas>
+                        </div>
+                        
+                        <!-- Performance Summary Box -->
+                        <div class="alert alert-light mt-4 text-start">
+                            <h5 class="alert-heading">Performance Summary (Random Forest Analysis)</h5>
+                            <p><strong>Overall Score:</strong> <span th:text="${percentage != null ? #numbers.formatDecimal(percentage, 1, 2) + '%' : '0%'}"></span> - <span th:text="${analytics.performanceCategory}"></span></p>
+                            <hr>
+                            <p class="mb-2"><strong>Strengths:</strong> 
+                                <span th:if="${analytics.topicMastery >= 70}">time Efficiency, </span>
+                                <span th:if="${analytics.confidence >= 70}">confidence</span>
+                            </p>
+                            <p class="mb-0"><strong>Areas for Improvement:</strong> 
+                                <span th:if="${analytics.difficultyResilience < 70}">difficulty Resilience, </span>
+                                <span th:if="${analytics.accuracy < 70}">accuracy</span>
+                            </p>
                         </div>
                     </div>
                     

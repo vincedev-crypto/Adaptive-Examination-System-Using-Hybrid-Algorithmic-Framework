@@ -65,20 +65,54 @@ public class StudentController {
             key = sessionKey;
         }
         
+        // DEBUG: Console logging
+        System.out.println("\n========== EXAM GRADING DEBUG ==========");
+        System.out.println("Student: " + studentId);
+        System.out.println("Answer Key Available: " + (key != null ? "YES" : "NO"));
+        if (key != null) {
+            System.out.println("Total Questions in Answer Key: " + key.size());
+        }
+        System.out.println("Student Submitted Answers: " + answers.size());
+        System.out.println("----------------------------------------");
+        
         // Convert answers to list and calculate score
         List<String> answerList = new ArrayList<>();
+        List<Map<String, Object>> answerDetails = new ArrayList<>();
         int score = 0;
         
         if (key != null) {
             for (int i = 1; i <= key.size(); i++) {
                 String studentAns = answers.get("q" + i);
+                String correctAns = key.get(i);
                 answerList.add(studentAns != null ? studentAns : "");
                 
-                if (studentAns != null && key.get(i) != null && 
-                    studentAns.trim().equalsIgnoreCase(key.get(i).trim())) {
+                boolean isCorrect = studentAns != null && correctAns != null && 
+                                   studentAns.trim().equalsIgnoreCase(correctAns.trim());
+                
+                if (isCorrect) {
                     score++;
                 }
+                
+                // DEBUG: Console output
+                System.out.println("Question " + i + ":");
+                System.out.println("  Student Answer: '" + (studentAns != null ? studentAns.trim() : "NO ANSWER") + "'");
+                System.out.println("  Correct Answer: '" + (correctAns != null ? correctAns.trim() : "NOT SET") + "'");
+                System.out.println("  Result: " + (isCorrect ? "✓ CORRECT" : "✗ WRONG"));
+                System.out.println();
+                
+                // Store details for displaying on results page
+                Map<String, Object> detail = new HashMap<>();
+                detail.put("questionNumber", i);
+                detail.put("studentAnswer", studentAns != null ? studentAns.trim() : "No Answer");
+                detail.put("correctAnswer", correctAns != null ? correctAns.trim() : "Not Set");
+                detail.put("isCorrect", isCorrect);
+                answerDetails.add(detail);
             }
+            
+            System.out.println("----------------------------------------");
+            System.out.println("FINAL SCORE: " + score + " / " + key.size());
+            System.out.println("PERCENTAGE: " + String.format("%.2f", (score * 100.0 / key.size())) + "%");
+            System.out.println("========================================\n");
             
             // Calculate Random Forest Analytics
             RandomForestService.StudentAnalytics analytics = 
@@ -88,11 +122,15 @@ public class StudentController {
             
             // Store analytics in session for later retrieval
             session.setAttribute("studentAnalytics", analytics);
+        } else {
+            System.out.println("ERROR: No answer key found for student " + studentId);
+            System.out.println("========================================\n");
         }
         
         model.addAttribute("score", score);
         model.addAttribute("total", key != null ? key.size() : 0);
         model.addAttribute("percentage", key != null && key.size() > 0 ? (score * 100.0 / key.size()) : 0);
+        model.addAttribute("answerDetails", answerDetails);
         return "student-results";
     }
     
