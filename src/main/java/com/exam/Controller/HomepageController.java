@@ -1,5 +1,6 @@
 package com.exam.algo;
 
+import com.exam.service.AnswerKeyService;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Paragraph;
@@ -10,6 +11,7 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -27,6 +29,9 @@ import java.util.stream.Collectors;
 @Controller
 @RequestMapping("/teacher")
 public class HomepageController {
+
+    @Autowired
+    private AnswerKeyService answerKeyService;
 
     private static List<String> enrolledStudents = new ArrayList<>();
     private static Map<String, List<String>> distributedExams = new HashMap<>();
@@ -54,9 +59,19 @@ public class HomepageController {
 
     @PostMapping("/distribute")
     public String distributeExam(@RequestParam String targetStudent, HttpSession session) {
+        @SuppressWarnings("unchecked")
         List<String> exam = (List<String>) session.getAttribute("shuffledExam");
+        
+        @SuppressWarnings("unchecked")
+        Map<Integer, String> answerKey = (Map<Integer, String>) session.getAttribute("correctAnswerKey");
+        
         if (exam != null) {
             distributedExams.put(targetStudent, exam);
+            
+            // Store the answer key for this student so we can grade their exam later
+            if (answerKey != null) {
+                answerKeyService.storeStudentAnswerKey(targetStudent, answerKey);
+            }
         }
         return "redirect:/teacher/homepage";
     }
@@ -293,5 +308,57 @@ public class HomepageController {
         return ResponseEntity.ok()
                 .headers(headers)
                 .body(baos.toByteArray());
+    }
+
+    @GetMapping("/export/answer-key")
+    public ResponseEntity<byte[]> exportAnswerKey(HttpSession session) throws DocumentException, IOException {
+        @SuppressWarnings("unchecked")
+        Map<Integer, String> answerKey = (Map<Integer, String>) session.getAttribute("correctAnswerKey");
+        
+        if (answerKey == null || answerKey.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        Document document = new Document();
+        PdfWriter.getInstance(document, baos);
+        document.open();
+
+        // Add title
+        Paragraph title = new Paragraph("ANSWER KEY - CONFIDENTIAL");
+        title.setAlignment(Paragraph.ALIGN_CENTER);
+        document.add(title);
+        document.add(new Paragraph("\n"));
+        document.add(new Paragraph("Date Generated: " + new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date())));
+        document.add(new Paragraph("\n\n"));
+
+        // Add answers in order
+        List<Integer> sortedKeys = new ArrayList<>(answerKey.keySet());
+        Collections.sort(sortedKeys);
+        
+        for (Integer questionNum : sortedKeys) {
+            String answer = answerKey.get(questionNum);
+            document.add(new Paragraph("Question " + questionNum + ": " + answer));
+        }
+
+        document.add(new Paragraph("\n\n"));
+        document.add(new Paragraph("Total Questions: " + answerKey.size()));
+
+        document.close();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDispositionFormData("attachment", "answer_key_" + System.currentTimeMillis() + ".pdf");
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(baos.toByteArray());
+    }
+    
+    /**
+     * Public method to get the AnswerKeyService for use by other controllers
+     */
+    public AnswerKeyService getAnswerKeyService() {
+        return answerKeyService;
     }
 }

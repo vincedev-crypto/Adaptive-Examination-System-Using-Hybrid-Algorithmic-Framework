@@ -1,6 +1,7 @@
 package com.exam.Controller;
 
 import Service.RandomForestService;
+import com.exam.service.AnswerKeyService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -15,6 +16,9 @@ public class StudentController {
 
     @Autowired
     private RandomForestService randomForestService;
+    
+    @Autowired
+    private AnswerKeyService answerKeyService;
 
     // This would normally be injected from a service, but for now we'll reference the static map
     // In production, this should be stored in database
@@ -49,10 +53,19 @@ public class StudentController {
     public String submitExam(@RequestParam Map<String, String> answers, 
                             HttpSession session, Model model,
                             java.security.Principal principal) {
-        Map<Integer, String> key = (Map<Integer, String>) session.getAttribute("correctAnswerKey");
         String studentId = principal != null ? principal.getName() : "guest";
         
-        // Convert answers to list
+        // Get answer key for this student from the AnswerKeyService
+        Map<Integer, String> key = answerKeyService.getStudentAnswerKey(studentId);
+        
+        // Fallback to session if not found in service (backward compatibility)
+        if (key == null) {
+            @SuppressWarnings("unchecked")
+            Map<Integer, String> sessionKey = (Map<Integer, String>) session.getAttribute("correctAnswerKey");
+            key = sessionKey;
+        }
+        
+        // Convert answers to list and calculate score
         List<String> answerList = new ArrayList<>();
         int score = 0;
         
@@ -61,7 +74,8 @@ public class StudentController {
                 String studentAns = answers.get("q" + i);
                 answerList.add(studentAns != null ? studentAns : "");
                 
-                if (studentAns != null && studentAns.equals(key.get(i))) {
+                if (studentAns != null && key.get(i) != null && 
+                    studentAns.trim().equalsIgnoreCase(key.get(i).trim())) {
                     score++;
                 }
             }
@@ -78,6 +92,7 @@ public class StudentController {
         
         model.addAttribute("score", score);
         model.addAttribute("total", key != null ? key.size() : 0);
+        model.addAttribute("percentage", key != null && key.size() > 0 ? (score * 100.0 / key.size()) : 0);
         return "student-results";
     }
     
