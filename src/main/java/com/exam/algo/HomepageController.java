@@ -1,8 +1,18 @@
 package com.exam.algo;
 
+import com.lowagie.text.Document;
+import com.lowagie.text.DocumentException;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.pdf.PdfWriter;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.apache.poi.xwpf.usermodel.XWPFDocument;
+import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
@@ -183,5 +193,105 @@ public class HomepageController {
         }
         
         return result.toString();
+    }
+
+    @GetMapping("/export/pdf")
+    public ResponseEntity<byte[]> exportPDF(HttpSession session) throws DocumentException, IOException {
+        @SuppressWarnings("unchecked")
+        List<String> exam = (List<String>) session.getAttribute("shuffledExam");
+        
+        if (exam == null || exam.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        Document document = new Document();
+        PdfWriter.getInstance(document, baos);
+        document.open();
+
+        // Add title
+        Paragraph title = new Paragraph("EXAMINATION PAPER");
+        title.setAlignment(Paragraph.ALIGN_CENTER);
+        document.add(title);
+        document.add(new Paragraph("\n"));
+        document.add(new Paragraph("NAME: _______________________     DATE: ___________"));
+        document.add(new Paragraph("\n\n"));
+
+        // Add questions
+        int questionNumber = 1;
+        for (String question : exam) {
+            document.add(new Paragraph(questionNumber + ". " + question.replace("\n", "\n   ")));
+            document.add(new Paragraph("\n"));
+            questionNumber++;
+        }
+
+        document.close();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDispositionFormData("attachment", "exam_" + System.currentTimeMillis() + ".pdf");
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(baos.toByteArray());
+    }
+
+    @GetMapping("/export/word")
+    public ResponseEntity<byte[]> exportWord(HttpSession session) throws IOException {
+        @SuppressWarnings("unchecked")
+        List<String> exam = (List<String>) session.getAttribute("shuffledExam");
+        
+        if (exam == null || exam.isEmpty()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        XWPFDocument document = new XWPFDocument();
+
+        // Add title
+        XWPFParagraph titlePara = document.createParagraph();
+        titlePara.setAlignment(org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER);
+        XWPFRun titleRun = titlePara.createRun();
+        titleRun.setText("EXAMINATION PAPER");
+        titleRun.setBold(true);
+        titleRun.setFontSize(18);
+
+        // Add header info
+        XWPFParagraph headerPara = document.createParagraph();
+        XWPFRun headerRun = headerPara.createRun();
+        headerRun.addBreak();
+        headerRun.setText("NAME: _______________________     DATE: ___________");
+        headerRun.addBreak();
+        headerRun.addBreak();
+
+        // Add questions
+        int questionNumber = 1;
+        for (String question : exam) {
+            XWPFParagraph questionPara = document.createParagraph();
+            XWPFRun questionRun = questionPara.createRun();
+            
+            String[] lines = question.split("\n");
+            questionRun.setText(questionNumber + ". " + lines[0]);
+            questionRun.addBreak();
+            
+            for (int i = 1; i < lines.length; i++) {
+                questionRun.setText("   " + lines[i]);
+                questionRun.addBreak();
+            }
+            
+            questionRun.addBreak();
+            questionNumber++;
+        }
+
+        document.write(baos);
+        document.close();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"));
+        headers.setContentDispositionFormData("attachment", "exam_" + System.currentTimeMillis() + ".docx");
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(baos.toByteArray());
     }
 }
