@@ -226,6 +226,11 @@ public class HomepageController {
             }
         }
 
+        // Merge external answer key if provided (external answers override embedded ones)
+        if (externalAnswerKey != null && !externalAnswerKey.isEmpty()) {
+            answerKey.putAll(externalAnswerKey);
+        }
+
         session.setAttribute("correctAnswerKey", answerKey);
         
         // Shuffle the order of questions
