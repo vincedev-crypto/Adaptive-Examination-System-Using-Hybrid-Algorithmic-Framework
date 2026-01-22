@@ -49,17 +49,11 @@
                                     <td th:text="${submission.examName}"></td>
                                     <td th:text="${#temporals.format(submission.submittedAt, 'MMM dd, yyyy HH:mm')}"></td>
                                     <td>
-                                        <span th:if="${submission.resultsReleased}" class="badge bg-success">Released</span>
-                                        <span th:unless="${submission.resultsReleased}" class="badge bg-warning">Pending Review</span>
+                                        <span class="badge bg-success">Completed</span>
                                     </td>
                                     <td>
-                                        <a th:if="${submission.resultsReleased}" 
-                                           th:href="@{/student/results/{id}(id=${submission.id})}" 
+                                        <a th:href="@{/student/results/{id}(id=${submission.id})}" 
                                            class="btn btn-sm btn-primary">View Results</a>
-                                        <button th:unless="${submission.resultsReleased}" 
-                                                class="btn btn-sm btn-secondary" disabled>
-                                            Awaiting Release
-                                        </button>
                                     </td>
                                 </tr>
                             </tbody>

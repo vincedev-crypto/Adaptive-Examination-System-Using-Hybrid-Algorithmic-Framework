@@ -29,7 +29,6 @@ import org.springframework.web.multipart.MultipartFile;
 import jakarta.servlet.http.HttpSession;
 import java.io.*;
 import java.security.SecureRandom;
-import java.time.LocalDateTime;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -107,18 +106,6 @@ public class HomepageController {
     @Transactional
     public String removeStudent(@RequestParam Long enrollmentId) {
         enrolledStudentRepository.deleteById(enrollmentId);
-        return "redirect:/teacher/homepage";
-    }
-    
-    @PostMapping("/release-results")
-    public String releaseResults(@RequestParam Long submissionId) {
-        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
-        if (submissionOpt.isPresent()) {
-            ExamSubmission submission = submissionOpt.get();
-            submission.setResultsReleased(true);
-            submission.setReleasedAt(LocalDateTime.now());
-            examSubmissionRepository.save(submission);
-        }
         return "redirect:/teacher/homepage";
     }
 

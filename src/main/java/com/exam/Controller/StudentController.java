@@ -60,11 +60,6 @@ public class StudentController {
         
         ExamSubmission submission = submissionOpt.get();
         
-        if (!submission.isResultsReleased()) {
-            model.addAttribute("error", "Results not yet released by teacher");
-            return "redirect:/student/dashboard";
-        }
-        
         // Parse answer details
         List<Map<String, Object>> answerDetails = new ArrayList<>();
         if (submission.getAnswerDetailsJson() != null && !submission.getAnswerDetailsJson().isEmpty()) {
@@ -190,15 +185,16 @@ public class StudentController {
             // Calculate Random Forest Analytics
             analytics = randomForestService.calculateStudentAnalytics(studentId, answerList, key, null);
             
-            // Save submission to database (not released yet)
+            // Save submission to database (auto-released)
             ExamSubmission submission = new ExamSubmission();
             submission.setStudentEmail(studentId);
             submission.setExamName("General Exam"); // You can make this dynamic
             submission.setScore(score);
             submission.setTotalQuestions(key.size());
             submission.setPercentage(percentage);
-            submission.setResultsReleased(false); // Teacher must release manually
+            submission.setResultsReleased(true); // AUTO-RELEASE: Both teacher and student can see
             submission.setSubmittedAt(LocalDateTime.now());
+            submission.setReleasedAt(LocalDateTime.now()); // Released immediately
             
             // Store analytics
             if (analytics != null) {
@@ -221,16 +217,21 @@ public class StudentController {
             submission.setAnswerDetailsJson(detailsStr.toString());
             
             examSubmissionRepository.save(submission);
-            System.out.println("Submission saved to database. Results pending release by teacher.");
+            System.out.println("Submission saved to database. Results automatically available.");
             
         } else {
             System.out.println("ERROR: No answer key found for student " + studentId);
             System.out.println("========================================\n");
         }
         
-        // Don't show score yet - just confirmation
-        model.addAttribute("submitted", true);
-        return "student-submission-confirmation";
+        // Show results immediately (both teacher and student can see)
+        model.addAttribute("score", score);
+        model.addAttribute("total", key != null ? key.size() : 0);
+        model.addAttribute("percentage", percentage);
+        model.addAttribute("answerDetails", answerDetails);
+        model.addAttribute("analytics", analytics);
+        
+        return "student-results";
     }
     
     /**

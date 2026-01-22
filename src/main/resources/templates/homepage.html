@@ -123,7 +123,7 @@
             <!-- Exam Submissions Section -->
             <div class="card upload-card p-4 shadow-sm border-0 mt-4" th:if="${!#lists.isEmpty(submissions)}">
                 <h5 class="text-primary mb-3">📝 Student Submissions</h5>
-                <p class="small text-muted">Review and release exam results to students.</p>
+                <p class="small text-muted">View all exam submissions and results.</p>
                 
                 <div class="table-responsive">
                     <table class="table table-hover table-sm">
@@ -133,7 +133,6 @@
                                 <th>Submitted</th>
                                 <th>Score</th>
                                 <th>Status</th>
-                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -143,27 +142,13 @@
                                 </td>
                                 <td th:text="${#temporals.format(submission.submittedAt, 'MMM dd, HH:mm')}"></td>
                                 <td>
-                                    <span th:if="${submission.resultsReleased}" class="badge bg-secondary">
+                                    <span class="badge bg-secondary">
                                         <span th:text="${submission.score + ' / ' + submission.totalQuestions}"></span>
                                         (<span th:text="${#numbers.formatDecimal(submission.percentage, 1, 2) + '%'}"></span>)
                                     </span>
-                                    <span th:unless="${submission.resultsReleased}" class="text-muted">Pending</span>
                                 </td>
                                 <td>
-                                    <span th:if="${submission.resultsReleased}" class="badge bg-success">Released</span>
-                                    <span th:unless="${submission.resultsReleased}" class="badge bg-warning text-dark">Pending</span>
-                                </td>
-                                <td>
-                                    <form th:if="${!submission.resultsReleased}" 
-                                          th:action="@{/teacher/release-results}" 
-                                          method="post" 
-                                          class="d-inline">
-                                        <input type="hidden" name="submissionId" th:value="${submission.id}">
-                                        <button type="submit" class="btn btn-sm btn-primary">Release Results</button>
-                                    </form>
-                                    <span th:if="${submission.resultsReleased}" class="text-muted small">
-                                        Released on <span th:text="${#temporals.format(submission.releasedAt, 'MMM dd')}"></span>
-                                    </span>
+                                    <span class="badge bg-success">Completed</span>
                                 </td>
                             </tr>
                         </tbody>
