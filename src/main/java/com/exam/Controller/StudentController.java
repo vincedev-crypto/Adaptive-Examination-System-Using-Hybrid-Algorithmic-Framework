@@ -179,7 +179,7 @@ public class StudentController {
             
             System.out.println("----------------------------------------");
             System.out.println("FINAL SCORE: " + score + " / " + key.size());
-            System.out.println("PERCENTAGE: " + String.format("%.2f", percentage) + "%");
+            System.out.println("PERCENTAGE: " + "%.2f".formatted(percentage) + "%");
             System.out.println("========================================\n");
             
             // Calculate Random Forest Analytics
