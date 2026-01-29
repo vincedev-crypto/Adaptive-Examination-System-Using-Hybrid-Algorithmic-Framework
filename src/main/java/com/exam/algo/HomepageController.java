@@ -7,6 +7,7 @@ import com.exam.repository.EnrolledStudentRepository;
 import com.exam.repository.ExamSubmissionRepository;
 import com.exam.repository.UserRepository;
 import com.exam.service.AnswerKeyService;
+import com.exam.service.FisherYatesService;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Paragraph;
@@ -31,7 +32,6 @@ import java.io.*;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.List;
-import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -43,6 +43,9 @@ public class HomepageController {
     private AnswerKeyService answerKeyService;
     
     @Autowired
+    private FisherYatesService fisherYatesService;
+    
+    @Autowired
     private UserRepository userRepository;
     
     @Autowired
@@ -52,23 +55,36 @@ public class HomepageController {
     private ExamSubmissionRepository examSubmissionRepository;
 
     private static Map<String, List<String>> distributedExams = new HashMap<>();
+    
+    // Store uploaded exams with their metadata
+    private static Map<String, UploadedExam> uploadedExams = new HashMap<>();
+    
+    // Helper class to store exam metadata
+    public static class UploadedExam {
+        private String examId;
+        private String examName;
+        private List<String> questions;
+        private Map<Integer, String> answerKey;
+        private java.time.LocalDateTime uploadedAt;
+        
+        public UploadedExam(String examId, String examName, List<String> questions, Map<Integer, String> answerKey) {
+            this.examId = examId;
+            this.examName = examName;
+            this.questions = questions;
+            this.answerKey = answerKey;
+            this.uploadedAt = java.time.LocalDateTime.now();
+        }
+        
+        public String getExamId() { return examId; }
+        public String getExamName() { return examName; }
+        public List<String> getQuestions() { return questions; }
+        public Map<Integer, String> getAnswerKey() { return answerKey; }
+        public java.time.LocalDateTime getUploadedAt() { return uploadedAt; }
+    }
 
     // Public getter for accessing distributed exams from other controllers
     public static Map<String, List<String>> getDistributedExams() {
         return distributedExams;
-    }
-    
-    // Inner class for Question
-    private static class Question {
-        int id;
-        String text;
-        List<String> choices;
-        
-        Question(int id, String text) {
-            this.id = id;
-            this.text = text;
-            this.choices = new ArrayList<>();
-        }
     }
 
     @GetMapping("/homepage")
@@ -90,6 +106,7 @@ public class HomepageController {
         model.addAttribute("enrolledStudents", enrolledStudents);
         model.addAttribute("allStudents", allStudents);
         model.addAttribute("submissions", submissions);
+        model.addAttribute("uploadedExams", new ArrayList<>(uploadedExams.values()));
         return "homepage";
     }
 
@@ -125,19 +142,17 @@ public class HomepageController {
     }
 
     @PostMapping("/distribute")
-    public String distributeExam(@RequestParam String targetStudent, HttpSession session) {
-        @SuppressWarnings("unchecked")
-        List<String> exam = (List<String>) session.getAttribute("shuffledExam");
+    public String distributeExam(@RequestParam String targetStudent, 
+                                 @RequestParam String examId, 
+                                 HttpSession session) {
+        UploadedExam selectedExam = uploadedExams.get(examId);
         
-        @SuppressWarnings("unchecked")
-        Map<Integer, String> answerKey = (Map<Integer, String>) session.getAttribute("correctAnswerKey");
-        
-        if (exam != null) {
-            distributedExams.put(targetStudent, exam);
+        if (selectedExam != null) {
+            distributedExams.put(targetStudent, selectedExam.getQuestions());
             
-            // Store the answer key for this student so we can grade their exam later
-            if (answerKey != null) {
-                answerKeyService.storeStudentAnswerKey(targetStudent, answerKey);
+            // Store the answer key for this student
+            if (selectedExam.getAnswerKey() != null) {
+                answerKeyService.storeStudentAnswerKey(targetStudent, selectedExam.getAnswerKey());
             }
         }
         return "redirect:/teacher/homepage";
@@ -160,7 +175,18 @@ public class HomepageController {
             // Process exam (with or without embedded answers)
             List<String> randomizedLines = processFisherYates(examCreated, session, answerKey);
             session.setAttribute("shuffledExam", randomizedLines);
+            
+            @SuppressWarnings("unchecked")
+            Map<Integer, String> finalAnswerKey = (Map<Integer, String>) session.getAttribute("correctAnswerKey");
+            
+            // Store the uploaded exam for later selection
+            String examId = "EXAM_" + System.currentTimeMillis();
+            String examName = examCreated.getOriginalFilename().replace(".pdf", "");
+            UploadedExam uploadedExam = new UploadedExam(examId, examName, randomizedLines, finalAnswerKey);
+            uploadedExams.put(examId, uploadedExam);
+            
             model.addAttribute("type", "exam");
+            model.addAttribute("examUploaded", true);
         }
         return "results";
     }
@@ -339,8 +365,10 @@ public class HomepageController {
 
         session.setAttribute("correctAnswerKey", answerKey);
         
-        // Shuffle the order of questions
-        Collections.shuffle(questionBlocks, rand);
+        // DO NOT shuffle questions - this causes answer key mismatch!
+        // The answer key is indexed by question number (1, 2, 3...)
+        // If we shuffle questions, the answer key will point to wrong answers
+        // Collections.shuffle(questionBlocks, rand);
         
         return questionBlocks;
     }
@@ -393,7 +421,8 @@ public class HomepageController {
         }
 
         // Shuffle the answer choices (Fisher-Yates randomization)
-        Collections.shuffle(choices, rand);
+        // Use FisherYatesService for proper implementation
+        fisherYatesService.shuffle(choices, rand);
         
         // Format: Question text followed by shuffled choices with new labels
         StringBuilder result = new StringBuilder(questionText);
@@ -420,13 +449,21 @@ public class HomepageController {
         PdfWriter.getInstance(document, baos);
         document.open();
 
-        // Add title
+        // Add title with better formatting
         Paragraph title = new Paragraph("EXAMINATION PAPER");
         title.setAlignment(Paragraph.ALIGN_CENTER);
         document.add(title);
-        document.add(new Paragraph("\n"));
-        document.add(new Paragraph("NAME: _______________________     DATE: ___________"));
-        document.add(new Paragraph("\n\n"));
+        document.add(new Paragraph(" "));
+        
+        // Add student information section with proper spacing
+        Paragraph nameField = new Paragraph("NAME: ________________________________________");
+        document.add(nameField);
+        document.add(new Paragraph(" "));
+        
+        Paragraph dateField = new Paragraph("DATE: ____________________");
+        document.add(dateField);
+        document.add(new Paragraph(" "));
+        document.add(new Paragraph(" "));
 
         // Add questions
         int questionNumber = 1;
@@ -467,13 +504,21 @@ public class HomepageController {
         titleRun.setBold(true);
         titleRun.setFontSize(18);
 
-        // Add header info
-        XWPFParagraph headerPara = document.createParagraph();
-        XWPFRun headerRun = headerPara.createRun();
-        headerRun.addBreak();
-        headerRun.setText("NAME: _______________________     DATE: ___________");
-        headerRun.addBreak();
-        headerRun.addBreak();
+        // Add blank line
+        document.createParagraph().createRun().addBreak();
+        
+        // Add NAME field
+        XWPFParagraph namePara = document.createParagraph();
+        XWPFRun nameRun = namePara.createRun();
+        nameRun.setText("NAME: ________________________________________");
+        nameRun.addBreak();
+        
+        // Add DATE field
+        XWPFParagraph datePara = document.createParagraph();
+        XWPFRun dateRun = datePara.createRun();
+        dateRun.setText("DATE: ____________________");
+        dateRun.addBreak();
+        dateRun.addBreak();
 
         // Add questions
         int questionNumber = 1;
@@ -504,8 +549,123 @@ public class HomepageController {
         return ResponseEntity.ok()
                 .headers(headers)
                 .body(baos.toByteArray());
+    }    
+    @GetMapping("/download-results")
+    public ResponseEntity<byte[]> downloadResults() throws IOException {
+        List<ExamSubmission> submissions = examSubmissionRepository.findAll();
+        
+        if (submissions.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        StringBuilder csv = new StringBuilder();
+        // CSV Header
+        csv.append("Student Email,Exam Name,Score,Total Questions,Percentage,Performance Category,")
+           .append("Topic Mastery,Difficulty Resilience,Accuracy,Time Efficiency,Confidence,")
+           .append("Submitted Date,Released Date\n");
+        
+        // Add each submission
+        for (ExamSubmission submission : submissions) {
+            csv.append(escapeCSV(submission.getStudentEmail())).append(",");
+            csv.append(escapeCSV(submission.getExamName())).append(",");
+            csv.append(submission.getScore()).append(",");
+            csv.append(submission.getTotalQuestions()).append(",");
+            csv.append(String.format("%.2f", submission.getPercentage())).append(",");
+            csv.append(escapeCSV(submission.getPerformanceCategory())).append(",");
+            csv.append(String.format("%.2f", submission.getTopicMastery())).append(",");
+            csv.append(String.format("%.2f", submission.getDifficultyResilience())).append(",");
+            csv.append(String.format("%.2f", submission.getAccuracy())).append(",");
+            csv.append(String.format("%.2f", submission.getTimeEfficiency())).append(",");
+            csv.append(String.format("%.2f", submission.getConfidence())).append(",");
+            csv.append(submission.getSubmittedAt().toString()).append(",");
+            csv.append(submission.getReleasedAt() != null ? submission.getReleasedAt().toString() : "N/A");
+            csv.append("\n");
+        }
+        
+        byte[] csvBytes = csv.toString().getBytes("UTF-8");
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv"));
+        headers.setContentDispositionFormData("attachment", "exam_results_" + System.currentTimeMillis() + ".csv");
+        
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(csvBytes);
     }
-
+    
+    @GetMapping("/download-result/{submissionId}")
+    public ResponseEntity<byte[]> downloadIndividualResult(@PathVariable Long submissionId) throws IOException {
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
+        
+        if (submissionOpt.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+        
+        ExamSubmission submission = submissionOpt.get();
+        
+        StringBuilder csv = new StringBuilder();
+        // CSV Header
+        csv.append("Student Email,Exam Name,Score,Total Questions,Percentage,Performance Category,");
+        csv.append("Topic Mastery,Difficulty Resilience,Accuracy,Time Efficiency,Confidence,");
+        csv.append("Submitted Date,Released Date\n");
+        
+        // Add submission data
+        csv.append(escapeCSV(submission.getStudentEmail())).append(",");
+        csv.append(escapeCSV(submission.getExamName())).append(",");
+        csv.append(submission.getScore()).append(",");
+        csv.append(submission.getTotalQuestions()).append(",");
+        csv.append(String.format("%.2f", submission.getPercentage())).append(",");
+        csv.append(escapeCSV(submission.getPerformanceCategory())).append(",");
+        csv.append(String.format("%.2f", submission.getTopicMastery())).append(",");
+        csv.append(String.format("%.2f", submission.getDifficultyResilience())).append(",");
+        csv.append(String.format("%.2f", submission.getAccuracy())).append(",");
+        csv.append(String.format("%.2f", submission.getTimeEfficiency())).append(",");
+        csv.append(String.format("%.2f", submission.getConfidence())).append(",");
+        csv.append(submission.getSubmittedAt().toString()).append(",");
+        csv.append(submission.getReleasedAt() != null ? submission.getReleasedAt().toString() : "N/A");
+        csv.append("\n");
+        
+        // Add detailed answers if available
+        if (submission.getAnswerDetailsJson() != null && !submission.getAnswerDetailsJson().isEmpty()) {
+            csv.append("\n\nDetailed Answers:\n");
+            csv.append("Question Number,Student Answer,Correct Answer,Result\n");
+            
+            String[] details = submission.getAnswerDetailsJson().split(";");
+            for (String detail : details) {
+                if (!detail.trim().isEmpty()) {
+                    String[] parts = detail.split("\\|");
+                    if (parts.length == 4) {
+                        csv.append(parts[0]).append(","); // Question number
+                        csv.append(escapeCSV(parts[1])).append(","); // Student answer
+                        csv.append(escapeCSV(parts[2])).append(","); // Correct answer
+                        csv.append(parts[3].equals("true") ? "Correct" : "Incorrect").append("\n");
+                    }
+                }
+            }
+        }
+        
+        byte[] csvBytes = csv.toString().getBytes("UTF-8");
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv"));
+        String filename = "result_" + submission.getStudentEmail().replace("@", "_") + "_" + submissionId + ".csv";
+        headers.setContentDispositionFormData("attachment", filename);
+        
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(csvBytes);
+    }
+    
+    /**
+     * Escape special characters in CSV
+     */
+    private String escapeCSV(String value) {
+        if (value == null) return "";
+        if (value.contains(",") || value.contains("\"") || value.contains("\n")) {
+            return "\"" + value.replace("\"", "\"\"") + "\"";
+        }
+        return value;
+    }
     @GetMapping("/export/answer-key")
     public ResponseEntity<byte[]> exportAnswerKey(HttpSession session) throws DocumentException, IOException {
         @SuppressWarnings("unchecked")

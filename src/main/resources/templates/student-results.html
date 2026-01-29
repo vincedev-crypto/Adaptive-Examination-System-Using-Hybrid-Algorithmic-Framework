@@ -101,29 +101,40 @@
                                               analytics.performanceCategory == 'Fair' ? 'bg-warning' : 'bg-danger'}"
                               th:text="${analytics.performanceCategory}"></span>
                         
-                        <input type="hidden" id="tmScoreValue" th:value="${analytics.topicMastery}"/>
-                        <input type="hidden" id="drScoreValue" th:value="${analytics.difficultyResilience}"/>
+                        <!-- Hidden inputs to pass analytics data to JavaScript -->
+                        <input type="hidden" id="topicMastery" th:value="${analytics.topicMastery}"/>
+                        <input type="hidden" id="difficultyResilience" th:value="${analytics.difficultyResilience}"/>
+                        <input type="hidden" id="accuracy" th:value="${analytics.accuracy}"/>
+                        <input type="hidden" id="timeEfficiency" th:value="${analytics.timeEfficiency}"/>
+                        <input type="hidden" id="confidence" th:value="${analytics.confidence}"/>
+                        <input type="hidden" id="performanceCategory" th:value="${analytics.performanceCategory}"/>
+                        <input type="hidden" id="overallPercentage" th:value="${percentage}"/>
                         
                         <button id="renderRadarBtn" class="btn btn-success mt-3 btn-lg">
                             📊 View Detailed Performance Chart
                         </button>
                         
                         <div id="chartSection" class="hidden mt-4">
+                            <div id="performanceSummary"></div>
                             <canvas id="radarChartCanvas" width="400" height="400"></canvas>
                         </div>
                         
                         <!-- Performance Summary Box -->
                         <div class="alert alert-light mt-4 text-start">
-                            <h5 class="alert-heading">Student Performance Summary</h5>
+                            <h5 class="alert-heading">Performance Summary (Random Forest Analysis)</h5>
                             <p><strong>Overall Score:</strong> <span th:text="${percentage != null ? #numbers.formatDecimal(percentage, 1, 2) + '%' : '0%'}"></span> - <span th:text="${analytics.performanceCategory}"></span></p>
                             <hr>
                             <p class="mb-2"><strong>Strengths:</strong> 
-                                <span th:if="${analytics.topicMastery >= 70}">time Efficiency, </span>
+                                <span th:if="${analytics.topicMastery >= 70}">topic Mastery, </span>
+                                <span th:if="${analytics.difficultyResilience >= 70}">difficulty Resilience, </span>
+                                <span th:if="${analytics.timeEfficiency >= 70}">time Efficiency, </span>
                                 <span th:if="${analytics.confidence >= 70}">confidence</span>
                             </p>
                             <p class="mb-0"><strong>Areas for Improvement:</strong> 
+                                <span th:if="${analytics.topicMastery < 70}">topic Mastery, </span>
                                 <span th:if="${analytics.difficultyResilience < 70}">difficulty Resilience, </span>
-                                <span th:if="${analytics.accuracy < 70}">accuracy</span>
+                                <span th:if="${analytics.timeEfficiency < 70}">time Efficiency, </span>
+                                <span th:if="${analytics.confidence < 70}">confidence</span>
                             </p>
                         </div>
                     </div>

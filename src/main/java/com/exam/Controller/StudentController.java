@@ -4,6 +4,7 @@ import Service.RandomForestService;
 import com.exam.entity.ExamSubmission;
 import com.exam.repository.ExamSubmissionRepository;
 import com.exam.service.AnswerKeyService;
+import com.exam.service.IRT3PLService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -19,6 +20,9 @@ public class StudentController {
 
     @Autowired
     private RandomForestService randomForestService;
+    
+    @Autowired
+    private IRT3PLService irt3PLService;
     
     @Autowired
     private AnswerKeyService answerKeyService;
@@ -97,6 +101,44 @@ public class StudentController {
         model.addAttribute("analytics", analytics);
         
         return "student-results";
+    }
+    
+    @GetMapping("/view-exam/{submissionId}")
+    public String viewExam(@PathVariable Long submissionId, Model model, java.security.Principal principal) {
+        String studentId = principal.getName();
+        
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
+        
+        if (submissionOpt.isEmpty() || !submissionOpt.get().getStudentEmail().equals(studentId)) {
+            model.addAttribute("error", "Submission not found");
+            return "redirect:/student/dashboard";
+        }
+        
+        ExamSubmission submission = submissionOpt.get();
+        
+        // Parse answer details to display questions and answers
+        List<Map<String, Object>> answerDetails = new ArrayList<>();
+        if (submission.getAnswerDetailsJson() != null && !submission.getAnswerDetailsJson().isEmpty()) {
+            String[] details = submission.getAnswerDetailsJson().split(";");
+            for (String detail : details) {
+                if (!detail.trim().isEmpty()) {
+                    String[] parts = detail.split("\\|");
+                    if (parts.length == 4) {
+                        Map<String, Object> detailMap = new HashMap<>();
+                        detailMap.put("questionNumber", Integer.parseInt(parts[0]));
+                        detailMap.put("studentAnswer", parts[1]);
+                        detailMap.put("correctAnswer", parts[2]);
+                        detailMap.put("isCorrect", Boolean.parseBoolean(parts[3]));
+                        answerDetails.add(detailMap);
+                    }
+                }
+            }
+        }
+        
+        model.addAttribute("submission", submission);
+        model.addAttribute("answerDetails", answerDetails);
+        
+        return "student-view-exam";
     }
 
     @GetMapping("/take-exam")
@@ -179,11 +221,32 @@ public class StudentController {
             
             System.out.println("----------------------------------------");
             System.out.println("FINAL SCORE: " + score + " / " + key.size());
-            System.out.println("PERCENTAGE: " + String.format("%.2f", percentage) + "%");
+            System.out.println("PERCENTAGE: " + "%.2f".formatted(percentage) + "%");
             System.out.println("========================================\n");
             
             // Calculate Random Forest Analytics
             analytics = randomForestService.calculateStudentAnalytics(studentId, answerList, key, null);
+            
+            // Calculate IRT 3PL Ability Estimate
+            List<Boolean> responses = new ArrayList<>();
+            for (String ans : answerList) {
+                String correct = key.get(responses.size() + 1);
+                responses.add(ans != null && correct != null && ans.trim().equalsIgnoreCase(correct.trim()));
+            }
+            
+            List<IRT3PLService.ItemParameters> itemParams = irt3PLService.generateDefaultItemParameters(key.size());
+            IRT3PLService.AbilityEstimate abilityEstimate = irt3PLService.estimateAbility(responses, itemParams);
+            
+            System.out.println("=== IRT 3PL Analysis ===");
+            System.out.println("Estimated Ability (θ): " + String.format("%.3f", abilityEstimate.getTheta()));
+            System.out.println("Standard Error: " + String.format("%.3f", abilityEstimate.getStandardError()));
+            System.out.println("Scaled Score (500±100): " + irt3PLService.thetaToScaledScore(abilityEstimate.getTheta(), 500, 100));
+            System.out.println("========================");
+            
+            // Store IRT metrics in session for display
+            session.setAttribute("irtTheta", abilityEstimate.getTheta());
+            session.setAttribute("irtScaledScore", irt3PLService.thetaToScaledScore(abilityEstimate.getTheta(), 500, 100));
+            session.setAttribute("irtStandardError", abilityEstimate.getStandardError());
             
             // Save submission to database (auto-released)
             ExamSubmission submission = new ExamSubmission();
@@ -196,13 +259,13 @@ public class StudentController {
             submission.setSubmittedAt(LocalDateTime.now());
             submission.setReleasedAt(LocalDateTime.now()); // Released immediately
             
-            // Store analytics
+            // Store analytics (validate to prevent NaN values)
             if (analytics != null) {
-                submission.setTopicMastery(analytics.getTopicMastery());
-                submission.setDifficultyResilience(analytics.getDifficultyResilience());
-                submission.setAccuracy(analytics.getAccuracy());
-                submission.setTimeEfficiency(analytics.getTimeEfficiency());
-                submission.setConfidence(analytics.getConfidence());
+                submission.setTopicMastery(validateDouble(analytics.getTopicMastery()));
+                submission.setDifficultyResilience(validateDouble(analytics.getDifficultyResilience()));
+                submission.setAccuracy(validateDouble(analytics.getAccuracy()));
+                submission.setTimeEfficiency(validateDouble(analytics.getTimeEfficiency()));
+                submission.setConfidence(validateDouble(analytics.getConfidence()));
                 submission.setPerformanceCategory(analytics.getPerformanceCategory());
             }
             
@@ -232,6 +295,16 @@ public class StudentController {
         model.addAttribute("analytics", analytics);
         
         return "student-results";
+    }
+    
+    /**
+     * Validate double values to prevent NaN or Infinity from being saved to database
+     */
+    private double validateDouble(double value) {
+        if (Double.isNaN(value) || Double.isInfinite(value)) {
+            return 0.0; // Return default value instead of NaN/Infinity
+        }
+        return value;
     }
     
     /**

@@ -39,17 +39,16 @@ document.addEventListener('DOMContentLoaded', function() {
                 radarBtn.disabled = true;
                 radarBtn.textContent = 'Loading...';
                 
-                // Fetch REAL Random Forest predictions from backend
-                const response = await fetch('/student/api/student-analytics', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    }
-                });
-                
-                if (!response.ok) throw new Error('Failed to fetch analytics');
-                
-                const analytics = await response.json();
+                // Get analytics data from hidden inputs (already passed from backend)
+                const analytics = {
+                    topicMastery: parseFloat(document.getElementById('topicMastery')?.value || 0),
+                    difficultyResilience: parseFloat(document.getElementById('difficultyResilience')?.value || 0),
+                    accuracy: parseFloat(document.getElementById('accuracy')?.value || 0),
+                    timeEfficiency: parseFloat(document.getElementById('timeEfficiency')?.value || 0),
+                    confidence: parseFloat(document.getElementById('confidence')?.value || 0),
+                    performanceCategory: document.getElementById('performanceCategory')?.value || 'No Data',
+                    historicalData: null // Will be null for now
+                };
                 
                 // Reveal the chart section
                 document.getElementById('chartSection').classList.remove('hidden');
