@@ -101,29 +101,68 @@
                             <small class="text-muted" th:text="${enrollment.studentEmail}"></small>
                         </div>
                         <div class="btn-group">
-                            <form th:action="@{/teacher/distribute}" method="post" class="d-inline">
-                                <input type="hidden" name="targetStudent" th:value="${enrollment.studentEmail}">
-                                <button type="submit" class="btn btn-sm btn-success fw-bold" 
-                                        th:disabled="${session.shuffledExam == null}">
-                                    Distribute Exam
-                                </button>
-                            </form>
+                            <button type="button" class="btn btn-sm btn-success fw-bold" 
+                                    th:disabled="${#lists.isEmpty(uploadedExams)}"
+                                    data-bs-toggle="modal" 
+                                    th:attr="data-bs-target='#examSelectModal' + ${enrollment.id}">
+                                Distribute Exam
+                            </button>
                             <form th:action="@{/teacher/remove-student}" method="post" class="d-inline ms-2">
                                 <input type="hidden" name="enrollmentId" th:value="${enrollment.id}">
                                 <button type="submit" class="btn btn-sm btn-danger">Remove</button>
                             </form>
                         </div>
+                        
+                        <!-- Exam Selection Modal -->
+                        <div class="modal fade" th:id="'examSelectModal' + ${enrollment.id}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <div class="modal-header">
+                                        <h5 class="modal-title">Select Exam to Distribute</h5>
+                                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                    </div>
+                                    <div class="modal-body">
+                                        <p>Distribute exam to: <strong th:text="${enrollment.studentName}"></strong></p>
+                                        <div class="list-group" th:if="${!#lists.isEmpty(uploadedExams)}">
+                                            <form th:each="exam : ${uploadedExams}" th:action="@{/teacher/distribute}" method="post">
+                                                <input type="hidden" name="targetStudent" th:value="${enrollment.studentEmail}">
+                                                <input type="hidden" name="examId" th:value="${exam.examId}">
+                                                <button type="submit" class="list-group-item list-group-item-action text-start">
+                                                    <div class="d-flex w-100 justify-content-between">
+                                                        <h6 class="mb-1" th:text="${exam.examName}">Exam Name</h6>
+                                                        <small th:text="${#temporals.format(exam.uploadedAt, 'MMM dd, HH:mm')}">Time</small>
+                                                    </div>
+                                                    <p class="mb-1 small text-muted">
+                                                        <span th:text="${#lists.size(exam.questions)} + ' questions'">20 questions</span>
+                                                    </p>
+                                                </button>
+                                            </form>
+                                        </div>
+                                        <div th:if="${#lists.isEmpty(uploadedExams)}" class="alert alert-warning">
+                                            No exams uploaded yet. Please upload an exam first.
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </li>
                 </ul>
-                <div th:if="${session.shuffledExam == null}" class="alert alert-warning mt-3 py-2 small">
+                <div th:if="${#lists.isEmpty(uploadedExams)}" class="alert alert-warning mt-3 py-2 small">
                     <strong>Note:</strong> You must process an exam first before you can distribute it to students.
                 </div>
             </div>
             
             <!-- Exam Submissions Section -->
             <div class="card upload-card p-4 shadow-sm border-0 mt-4" th:if="${!#lists.isEmpty(submissions)}">
-                <h5 class="text-primary mb-3">📝 Student Submissions</h5>
-                <p class="small text-muted">View all exam submissions and results.</p>
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h5 class="text-primary mb-0">📝 Student Submissions</h5>
+                        <p class="small text-muted mb-0">View all exam submissions and results.</p>
+                    </div>
+                    <a th:href="@{/teacher/download-results}" class="btn btn-success btn-sm">
+                        <i class="bi bi-download"></i> Download All Results
+                    </a>
+                </div>
                 
                 <div class="table-responsive">
                     <table class="table table-hover table-sm">
@@ -132,7 +171,9 @@
                                 <th>Student</th>
                                 <th>Submitted</th>
                                 <th>Score</th>
+                                <th>Performance</th>
                                 <th>Status</th>
+                                <th>Action</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -148,7 +189,21 @@
                                     </span>
                                 </td>
                                 <td>
+                                    <span class="badge" 
+                                          th:classappend="${submission.performanceCategory == 'Excellent' ? 'bg-success' : 
+                                                          submission.performanceCategory == 'Good' ? 'bg-info' : 
+                                                          submission.performanceCategory == 'Fair' ? 'bg-warning' : 'bg-danger'}"
+                                          th:text="${submission.performanceCategory}"></span>
+                                </td>
+                                <td>
                                     <span class="badge bg-success">Completed</span>
+                                </td>
+                                <td>
+                                    <a th:href="@{/teacher/download-result/{id}(id=${submission.id})}" 
+                                       class="btn btn-sm btn-outline-primary" 
+                                       title="Download this result">
+                                        <i class="bi bi-download"></i> Download
+                                    </a>
                                 </td>
                             </tr>
                         </tbody>

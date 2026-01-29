@@ -53,7 +53,9 @@
                                     </td>
                                     <td>
                                         <a th:href="@{/student/results/{id}(id=${submission.id})}" 
-                                           class="btn btn-sm btn-primary">View Results</a>
+                                           class="btn btn-sm btn-primary me-2">View Results</a>
+                                        <a th:href="@{/student/view-exam/{id}(id=${submission.id})}" 
+                                           class="btn btn-sm btn-outline-secondary">View Exam</a>
                                     </td>
                                 </tr>
                             </tbody>
