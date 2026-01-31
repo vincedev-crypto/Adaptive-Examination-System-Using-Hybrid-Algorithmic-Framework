@@ -217,11 +217,17 @@ public class StudentController {
                 answerDetails.add(detail);
             }
             
-            percentage = (score * 100.0 / key.size());
+            // Prevent division by zero
+            if (key.size() > 0) {
+                percentage = (score * 100.0 / key.size());
+            } else {
+                percentage = 0.0;
+                System.out.println("WARNING: Answer key is empty (0 questions)!");
+            }
             
             System.out.println("----------------------------------------");
             System.out.println("FINAL SCORE: " + score + " / " + key.size());
-            System.out.println("PERCENTAGE: " + "%.2f".formatted(percentage) + "%");
+            System.out.println("PERCENTAGE: " + (key.size() > 0 ? "%.2f".formatted(percentage) + "%" : "N/A (no questions)"));
             System.out.println("========================================\n");
             
             // Calculate Random Forest Analytics
