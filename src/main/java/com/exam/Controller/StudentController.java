@@ -177,6 +177,10 @@ public class StudentController {
         System.out.println("Answer Key Available: " + (key != null ? "YES" : "NO"));
         if (key != null) {
             System.out.println("Total Questions in Answer Key: " + key.size());
+            System.out.println("Answer Key Contents:");
+            for (int i = 1; i <= key.size(); i++) {
+                System.out.println("  Q" + i + " -> " + (key.get(i) != null ? "'" + key.get(i) + "'" : "NULL"));
+            }
         }
         System.out.println("Student Submitted Answers: " + answers.size());
         System.out.println("----------------------------------------");
@@ -285,20 +289,60 @@ public class StudentController {
             }
             submission.setAnswerDetailsJson(detailsStr.toString());
             
-            examSubmissionRepository.save(submission);
+            ExamSubmission savedSubmission = examSubmissionRepository.save(submission);
             System.out.println("Submission saved to database. Results automatically available.");
+            
+            // Store results in session for display after redirect
+            session.setAttribute("lastSubmissionId", savedSubmission.getId());
+            session.setAttribute("lastScore", score);
+            session.setAttribute("lastTotal", key.size());
+            session.setAttribute("lastPercentage", percentage);
+            session.setAttribute("lastAnswerDetails", answerDetails);
+            session.setAttribute("lastAnalytics", analytics);
+            
+            // Redirect to avoid form resubmission (Post-Redirect-Get pattern)
+            return "redirect:/student/submission-success";
             
         } else {
             System.out.println("ERROR: No answer key found for student " + studentId);
             System.out.println("========================================\n");
+            model.addAttribute("error", "No answer key available for grading.");
+            return "redirect:/student/dashboard";
+        }
+    }
+    
+    /**
+     * Display submission success page (after redirect from POST submit)
+     */
+    @GetMapping("/submission-success")
+    public String submissionSuccess(HttpSession session, Model model) {
+        // Retrieve results from session
+        Integer score = (Integer) session.getAttribute("lastScore");
+        Integer total = (Integer) session.getAttribute("lastTotal");
+        Double percentage = (Double) session.getAttribute("lastPercentage");
+        
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> answerDetails = (List<Map<String, Object>>) session.getAttribute("lastAnswerDetails");
+        RandomForestService.StudentAnalytics analytics = 
+            (RandomForestService.StudentAnalytics) session.getAttribute("lastAnalytics");
+        
+        // If no session data, redirect to dashboard
+        if (score == null) {
+            return "redirect:/student/dashboard";
         }
         
-        // Show results immediately (both teacher and student can see)
         model.addAttribute("score", score);
-        model.addAttribute("total", key != null ? key.size() : 0);
+        model.addAttribute("total", total);
         model.addAttribute("percentage", percentage);
         model.addAttribute("answerDetails", answerDetails);
         model.addAttribute("analytics", analytics);
+        
+        // Clear session data after displaying
+        session.removeAttribute("lastScore");
+        session.removeAttribute("lastTotal");
+        session.removeAttribute("lastPercentage");
+        session.removeAttribute("lastAnswerDetails");
+        session.removeAttribute("lastAnalytics");
         
         return "student-results";
     }

@@ -435,6 +435,12 @@ public class HomepageController {
         for (int i = 0; i < questionBlocks.size(); i++) {
             String question = questionBlocks.get(i);
             String answer = answerKey.get(i + 1); // Answer key is 1-indexed
+            
+            if (answer == null) {
+                System.out.println("WARNING: No answer found for question " + (i + 1));
+                answer = "Not Set"; // Provide a default to make it visible
+            }
+            
             questionsWithAnswers.add(new QuestionWithAnswer(question, answer, i + 1));
         }
         
@@ -450,6 +456,9 @@ public class HomepageController {
             answerKey.put(i + 1, qa.answer);
             System.out.println("Shuffled Q" + (i + 1) + " (originally Q" + qa.originalNumber + ") -> " + qa.answer);
         }
+        
+        // Update session with the shuffled answer key
+        session.setAttribute("correctAnswerKey", answerKey);
         
         return questionBlocks;
     }
