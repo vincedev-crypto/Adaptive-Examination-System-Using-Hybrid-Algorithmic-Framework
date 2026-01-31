@@ -67,7 +67,9 @@ public class ExamSubmission {
     public void setTotalQuestions(int totalQuestions) { this.totalQuestions = totalQuestions; }
     
     public double getPercentage() { return percentage; }
-    public void setPercentage(double percentage) { this.percentage = percentage; }
+    public void setPercentage(double percentage) { 
+        this.percentage = validateDouble(percentage);
+    }
     
     public boolean isResultsReleased() { return resultsReleased; }
     public void setResultsReleased(boolean resultsReleased) { this.resultsReleased = resultsReleased; }
@@ -82,20 +84,40 @@ public class ExamSubmission {
     public void setAnswerDetailsJson(String answerDetailsJson) { this.answerDetailsJson = answerDetailsJson; }
     
     public double getTopicMastery() { return topicMastery; }
-    public void setTopicMastery(double topicMastery) { this.topicMastery = topicMastery; }
+    public void setTopicMastery(double topicMastery) { 
+        this.topicMastery = validateDouble(topicMastery);
+    }
     
     public double getDifficultyResilience() { return difficultyResilience; }
-    public void setDifficultyResilience(double difficultyResilience) { this.difficultyResilience = difficultyResilience; }
+    public void setDifficultyResilience(double difficultyResilience) { 
+        this.difficultyResilience = validateDouble(difficultyResilience);
+    }
     
     public double getAccuracy() { return accuracy; }
-    public void setAccuracy(double accuracy) { this.accuracy = accuracy; }
+    public void setAccuracy(double accuracy) { 
+        this.accuracy = validateDouble(accuracy);
+    }
     
     public double getTimeEfficiency() { return timeEfficiency; }
-    public void setTimeEfficiency(double timeEfficiency) { this.timeEfficiency = timeEfficiency; }
+    public void setTimeEfficiency(double timeEfficiency) { 
+        this.timeEfficiency = validateDouble(timeEfficiency);
+    }
     
     public double getConfidence() { return confidence; }
-    public void setConfidence(double confidence) { this.confidence = confidence; }
+    public void setConfidence(double confidence) { 
+        this.confidence = validateDouble(confidence);
+    }
     
     public String getPerformanceCategory() { return performanceCategory; }
     public void setPerformanceCategory(String performanceCategory) { this.performanceCategory = performanceCategory; }
+    
+    /**
+     * Validate double values to prevent NaN or Infinity from being saved to database
+     */
+    private double validateDouble(double value) {
+        if (Double.isNaN(value) || Double.isInfinite(value)) {
+            return 0.0; // Return default value instead of NaN/Infinity
+        }
+        return value;
+    }
 }
