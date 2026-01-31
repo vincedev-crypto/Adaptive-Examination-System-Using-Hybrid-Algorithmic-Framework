@@ -11,38 +11,50 @@ public class ExamSubmission {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     
-    @Column(nullable = false)
+    @Column(name = "student_email", nullable = false)
     private String studentEmail;
     
-    @Column(nullable = false)
+    @Column(name = "exam_name", nullable = false)
     private String examName;
     
     @Column(nullable = false)
     private int score;
     
-    @Column(nullable = false)
+    @Column(name = "total_questions", nullable = false)
     private int totalQuestions;
     
     @Column(nullable = false)
     private double percentage;
     
-    @Column(nullable = false)
+    @Column(name = "results_released", nullable = false)
     private boolean resultsReleased = false; // Teacher controls this
     
-    @Column(nullable = false)
+    @Column(name = "submitted_at", nullable = false)
     private LocalDateTime submittedAt;
     
+    @Column(name = "released_at")
     private LocalDateTime releasedAt;
     
-    @Column(columnDefinition = "TEXT")
+    @Column(name = "answer_details_json", columnDefinition = "TEXT")
     private String answerDetailsJson; // Store answer details as JSON
     
     // Analytics fields
+    @Column(name = "topic_mastery")
     private double topicMastery;
+    
+    @Column(name = "difficulty_resilience")
     private double difficultyResilience;
+    
+    @Column(name = "accuracy")
     private double accuracy;
+    
+    @Column(name = "time_efficiency")
     private double timeEfficiency;
+    
+    @Column(name = "confidence")
     private double confidence;
+    
+    @Column(name = "performance_category")
     private String performanceCategory;
     
     // Constructors
