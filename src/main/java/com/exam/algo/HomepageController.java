@@ -148,14 +148,65 @@ public class HomepageController {
         UploadedExam selectedExam = uploadedExams.get(examId);
         
         if (selectedExam != null) {
-            distributedExams.put(targetStudent, selectedExam.getQuestions());
+            // Create a fresh copy of questions for this student
+            List<String> studentExamCopy = new ArrayList<>(selectedExam.getQuestions());
             
-            // Store the answer key for this student
+            // Re-shuffle answer choices for each question block to make it unique per student
+            List<String> uniqueExam = new ArrayList<>();
+            SecureRandom rand = new SecureRandom();
+            
+            for (String questionBlock : studentExamCopy) {
+                uniqueExam.add(reshuffleQuestionChoices(questionBlock, rand));
+            }
+            
+            // Store the uniquely shuffled exam for this student
+            distributedExams.put(targetStudent, uniqueExam);
+            
+            // Store the answer key for this student (answers remain the same, just choice order changes)
             if (selectedExam.getAnswerKey() != null) {
                 answerKeyService.storeStudentAnswerKey(targetStudent, selectedExam.getAnswerKey());
             }
+            
+            System.out.println("Distributed unique shuffled exam to: " + targetStudent);
         }
         return "redirect:/teacher/homepage";
+    }
+    
+    /**
+     * Re-shuffle the answer choices within a question block to create unique exams
+     */
+    private String reshuffleQuestionChoices(String questionBlock, SecureRandom rand) {
+        String[] lines = questionBlock.split("\n");
+        if (lines.length <= 1) return questionBlock; // No choices to shuffle
+        
+        String questionText = lines[0];
+        List<String> choices = new ArrayList<>();
+        
+        // Extract choices (lines with A), B), C), D) format)
+        for (int i = 1; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.matches("^[A-Za-z]\\)\\s+.+")) {
+                // Remove the label and extract just the choice text
+                String choiceText = line.replaceFirst("^[A-Za-z]\\)\\s+", "");
+                choices.add(choiceText);
+            }
+        }
+        
+        // If no choices found, return original
+        if (choices.isEmpty()) return questionBlock;
+        
+        // Shuffle the choices using Fisher-Yates
+        fisherYatesService.shuffle(choices, rand);
+        
+        // Rebuild the question with reshuffled choices
+        StringBuilder result = new StringBuilder(questionText);
+        char label = 'A';
+        for (String choice : choices) {
+            result.append("\n").append(label).append(") ").append(choice);
+            label++;
+        }
+        
+        return result.toString();
     }
 
     @PostMapping("/process-exams")
