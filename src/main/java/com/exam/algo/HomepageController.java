@@ -81,6 +81,19 @@ public class HomepageController {
         public Map<Integer, String> getAnswerKey() { return answerKey; }
         public java.time.LocalDateTime getUploadedAt() { return uploadedAt; }
     }
+    
+    // Helper class for shuffling questions while preserving answer associations
+    private static class QuestionWithAnswer {
+        String question;
+        String answer;
+        int originalNumber;
+        
+        QuestionWithAnswer(String question, String answer, int originalNumber) {
+            this.question = question;
+            this.answer = answer;
+            this.originalNumber = originalNumber;
+        }
+    }
 
     // Public getter for accessing distributed exams from other controllers
     public static Map<String, List<String>> getDistributedExams() {
@@ -416,10 +429,27 @@ public class HomepageController {
 
         session.setAttribute("correctAnswerKey", answerKey);
         
-        // DO NOT shuffle questions - this causes answer key mismatch!
-        // The answer key is indexed by question number (1, 2, 3...)
-        // If we shuffle questions, the answer key will point to wrong answers
-        // Collections.shuffle(questionBlocks, rand);
+        // Shuffle the question order to prevent cheating
+        // Create a mapping to preserve answer key association
+        List<QuestionWithAnswer> questionsWithAnswers = new ArrayList<>();
+        for (int i = 0; i < questionBlocks.size(); i++) {
+            String question = questionBlocks.get(i);
+            String answer = answerKey.get(i + 1); // Answer key is 1-indexed
+            questionsWithAnswers.add(new QuestionWithAnswer(question, answer, i + 1));
+        }
+        
+        // Shuffle questions with their answers
+        Collections.shuffle(questionsWithAnswers, rand);
+        
+        // Rebuild questionBlocks and answerKey with new order
+        questionBlocks.clear();
+        answerKey.clear();
+        for (int i = 0; i < questionsWithAnswers.size(); i++) {
+            QuestionWithAnswer qa = questionsWithAnswers.get(i);
+            questionBlocks.add(qa.question);
+            answerKey.put(i + 1, qa.answer);
+            System.out.println("Shuffled Q" + (i + 1) + " (originally Q" + qa.originalNumber + ") -> " + qa.answer);
+        }
         
         return questionBlocks;
     }
