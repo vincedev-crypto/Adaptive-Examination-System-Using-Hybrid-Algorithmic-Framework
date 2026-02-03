@@ -163,7 +163,8 @@
                                                         </div>
                                                         <div class="col-md-6 mb-2">
                                                             <label class="form-label small fw-bold">Submission Deadline</label>
-                                                            <input type="datetime-local" name="deadline" class="form-control form-control-sm" required>
+                                                            <input type="datetime-local" name="deadline" class="form-control form-control-sm" 
+                                                                   th:min="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd''T''HH:mm')}" required>
                                                         </div>
                                                     </div>
                                                 </div>
