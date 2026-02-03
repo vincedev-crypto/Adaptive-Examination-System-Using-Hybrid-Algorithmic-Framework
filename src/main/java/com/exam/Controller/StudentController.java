@@ -179,18 +179,17 @@ public class StudentController {
         String deadline = (String) session.getAttribute("examDeadline_" + studentId);
         
         // ALWAYS set start time to NOW when student accesses exam page (force reset)
-        // This ensures timer starts fresh even if old session data exists
-        String startTime = java.time.LocalDateTime.now()
-            .truncatedTo(java.time.temporal.ChronoUnit.MILLIS)
-            .toString();
-        session.setAttribute("examStartTime_" + studentId, startTime);
-        System.out.println("▶ Exam timer STARTED for " + studentId + " at: " + startTime);
+        // Use epoch milliseconds for reliable JavaScript Date handling
+        long startTimeMillis = System.currentTimeMillis();
+        session.setAttribute("examStartTime_" + studentId, startTimeMillis);
+        System.out.println("▶ Exam timer STARTED for " + studentId + " at: " + startTimeMillis + " (" + 
+                          java.time.Instant.ofEpochMilli(startTimeMillis).toString() + ")");
         
         examInfo.put("subject", subject != null ? subject : "General");
         examInfo.put("activityType", activityType != null ? activityType : "Exam");
         examInfo.put("timeLimit", timeLimit != null ? timeLimit.toString() : "60");
         examInfo.put("deadline", deadline != null ? deadline : "");
-        examInfo.put("startTime", startTime);
+        examInfo.put("startTimeMillis", String.valueOf(startTimeMillis));
         model.addAttribute("examInfo", examInfo);
         
         // Get question difficulties from session
@@ -214,6 +213,18 @@ public class StudentController {
                             HttpSession session, Model model,
                             java.security.Principal principal) {
         String studentId = principal != null ? principal.getName() : "guest";
+        
+        // Prevent immediate auto-submit: Check if exam just started (< 10 seconds ago)
+        Object startTimeObj = session.getAttribute("examStartTime_" + studentId);
+        if (startTimeObj != null) {
+            long startTimeMillis = (Long) startTimeObj;
+            long elapsedMillis = System.currentTimeMillis() - startTimeMillis;
+            if (elapsedMillis < 10000) { // Less than 10 seconds
+                System.out.println("⚠️ BLOCKED: Exam submitted too quickly (" + elapsedMillis + "ms). Rejecting.");
+                model.addAttribute("error", "Exam cannot be submitted within 10 seconds of starting. Please wait.");
+                return "redirect:/student/take-exam";
+            }
+        }
         
         // Get answer key for this student from the AnswerKeyService
         Map<Integer, String> key = answerKeyService.getStudentAnswerKey(studentId);

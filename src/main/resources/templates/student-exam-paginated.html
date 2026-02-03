@@ -360,38 +360,35 @@
         // Timer functions
         function initializeTimer() {
             const timeLimitMinutes = parseInt(examInfo.timeLimit) || 60;
-            const startTimeStr = examInfo.startTime;
+            const startTimeMillis = parseInt(examInfo.startTimeMillis);
             
             console.log('🕒 Initializing timer - Time limit:', timeLimitMinutes, 'minutes');
-            console.log('🕒 Start time received:', startTimeStr);
+            console.log('🕒 Start time (epoch ms):', startTimeMillis);
             
-            // Calculate remaining time based on start time
-            if (!startTimeStr || startTimeStr === '' || startTimeStr === 'undefined') {
-                console.warn('⚠️ No start time provided, using full time limit');
+            // Calculate remaining time using epoch milliseconds (no Date parsing needed)
+            if (!startTimeMillis || isNaN(startTimeMillis)) {
+                console.warn('⚠️ No valid start time provided, using full time limit');
                 timeRemainingSeconds = timeLimitMinutes * 60;
             } else {
-                try {
-                    const startTime = new Date(startTimeStr);
-                    const now = new Date();
-                    
-                    if (isNaN(startTime.getTime())) {
-                        console.warn('⚠️ Invalid date format, using full time limit');
+                const nowMillis = Date.now();
+                const elapsedSeconds = Math.floor((nowMillis - startTimeMillis) / 1000);
+                timeRemainingSeconds = (timeLimitMinutes * 60) - elapsedSeconds;
+                
+                console.log('🕒 Current time (epoch ms):', nowMillis);
+                console.log('🕒 Elapsed:', elapsedSeconds, 'seconds');
+                console.log('🕒 Remaining:', timeRemainingSeconds, 'seconds');
+                
+                // Minimum 5 seconds to prevent immediate auto-submit on page load
+                if (timeRemainingSeconds < 5) {
+                    console.warn('⚠️ Timer shows < 5 seconds. Check if this is correct!');
+                    if (elapsedSeconds < 5) {
+                        // If exam just started, reset to full time
+                        console.log('✅ Exam just started, using full time limit');
                         timeRemainingSeconds = timeLimitMinutes * 60;
                     } else {
-                        const elapsedSeconds = Math.floor((now - startTime) / 1000);
-                        timeRemainingSeconds = (timeLimitMinutes * 60) - elapsedSeconds;
-                        
-                        console.log('🕒 Elapsed:', elapsedSeconds, 'seconds');
-                        console.log('🕒 Remaining:', timeRemainingSeconds, 'seconds');
-                        
-                        // If time is negative or already expired, set to 0 (will auto-submit immediately)
-                        if (timeRemainingSeconds < 0) {
-                            timeRemainingSeconds = 0;
-                        }
+                        // Time actually expired
+                        timeRemainingSeconds = 0;
                     }
-                } catch (e) {
-                    console.error('❌ Error parsing start time:', e);
-                    timeRemainingSeconds = timeLimitMinutes * 60;
                 }
             }
             
