@@ -192,19 +192,21 @@
 
         // Display current question
         function displayQuestion() {
-            const question = exam[currentPage];
+            let question = exam[currentPage];
             const questionNumber = currentPage + 1;
             
-            // Check if it's a text-input question (remove the prefix for display)
-            const isTextInput = question.startsWith('[TEXT_INPUT]');
-            const actualQuestion = isTextInput ? question.substring(12).trim() : question;
+            // Remove [TEXT_INPUT] prefix if present
+            const isTextInput = question.includes('[TEXT_INPUT]');
+            if (isTextInput) {
+                question = question.replace('[TEXT_INPUT]', '').trim();
+            }
             
             let html = `<h5 class="mb-4">Question ${questionNumber}</h5>`;
             
             if (isTextInput) {
                 // Text-input question (prefix hidden from student)
                 html += `
-                    <p class="lead mb-4">${actualQuestion}</p>
+                    <p class="lead mb-4">${question}</p>
                     <div class="form-group">
                         <label class="form-label fw-bold">Your Answer:</label>
                         <textarea class="form-control" rows="4" 
