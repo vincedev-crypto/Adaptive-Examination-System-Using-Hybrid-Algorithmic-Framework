@@ -2,7 +2,9 @@ package com.exam.Controller;
 
 import Service.RandomForestService;
 import com.exam.entity.ExamSubmission;
+import com.exam.entity.User;
 import com.exam.repository.ExamSubmissionRepository;
+import com.exam.repository.UserRepository;
 import com.exam.service.AnswerKeyService;
 import com.exam.service.IRT3PLService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,6 +31,9 @@ public class StudentController {
     
     @Autowired
     private ExamSubmissionRepository examSubmissionRepository;
+    
+    @Autowired
+    private UserRepository userRepository;
 
     // This would normally be injected from a service, but for now we'll reference the static map
     // In production, this should be stored in database
