@@ -57,15 +57,16 @@
                                 </div>
                             </div>
                             
-                            <label class="form-label fw-bold text-primary">Select Test Questionnaire (PDF) *</label>
-                            <input class="form-control mb-3" type="file" name="examCreated" accept=".pdf" required>
+                            <label class="form-label fw-bold text-primary">Select Test Questionnaire (PDF or CSV) *</label>
+                            <input class="form-control mb-3" type="file" name="examCreated" accept=".pdf,.csv" required>
                             
-                            <label class="form-label fw-bold text-warning">Select Answer Key (PDF) - Optional</label>
-                            <input class="form-control" type="file" name="answerKeyPdf" accept=".pdf">
+                            <label class="form-label fw-bold text-warning">Select Answer Key (PDF or CSV) - Optional</label>
+                            <input class="form-control" type="file" name="answerKeyPdf" accept=".pdf,.csv">
                             <div class="form-text">
-                                <strong>Two Options:</strong><br>
+                                <strong>Three Options:</strong><br>
                                 1. <strong>Single PDF</strong>: Questions with "Answer: ..." lines included<br>
-                                2. <strong>Two PDFs</strong>: Upload questions PDF + separate answer key PDF
+                                2. <strong>Two PDFs</strong>: Upload questions PDF + separate answer key PDF<br>
+                                3. <strong>CSV Format</strong>: Upload CSV file with columns: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD, Answer
                             </div>
                         </div>
 

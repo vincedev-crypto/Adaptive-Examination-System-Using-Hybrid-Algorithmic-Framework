@@ -277,16 +277,29 @@ public class HomepageController {
                                HttpSession session, Model model) throws Exception {
         if (examCreated != null && !examCreated.isEmpty()) {
             Map<Integer, String> answerKey = new HashMap<>();
+            String fileName = examCreated.getOriginalFilename();
+            boolean isCsvFormat = fileName != null && fileName.toLowerCase().endsWith(".csv");
             
-            // Check if separate answer key PDF is provided
+            // Check if separate answer key is provided
             if (answerKeyPdf != null && !answerKeyPdf.isEmpty()) {
-                // Parse separate answer key PDF
-                answerKey = parseAnswerKeyPdf(answerKeyPdf);
+                String answerKeyFileName = answerKeyPdf.getOriginalFilename();
+                boolean isAnswerKeyCsv = answerKeyFileName != null && answerKeyFileName.toLowerCase().endsWith(".csv");
+                
+                if (isAnswerKeyCsv) {
+                    answerKey = parseAnswerKeyCsv(answerKeyPdf);
+                } else {
+                    answerKey = parseAnswerKeyPdf(answerKeyPdf);
+                }
                 model.addAttribute("message", "Exam and Answer Key processed successfully!");
             }
             
-            // Process exam (with or without embedded answers)
-            List<String> randomizedLines = processFisherYates(examCreated, session, answerKey);
+            // Process exam based on file type
+            List<String> randomizedLines;
+            if (isCsvFormat) {
+                randomizedLines = processCsvExam(examCreated, session, answerKey);
+            } else {
+                randomizedLines = processFisherYates(examCreated, session, answerKey);
+            }
             session.setAttribute("shuffledExam", randomizedLines);
             
             @SuppressWarnings("unchecked")
@@ -395,6 +408,171 @@ public class HomepageController {
         }
         
         return answerKey;
+    }
+    
+    /**
+     * Parse CSV file containing exam questions and answers
+     * Expected format: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD, Answer
+     */
+    private List<String> processCsvExam(MultipartFile file, HttpSession session, 
+                                        Map<Integer, String> externalAnswerKey) throws IOException {
+        List<String> questionBlocks = new ArrayList<>();
+        Map<Integer, String> answerKey = new HashMap<>();
+        
+        System.out.println("=== PROCESSING CSV EXAM ===");
+        
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
+            String headerLine = reader.readLine(); // Skip header
+            System.out.println("CSV Header: " + headerLine);
+            
+            String line;
+            int questionNumber = 1;
+            
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                
+                // Parse CSV line (handle quoted fields)
+                String[] columns = parseCsvLine(line);
+                
+                if (columns.length >= 6) {
+                    String questionText = columns[0].trim();
+                    String choiceA = columns[1].trim();
+                    String choiceB = columns[2].trim();
+                    String choiceC = columns[3].trim();
+                    String choiceD = columns[4].trim();
+                    String correctAnswer = columns[5].trim();
+                    
+                    // Build question block
+                    StringBuilder questionBlock = new StringBuilder();
+                    questionBlock.append(questionText).append("\n");
+                    questionBlock.append("A) ").append(choiceA).append("\n");
+                    questionBlock.append("B) ").append(choiceB).append("\n");
+                    questionBlock.append("C) ").append(choiceC).append("\n");
+                    questionBlock.append("D) ").append(choiceD);
+                    
+                    questionBlocks.add(questionBlock.toString());
+                    answerKey.put(questionNumber, correctAnswer);
+                    
+                    System.out.println("Parsed CSV Q" + questionNumber + " -> " + correctAnswer);
+                    questionNumber++;
+                } else {
+                    System.out.println("WARNING: Skipping malformed CSV line: " + line);
+                }
+            }
+        }
+        
+        System.out.println("=== CSV EXAM PARSED: " + questionBlocks.size() + " questions ===");
+        
+        // Merge external answer key if provided
+        if (externalAnswerKey != null && !externalAnswerKey.isEmpty()) {
+            System.out.println("Merging external answer key with " + externalAnswerKey.size() + " answers");
+            answerKey.putAll(externalAnswerKey);
+        }
+        
+        // Shuffle questions with Fisher-Yates
+        List<QuestionWithAnswer> questionsWithAnswers = new ArrayList<>();
+        for (int i = 0; i < questionBlocks.size(); i++) {
+            String question = questionBlocks.get(i);
+            String answer = answerKey.get(i + 1);
+            questionsWithAnswers.add(new QuestionWithAnswer(question, answer, i + 1));
+        }
+        
+        SecureRandom rand = new SecureRandom();
+        Collections.shuffle(questionsWithAnswers, rand);
+        
+        // Rebuild with shuffled order
+        questionBlocks.clear();
+        answerKey.clear();
+        for (int i = 0; i < questionsWithAnswers.size(); i++) {
+            QuestionWithAnswer qa = questionsWithAnswers.get(i);
+            
+            // Re-shuffle choices within each question
+            String shuffledQuestion = reshuffleQuestionChoices(qa.question, rand);
+            questionBlocks.add(shuffledQuestion);
+            answerKey.put(i + 1, qa.answer);
+            
+            System.out.println("Shuffled CSV Q" + (i + 1) + " (originally Q" + qa.originalNumber + ") -> " + qa.answer);
+        }
+        
+        session.setAttribute("correctAnswerKey", answerKey);
+        return questionBlocks;
+    }
+    
+    /**
+     * Parse CSV answer key file
+     * Expected format: QuestionNumber, Answer (or just Answer per line)
+     */
+    private Map<Integer, String> parseAnswerKeyCsv(MultipartFile file) throws IOException {
+        Map<Integer, String> answerKey = new HashMap<>();
+        
+        System.out.println("=== PARSING CSV ANSWER KEY ===");
+        
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
+            String firstLine = reader.readLine();
+            boolean hasHeader = firstLine != null && 
+                               (firstLine.toLowerCase().contains("question") || 
+                                firstLine.toLowerCase().contains("answer"));
+            
+            if (!hasHeader && firstLine != null) {
+                // Process first line as data
+                String[] columns = parseCsvLine(firstLine);
+                if (columns.length >= 2) {
+                    int qNum = Integer.parseInt(columns[0].trim());
+                    answerKey.put(qNum, columns[1].trim());
+                } else if (columns.length == 1) {
+                    answerKey.put(1, columns[0].trim());
+                }
+            }
+            
+            String line;
+            int questionNumber = hasHeader ? 1 : 2;
+            
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                
+                String[] columns = parseCsvLine(line);
+                
+                if (columns.length >= 2) {
+                    // Format: QuestionNumber, Answer
+                    int qNum = Integer.parseInt(columns[0].trim());
+                    answerKey.put(qNum, columns[1].trim());
+                    System.out.println("Parsed CSV Answer Key Q" + qNum + " -> " + columns[1].trim());
+                } else if (columns.length == 1) {
+                    // Format: Just answers per line
+                    answerKey.put(questionNumber, columns[0].trim());
+                    System.out.println("Parsed CSV Answer Key Q" + questionNumber + " -> " + columns[0].trim());
+                    questionNumber++;
+                }
+            }
+        }
+        
+        System.out.println("=== CSV ANSWER KEY PARSED: " + answerKey.size() + " answers ===");
+        return answerKey;
+    }
+    
+    /**
+     * Parse a CSV line handling quoted fields and commas within quotes
+     */
+    private String[] parseCsvLine(String line) {
+        List<String> fields = new ArrayList<>();
+        StringBuilder currentField = new StringBuilder();
+        boolean inQuotes = false;
+        
+        for (int i = 0; i < line.length(); i++) {
+            char c = line.charAt(i);
+            
+            if (c == '"') {
+                inQuotes = !inQuotes;
+            } else if (c == ',' && !inQuotes) {
+                fields.add(currentField.toString());
+                currentField = new StringBuilder();
+            } else {
+                currentField.append(c);
+            }
+        }
+        
+        fields.add(currentField.toString());
+        return fields.toArray(new String[0]);
     }
 
     private List<String> processFisherYates(MultipartFile file, HttpSession session, 
