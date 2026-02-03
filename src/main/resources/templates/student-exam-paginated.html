@@ -359,16 +359,40 @@
 
         // Timer functions
         function initializeTimer() {
-            const timeLimitMinutes = parseInt(examInfo.timeLimit);
-            const startTime = new Date(examInfo.startTime);
-            const now = new Date();
-            const elapsedSeconds = Math.floor((now - startTime) / 1000);
+            const timeLimitMinutes = parseInt(examInfo.timeLimit) || 60;
+            const startTimeStr = examInfo.startTime;
             
-            timeRemainingSeconds = (timeLimitMinutes * 60) - elapsedSeconds;
-            
-            if (timeRemainingSeconds <= 0) {
-                autoSubmitExam();
-                return;
+            // Validate start time exists
+            if (!startTimeStr || startTimeStr === '' || startTimeStr === 'undefined') {
+                console.warn('Invalid start time, using full time limit');
+                timeRemainingSeconds = timeLimitMinutes * 60;
+            } else {
+                try {
+                    const startTime = new Date(startTimeStr);
+                    const now = new Date();
+                    
+                    // Check if date is valid
+                    if (isNaN(startTime.getTime())) {
+                        console.warn('Invalid date, using full time limit');
+                        timeRemainingSeconds = timeLimitMinutes * 60;
+                    } else {
+                        const elapsedSeconds = Math.floor((now - startTime) / 1000);
+                        timeRemainingSeconds = Math.max((timeLimitMinutes * 60) - elapsedSeconds, 0);
+                        
+                        // Only auto-submit if significantly past time limit (> 1 minute)
+                        if (timeRemainingSeconds <= 0 && elapsedSeconds > (timeLimitMinutes * 60 + 60)) {
+                            console.log('Exam time expired - auto submitting');
+                            autoSubmitExam();
+                            return;
+                        } else if (timeRemainingSeconds <= 0) {
+                            // Give a small grace period
+                            timeRemainingSeconds = 60;
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error parsing start time:', e);
+                    timeRemainingSeconds = timeLimitMinutes * 60;
+                }
             }
             
             updateTimerDisplay();
