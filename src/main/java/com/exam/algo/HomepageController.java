@@ -412,7 +412,11 @@ public class HomepageController {
     
     /**
      * Parse CSV file containing exam questions and answers
-     * Expected format: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD, Answer
+     * Supports multiple formats:
+     * 1. Full format: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD, Answer
+     * 2. Compact format with embedded answer: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD
+     *    (Answer extracted from question text if it contains "Answer: ...")
+     * 3. Simple format: Question (with embedded "Answer: ...")
      */
     private List<String> processCsvExam(MultipartFile file, HttpSession session, 
                                         Map<Integer, String> externalAnswerKey) throws IOException {
@@ -422,42 +426,27 @@ public class HomepageController {
         System.out.println("=== PROCESSING CSV EXAM ===");
         
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
-            String headerLine = reader.readLine(); // Skip header
-            System.out.println("CSV Header: " + headerLine);
+            String headerLine = reader.readLine(); // Read first line
+            System.out.println("CSV First Line: " + headerLine);
+            
+            // Detect CSV format
+            String[] headerCols = parseCsvLine(headerLine);
+            boolean hasHeader = headerLine.toLowerCase().contains("question") || 
+                               headerLine.toLowerCase().contains("choice") ||
+                               headerLine.toLowerCase().contains("answer");
+            
+            // Process first line if it's not a header
+            if (!hasHeader && headerLine != null && !headerLine.trim().isEmpty()) {
+                processCSVRow(headerLine, 1, questionBlocks, answerKey);
+            }
             
             String line;
-            int questionNumber = 1;
+            int questionNumber = hasHeader ? 1 : 2;
             
             while ((line = reader.readLine()) != null) {
                 if (line.trim().isEmpty()) continue;
-                
-                // Parse CSV line (handle quoted fields)
-                String[] columns = parseCsvLine(line);
-                
-                if (columns.length >= 6) {
-                    String questionText = columns[0].trim();
-                    String choiceA = columns[1].trim();
-                    String choiceB = columns[2].trim();
-                    String choiceC = columns[3].trim();
-                    String choiceD = columns[4].trim();
-                    String correctAnswer = columns[5].trim();
-                    
-                    // Build question block
-                    StringBuilder questionBlock = new StringBuilder();
-                    questionBlock.append(questionText).append("\n");
-                    questionBlock.append("A) ").append(choiceA).append("\n");
-                    questionBlock.append("B) ").append(choiceB).append("\n");
-                    questionBlock.append("C) ").append(choiceC).append("\n");
-                    questionBlock.append("D) ").append(choiceD);
-                    
-                    questionBlocks.add(questionBlock.toString());
-                    answerKey.put(questionNumber, correctAnswer);
-                    
-                    System.out.println("Parsed CSV Q" + questionNumber + " -> " + correctAnswer);
-                    questionNumber++;
-                } else {
-                    System.out.println("WARNING: Skipping malformed CSV line: " + line);
-                }
+                processCSVRow(line, questionNumber, questionBlocks, answerKey);
+                questionNumber++;
             }
         }
         
@@ -496,6 +485,116 @@ public class HomepageController {
         
         session.setAttribute("correctAnswerKey", answerKey);
         return questionBlocks;
+    }
+    
+    /**
+     * Process a single CSV row - handles multiple formats
+     */
+    private void processCSVRow(String line, int questionNumber, 
+                               List<String> questionBlocks, Map<Integer, String> answerKey) {
+        String[] columns = parseCsvLine(line);
+        
+        if (columns.length >= 6) {
+            // Format 1: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD, Answer
+            String questionText = columns[0].trim();
+            String choiceA = columns[1].trim();
+            String choiceB = columns[2].trim();
+            String choiceC = columns[3].trim();
+            String choiceD = columns[4].trim();
+            String correctAnswer = columns[5].trim();
+            
+            // Build question block
+            StringBuilder questionBlock = new StringBuilder();
+            questionBlock.append(questionText).append("\n");
+            questionBlock.append("A) ").append(choiceA).append("\n");
+            questionBlock.append("B) ").append(choiceB).append("\n");
+            questionBlock.append("C) ").append(choiceC).append("\n");
+            questionBlock.append("D) ").append(choiceD);
+            
+            questionBlocks.add(questionBlock.toString());
+            answerKey.put(questionNumber, correctAnswer);
+            
+            System.out.println("Parsed CSV Q" + questionNumber + " (Format 1) -> " + correctAnswer);
+            
+        } else if (columns.length >= 5) {
+            // Format 2: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD
+            // Try to extract answer from question text
+            String questionText = columns[0].trim();
+            String choiceA = columns[1].trim();
+            String choiceB = columns[2].trim();
+            String choiceC = columns[3].trim();
+            String choiceD = columns[4].trim();
+            
+            // Extract answer if embedded in question
+            String correctAnswer = extractEmbeddedAnswer(questionText);
+            if (correctAnswer != null) {
+                // Remove the answer from question text
+                questionText = questionText.replaceAll("(?i)\\s*answer\\s*:\\s*.*$", "").trim();
+            }
+            
+            // Build question block
+            StringBuilder questionBlock = new StringBuilder();
+            questionBlock.append(questionText).append("\n");
+            questionBlock.append("A) ").append(choiceA).append("\n");
+            questionBlock.append("B) ").append(choiceB).append("\n");
+            questionBlock.append("C) ").append(choiceC).append("\n");
+            questionBlock.append("D) ").append(choiceD);
+            
+            questionBlocks.add(questionBlock.toString());
+            if (correctAnswer != null) {
+                answerKey.put(questionNumber, correctAnswer);
+                System.out.println("Parsed CSV Q" + questionNumber + " (Format 2 with embedded answer) -> " + correctAnswer);
+            } else {
+                System.out.println("Parsed CSV Q" + questionNumber + " (Format 2 - no answer found)");
+            }
+            
+        } else if (columns.length == 1) {
+            // Format 3: Single column with question containing embedded answer and choices
+            String fullText = columns[0].trim();
+            
+            // Try to extract answer
+            String correctAnswer = extractEmbeddedAnswer(fullText);
+            
+            // Remove answer line from text
+            fullText = fullText.replaceAll("(?i)\\s*answer\\s*:\\s*.*$", "").trim();
+            
+            // Check if it already has choices formatted
+            if (fullText.contains("\n") && fullText.matches("(?s).*[A-D]\\).*")) {
+                // Already has formatted choices
+                questionBlocks.add(fullText);
+            } else {
+                // Plain question without formatted choices
+                questionBlocks.add(fullText);
+            }
+            
+            if (correctAnswer != null) {
+                answerKey.put(questionNumber, correctAnswer);
+                System.out.println("Parsed CSV Q" + questionNumber + " (Format 3 with embedded answer) -> " + correctAnswer);
+            } else {
+                System.out.println("Parsed CSV Q" + questionNumber + " (Format 3 - no answer found)");
+            }
+            
+        } else {
+            System.out.println("WARNING: Skipping malformed CSV line: " + line);
+        }
+    }
+    
+    /**
+     * Extract embedded answer from question text (e.g., "Answer: Paris")
+     */
+    private String extractEmbeddedAnswer(String text) {
+        if (text.toLowerCase().contains("answer:")) {
+            String[] parts = text.split("(?i)answer\\s*:\\s*", 2);
+            if (parts.length == 2) {
+                return parts[1].trim();
+            }
+        } else if (text.toLowerCase().contains("correct:")) {
+            String[] parts = text.split("(?i)correct\\s*:\\s*", 2);
+            if (parts.length == 2) {
+                return parts[1].trim();
+            }
+        }
+        return null;
     }
     
     /**
