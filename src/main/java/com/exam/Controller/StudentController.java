@@ -179,11 +179,18 @@ public class StudentController {
         String deadline = (String) session.getAttribute("examDeadline_" + studentId);
         String startTime = (String) session.getAttribute("examStartTime_" + studentId);
         
+        // Set start time NOW if this is the first time taking the exam
+        if (startTime == null || startTime.isEmpty()) {
+            startTime = java.time.LocalDateTime.now().toString();
+            session.setAttribute("examStartTime_" + studentId, startTime);
+            System.out.println("Exam start time set for " + studentId + ": " + startTime);
+        }
+        
         examInfo.put("subject", subject != null ? subject : "General");
         examInfo.put("activityType", activityType != null ? activityType : "Exam");
         examInfo.put("timeLimit", timeLimit != null ? timeLimit.toString() : "60");
         examInfo.put("deadline", deadline != null ? deadline : "");
-        examInfo.put("startTime", startTime != null ? startTime : java.time.LocalDateTime.now().toString());
+        examInfo.put("startTime", startTime);
         model.addAttribute("examInfo", examInfo);
         
         // Get question difficulties from session

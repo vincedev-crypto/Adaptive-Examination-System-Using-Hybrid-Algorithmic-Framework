@@ -193,10 +193,9 @@ public class HomepageController {
             session.setAttribute("examActivityType_" + targetStudent, selectedExam.getActivityType());
             session.setAttribute("examName_" + targetStudent, selectedExam.getExamName());
             
-            // Store time limit and deadline
+            // Store time limit and deadline (startTime will be set when student actually takes exam)
             session.setAttribute("examTimeLimit_" + targetStudent, timeLimit);
             session.setAttribute("examDeadline_" + targetStudent, deadline);
-            session.setAttribute("examStartTime_" + targetStudent, java.time.LocalDateTime.now().toString());
             
             // Store the answer key for this student (answers remain the same, just choice order changes)
             if (selectedExam.getAnswerKey() != null) {
