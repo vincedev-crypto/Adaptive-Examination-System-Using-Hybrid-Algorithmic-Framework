@@ -177,14 +177,14 @@ public class StudentController {
         String activityType = (String) session.getAttribute("examActivityType_" + studentId);
         Integer timeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentId);
         String deadline = (String) session.getAttribute("examDeadline_" + studentId);
-        String startTime = (String) session.getAttribute("examStartTime_" + studentId);
         
-        // Set start time NOW if this is the first time taking the exam
-        if (startTime == null || startTime.isEmpty()) {
-            startTime = java.time.LocalDateTime.now().toString();
-            session.setAttribute("examStartTime_" + studentId, startTime);
-            System.out.println("Exam start time set for " + studentId + ": " + startTime);
-        }
+        // ALWAYS set start time to NOW when student accesses exam page (force reset)
+        // This ensures timer starts fresh even if old session data exists
+        String startTime = java.time.LocalDateTime.now()
+            .truncatedTo(java.time.temporal.ChronoUnit.MILLIS)
+            .toString();
+        session.setAttribute("examStartTime_" + studentId, startTime);
+        System.out.println("▶ Exam timer STARTED for " + studentId + " at: " + startTime);
         
         examInfo.put("subject", subject != null ? subject : "General");
         examInfo.put("activityType", activityType != null ? activityType : "Exam");

@@ -362,38 +362,40 @@
             const timeLimitMinutes = parseInt(examInfo.timeLimit) || 60;
             const startTimeStr = examInfo.startTime;
             
-            // Validate start time exists
+            console.log('🕒 Initializing timer - Time limit:', timeLimitMinutes, 'minutes');
+            console.log('🕒 Start time received:', startTimeStr);
+            
+            // Calculate remaining time based on start time
             if (!startTimeStr || startTimeStr === '' || startTimeStr === 'undefined') {
-                console.warn('Invalid start time, using full time limit');
+                console.warn('⚠️ No start time provided, using full time limit');
                 timeRemainingSeconds = timeLimitMinutes * 60;
             } else {
                 try {
                     const startTime = new Date(startTimeStr);
                     const now = new Date();
                     
-                    // Check if date is valid
                     if (isNaN(startTime.getTime())) {
-                        console.warn('Invalid date, using full time limit');
+                        console.warn('⚠️ Invalid date format, using full time limit');
                         timeRemainingSeconds = timeLimitMinutes * 60;
                     } else {
                         const elapsedSeconds = Math.floor((now - startTime) / 1000);
-                        timeRemainingSeconds = Math.max((timeLimitMinutes * 60) - elapsedSeconds, 0);
+                        timeRemainingSeconds = (timeLimitMinutes * 60) - elapsedSeconds;
                         
-                        // Only auto-submit if significantly past time limit (> 1 minute)
-                        if (timeRemainingSeconds <= 0 && elapsedSeconds > (timeLimitMinutes * 60 + 60)) {
-                            console.log('Exam time expired - auto submitting');
-                            autoSubmitExam();
-                            return;
-                        } else if (timeRemainingSeconds <= 0) {
-                            // Give a small grace period
-                            timeRemainingSeconds = 60;
+                        console.log('🕒 Elapsed:', elapsedSeconds, 'seconds');
+                        console.log('🕒 Remaining:', timeRemainingSeconds, 'seconds');
+                        
+                        // If time is negative or already expired, set to 0 (will auto-submit immediately)
+                        if (timeRemainingSeconds < 0) {
+                            timeRemainingSeconds = 0;
                         }
                     }
                 } catch (e) {
-                    console.error('Error parsing start time:', e);
+                    console.error('❌ Error parsing start time:', e);
                     timeRemainingSeconds = timeLimitMinutes * 60;
                 }
             }
+            
+            console.log('✅ Timer initialized with', timeRemainingSeconds, 'seconds remaining');
             
             updateTimerDisplay();
             timerInterval = setInterval(() => {
