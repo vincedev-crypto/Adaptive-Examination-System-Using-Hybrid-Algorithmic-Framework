@@ -63,13 +63,18 @@ public class HomepageController {
     public static class UploadedExam {
         private String examId;
         private String examName;
+        private String subject;
+        private String activityType;
         private List<String> questions;
         private Map<Integer, String> answerKey;
         private java.time.LocalDateTime uploadedAt;
         
-        public UploadedExam(String examId, String examName, List<String> questions, Map<Integer, String> answerKey) {
+        public UploadedExam(String examId, String examName, String subject, String activityType, 
+                          List<String> questions, Map<Integer, String> answerKey) {
             this.examId = examId;
             this.examName = examName;
+            this.subject = subject;
+            this.activityType = activityType;
             this.questions = questions;
             this.answerKey = answerKey;
             this.uploadedAt = java.time.LocalDateTime.now();
@@ -77,6 +82,8 @@ public class HomepageController {
         
         public String getExamId() { return examId; }
         public String getExamName() { return examName; }
+        public String getSubject() { return subject; }
+        public String getActivityType() { return activityType; }
         public List<String> getQuestions() { return questions; }
         public Map<Integer, String> getAnswerKey() { return answerKey; }
         public java.time.LocalDateTime getUploadedAt() { return uploadedAt; }
@@ -156,7 +163,9 @@ public class HomepageController {
 
     @PostMapping("/distribute")
     public String distributeExam(@RequestParam String targetStudent, 
-                                 @RequestParam String examId, 
+                                 @RequestParam String examId,
+                                 @RequestParam Integer timeLimit,
+                                 @RequestParam String deadline,
                                  HttpSession session) {
         UploadedExam selectedExam = uploadedExams.get(examId);
         
@@ -175,14 +184,52 @@ public class HomepageController {
             // Store the uniquely shuffled exam for this student
             distributedExams.put(targetStudent, uniqueExam);
             
+            // Generate difficulty levels for each question
+            List<String> difficultyLevels = generateQuestionDifficulties(uniqueExam.size(), rand);
+            session.setAttribute("questionDifficulties_" + targetStudent, difficultyLevels);
+            
+            // Store exam metadata for student display
+            session.setAttribute("examSubject_" + targetStudent, selectedExam.getSubject());
+            session.setAttribute("examActivityType_" + targetStudent, selectedExam.getActivityType());
+            session.setAttribute("examName_" + targetStudent, selectedExam.getExamName());
+            
+            // Store time limit and deadline
+            session.setAttribute("examTimeLimit_" + targetStudent, timeLimit);
+            session.setAttribute("examDeadline_" + targetStudent, deadline);
+            session.setAttribute("examStartTime_" + targetStudent, java.time.LocalDateTime.now().toString());
+            
             // Store the answer key for this student (answers remain the same, just choice order changes)
             if (selectedExam.getAnswerKey() != null) {
                 answerKeyService.storeStudentAnswerKey(targetStudent, selectedExam.getAnswerKey());
             }
             
             System.out.println("Distributed unique shuffled exam to: " + targetStudent);
+            System.out.println("Time limit: " + timeLimit + " minutes, Deadline: " + deadline);
         }
         return "redirect:/teacher/homepage";
+    }
+    
+    /**
+     * Generate difficulty levels for questions based on IRT-inspired distribution
+     * Difficulty spread: 30% Easy, 50% Medium, 20% Hard
+     */
+    private List<String> generateQuestionDifficulties(int numQuestions, SecureRandom rand) {
+        List<String> difficulties = new ArrayList<>();
+        
+        // Calculate distribution
+        int numEasy = (int) Math.ceil(numQuestions * 0.30);
+        int numHard = (int) Math.ceil(numQuestions * 0.20);
+        int numMedium = numQuestions - numEasy - numHard;
+        
+        // Create difficulty pool
+        for (int i = 0; i < numEasy; i++) difficulties.add("Easy");
+        for (int i = 0; i < numMedium; i++) difficulties.add("Medium");
+        for (int i = 0; i < numHard; i++) difficulties.add("Hard");
+        
+        // Shuffle to randomize difficulty order
+        Collections.shuffle(difficulties, rand);
+        
+        return difficulties;
     }
     
     /**
@@ -225,6 +272,8 @@ public class HomepageController {
     @PostMapping("/process-exams")
     public String processExams(@RequestParam(value = "examCreated", required = false) MultipartFile examCreated,
                                @RequestParam(value = "answerKeyPdf", required = false) MultipartFile answerKeyPdf,
+                               @RequestParam(value = "subject", required = false) String subject,
+                               @RequestParam(value = "activityType", required = false) String activityType,
                                HttpSession session, Model model) throws Exception {
         if (examCreated != null && !examCreated.isEmpty()) {
             Map<Integer, String> answerKey = new HashMap<>();
@@ -246,7 +295,11 @@ public class HomepageController {
             // Store the uploaded exam for later selection
             String examId = "EXAM_" + System.currentTimeMillis();
             String examName = examCreated.getOriginalFilename().replace(".pdf", "");
-            UploadedExam uploadedExam = new UploadedExam(examId, examName, randomizedLines, finalAnswerKey);
+            String examSubject = (subject != null && !subject.isEmpty()) ? subject : "General";
+            String examActivityType = (activityType != null && !activityType.isEmpty()) ? activityType : "Exam";
+            
+            UploadedExam uploadedExam = new UploadedExam(examId, examName, examSubject, examActivityType, 
+                                                         randomizedLines, finalAnswerKey);
             uploadedExams.put(examId, uploadedExam);
             
             model.addAttribute("type", "exam");

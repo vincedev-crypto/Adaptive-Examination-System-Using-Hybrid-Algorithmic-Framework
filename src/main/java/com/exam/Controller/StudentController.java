@@ -151,8 +151,50 @@ public class StudentController {
             return "redirect:/student/dashboard";
         }
         
+        // Get student information
+        Optional<User> studentOpt = userRepository.findByEmail(studentId);
+        if (studentOpt.isPresent()) {
+            User student = studentOpt.get();
+            Map<String, String> userInfo = new HashMap<>();
+            userInfo.put("fullName", student.getFullName());
+            userInfo.put("email", student.getEmail());
+            model.addAttribute("userInfo", userInfo);
+        } else {
+            Map<String, String> userInfo = new HashMap<>();
+            userInfo.put("fullName", "Student");
+            userInfo.put("email", studentId);
+            model.addAttribute("userInfo", userInfo);
+        }
+        
+        // Get exam information (subject and activity type) from session
+        Map<String, String> examInfo = new HashMap<>();
+        String subject = (String) session.getAttribute("examSubject_" + studentId);
+        String activityType = (String) session.getAttribute("examActivityType_" + studentId);
+        Integer timeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentId);
+        String deadline = (String) session.getAttribute("examDeadline_" + studentId);
+        String startTime = (String) session.getAttribute("examStartTime_" + studentId);
+        
+        examInfo.put("subject", subject != null ? subject : "General");
+        examInfo.put("activityType", activityType != null ? activityType : "Exam");
+        examInfo.put("timeLimit", timeLimit != null ? timeLimit.toString() : "60");
+        examInfo.put("deadline", deadline != null ? deadline : "");
+        examInfo.put("startTime", startTime != null ? startTime : java.time.LocalDateTime.now().toString());
+        model.addAttribute("examInfo", examInfo);
+        
+        // Get question difficulties from session
+        @SuppressWarnings("unchecked")
+        List<String> difficulties = (List<String>) session.getAttribute("questionDifficulties_" + studentId);
+        if (difficulties == null) {
+            // Generate default difficulties if not found
+            difficulties = new ArrayList<>();
+            for (int i = 0; i < exam.size(); i++) {
+                difficulties.add("Medium");
+            }
+        }
+        model.addAttribute("difficulties", difficulties);
+        
         model.addAttribute("exam", exam);
-        return "student-exam";
+        return "student-exam-paginated";
     }
 
     @PostMapping("/submit")
@@ -261,7 +303,15 @@ public class StudentController {
             // Save submission to database (auto-released)
             ExamSubmission submission = new ExamSubmission();
             submission.setStudentEmail(studentId);
-            submission.setExamName("General Exam"); // You can make this dynamic
+            
+            // Retrieve exam metadata from session
+            String examName = (String) session.getAttribute("examName_" + studentId);
+            String subject = (String) session.getAttribute("examSubject_" + studentId);
+            String activityType = (String) session.getAttribute("examActivityType_" + studentId);
+            
+            submission.setExamName(examName != null ? examName : "General Exam");
+            submission.setSubject(subject != null ? subject : "General");
+            submission.setActivityType(activityType != null ? activityType : "Exam");
             submission.setScore(score);
             submission.setTotalQuestions(key.size());
             submission.setPercentage(percentage);

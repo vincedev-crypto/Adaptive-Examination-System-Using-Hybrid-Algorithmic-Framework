@@ -17,6 +17,12 @@ public class ExamSubmission {
     @Column(name = "exam_name", nullable = false)
     private String examName;
     
+    @Column(name = "subject", nullable = false)
+    private String subject; // Subject name (e.g., Mathematics, Science)
+    
+    @Column(name = "activity_type", nullable = false)
+    private String activityType; // Assignment or Exam
+    
     @Column(nullable = false)
     private int score;
     
@@ -71,6 +77,12 @@ public class ExamSubmission {
     
     public String getExamName() { return examName; }
     public void setExamName(String examName) { this.examName = examName; }
+    
+    public String getSubject() { return subject; }
+    public void setSubject(String subject) { this.subject = subject; }
+    
+    public String getActivityType() { return activityType; }
+    public void setActivityType(String activityType) { this.activityType = activityType; }
     
     public int getScore() { return score; }
     public void setScore(int score) { this.score = score; }

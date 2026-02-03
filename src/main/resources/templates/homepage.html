@@ -40,7 +40,24 @@
                     <form th:action="@{/teacher/process-exams}" method="post" enctype="multipart/form-data" id="uploadForm" class="hidden">
                         
                         <div id="examSection" class="hidden mb-4 text-start">
-                            <label class="form-label fw-bold text-primary">Select Test Questionnaire (PDF)</label>
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold text-info">Subject Name *</label>
+                                    <input class="form-control" type="text" name="subject" placeholder="e.g., Mathematics, Science" required>
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label fw-bold text-info">Activity Type *</label>
+                                    <select class="form-select" name="activityType" required>
+                                        <option value="">Select Type</option>
+                                        <option value="Exam">Exam</option>
+                                        <option value="Assignment">Assignment</option>
+                                        <option value="Quiz">Quiz</option>
+                                        <option value="Practice Test">Practice Test</option>
+                                    </select>
+                                </div>
+                            </div>
+                            
+                            <label class="form-label fw-bold text-primary">Select Test Questionnaire (PDF) *</label>
                             <input class="form-control mb-3" type="file" name="examCreated" accept=".pdf" required>
                             
                             <label class="form-label fw-bold text-warning">Select Answer Key (PDF) - Optional</label>
@@ -127,15 +144,33 @@
                                             <form th:each="exam : ${uploadedExams}" th:action="@{/teacher/distribute}" method="post">
                                                 <input type="hidden" name="targetStudent" th:value="${enrollment.studentEmail}">
                                                 <input type="hidden" name="examId" th:value="${exam.examId}">
-                                                <button type="submit" class="list-group-item list-group-item-action text-start">
-                                                    <div class="d-flex w-100 justify-content-between">
-                                                        <h6 class="mb-1" th:text="${exam.examName}">Exam Name</h6>
-                                                        <small th:text="${#temporals.format(exam.uploadedAt, 'MMM dd, HH:mm')}">Time</small>
-                                                    </div>
-                                                    <p class="mb-1 small text-muted">
-                                                        <span th:text="${#lists.size(exam.questions)} + ' questions'">20 questions</span>
+                                                
+                                                <!-- Time Limit and Deadline Settings -->
+                                                <div class="mb-3 p-3 bg-light rounded">
+                                                    <h6 class="mb-2" th:text="${exam.examName}">Exam Name</h6>
+                                                    <p class="mb-2 small">
+                                                        <span class="badge bg-primary" th:text="${exam.subject}">Subject</span>
+                                                        <span class="badge bg-info" th:text="${exam.activityType}">Type</span>
+                                                        <span class="text-muted" th:text="${#lists.size(exam.questions)} + ' questions'">20 questions</span>
                                                     </p>
+                                                    
+                                                    <div class="row">
+                                                        <div class="col-md-6 mb-2">
+                                                            <label class="form-label small fw-bold">Time Limit (minutes)</label>
+                                                            <input type="number" name="timeLimit" class="form-control form-control-sm" 
+                                                                   min="5" max="300" value="60" required>
+                                                        </div>
+                                                        <div class="col-md-6 mb-2">
+                                                            <label class="form-label small fw-bold">Submission Deadline</label>
+                                                            <input type="datetime-local" name="deadline" class="form-control form-control-sm" required>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
+                                                <button type="submit" class="btn btn-primary w-100">
+                                                    Distribute This Exam
                                                 </button>
+                                                <hr class="my-3" th:unless="${examStat.last}">
                                             </form>
                                         </div>
                                         <div th:if="${#lists.isEmpty(uploadedExams)}" class="alert alert-warning">
