@@ -462,24 +462,52 @@ public class HomepageController {
             String headerLine = reader.readLine(); // Read first line
             System.out.println("CSV First Line: " + headerLine);
             
-            // Detect CSV format
+            // Detect CSV format based on headers
             String[] headerCols = parseCsvLine(headerLine);
             boolean hasHeader = headerLine.toLowerCase().contains("question") || 
                                headerLine.toLowerCase().contains("choice") ||
-                               headerLine.toLowerCase().contains("answer");
+                               headerLine.toLowerCase().contains("answer") ||
+                               headerLine.toLowerCase().contains("difficulty");
             
-            // Process first line if it's not a header
-            if (!hasHeader && headerLine != null && !headerLine.trim().isEmpty()) {
-                processCSVRow(headerLine, 1, questionBlocks, answerKey);
-            }
+            // Detect format type
+            boolean isOpenEndedFormat = headerLine.toLowerCase().contains("question_text") || 
+                                       (headerLine.toLowerCase().contains("question_number") && 
+                                        headerLine.toLowerCase().contains("difficulty"));
             
-            String line;
-            int questionNumber = hasHeader ? 1 : 2;
+            System.out.println("Format detected: " + (isOpenEndedFormat ? "Open-Ended" : "Multiple-Choice"));
             
-            while ((line = reader.readLine()) != null) {
-                if (line.trim().isEmpty()) continue;
-                processCSVRow(line, questionNumber, questionBlocks, answerKey);
-                questionNumber++;
+            if (isOpenEndedFormat) {
+                // Process open-ended format (Question_Number, Difficulty, Question_Text)
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    if (line.trim().isEmpty()) continue;
+                    String[] columns = parseCsvLine(line);
+                    
+                    if (columns.length >= 3) {
+                        int qNum = Integer.parseInt(columns[0].trim());
+                        String difficulty = columns[1].trim();
+                        String questionText = columns[2].trim();
+                        
+                        // Mark as text-input question with special prefix
+                        questionBlocks.add("[TEXT_INPUT]" + questionText);
+                        System.out.println("Parsed Open-Ended Q" + qNum + " (" + difficulty + "): " + questionText);
+                    }
+                }
+            } else {
+                // Process multiple-choice format
+                // Process first line if it's not a header
+                if (!hasHeader && headerLine != null && !headerLine.trim().isEmpty()) {
+                    processCSVRow(headerLine, 1, questionBlocks, answerKey);
+                }
+                
+                String line;
+                int questionNumber = hasHeader ? 1 : 2;
+                
+                while ((line = reader.readLine()) != null) {
+                    if (line.trim().isEmpty()) continue;
+                    processCSVRow(line, questionNumber, questionBlocks, answerKey);
+                    questionNumber++;
+                }
             }
         }
         
@@ -508,12 +536,20 @@ public class HomepageController {
         for (int i = 0; i < questionsWithAnswers.size(); i++) {
             QuestionWithAnswer qa = questionsWithAnswers.get(i);
             
-            // Re-shuffle choices within each question
-            String shuffledQuestion = reshuffleQuestionChoices(qa.question, rand);
+            // Only shuffle choices for multiple-choice questions
+            String shuffledQuestion;
+            if (qa.question.startsWith("[TEXT_INPUT]")) {
+                // Keep text-input questions as-is
+                shuffledQuestion = qa.question;
+            } else {
+                // Re-shuffle choices within each multiple-choice question
+                shuffledQuestion = reshuffleQuestionChoices(qa.question, rand);
+            }
+            
             questionBlocks.add(shuffledQuestion);
             answerKey.put(i + 1, qa.answer);
             
-            System.out.println("Shuffled CSV Q" + (i + 1) + " (originally Q" + qa.originalNumber + ") -> " + qa.answer);
+            System.out.println("Shuffled Q" + (i + 1) + " (originally Q" + qa.originalNumber + ") -> " + qa.answer);
         }
         
         session.setAttribute("correctAnswerKey", answerKey);

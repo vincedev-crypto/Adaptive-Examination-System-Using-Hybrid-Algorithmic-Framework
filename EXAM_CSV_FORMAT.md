@@ -2,11 +2,11 @@
 
 ## Supported CSV Formats
 
-The system supports **THREE flexible formats** for CSV exam uploads:
+The system supports **FOUR flexible formats** for CSV exam uploads:
 
 ---
 
-## Format 1: Full Format (Recommended)
+## Format 1: Multiple-Choice with Full Format (Recommended for MCQs)
 
 Complete format with separate columns for everything:
 
@@ -22,10 +22,11 @@ Question,ChoiceA,ChoiceB,ChoiceC,ChoiceD,Answer
 - ✅ Easy to create in Excel/Google Sheets
 - ✅ Separate answer column
 - ✅ Best for team collaboration
+- ✅ Multiple-choice questions with A/B/C/D options
 
 ---
 
-## Format 2: Compact Format with Embedded Answers
+## Format 2: Multiple-Choice with Embedded Answers
 
 Questions with embedded answers in the question text:
 
@@ -63,6 +64,44 @@ Question
 
 ---
 
+## Format 4: Open-Ended Questions (NEW!)
+
+For text-input questions without multiple choice options:
+
+**Questions File (IT_Questions_Only.csv):**
+```csv
+Question_Number,Difficulty,Question_Text
+1,Easy,What does 'CPU' stand for?
+2,Easy,Which protocol is used for sending emails?
+3,Medium,Explain the difference between TCP and UDP?
+4,Hard,Describe the phases of the SDLC.
+```
+
+**Answers File (IT_Answer_Key.csv):**
+```csv
+Question_Number,Correct_Answer
+1,Central Processing Unit
+2,SMTP
+3,TCP is reliable/connection-oriented; UDP is fast/connectionless.
+4,"Planning, Analysis, Design, Implementation, Maintenance."
+```
+
+### Features:
+- ✅ Open-ended text questions (no A/B/C/D choices)
+- ✅ Students type their answers in a text box
+- ✅ Intelligent grading with partial keyword matching
+- ✅ Difficulty levels tracked (Easy/Medium/Hard)
+- ✅ Separate answer key file required
+- ✅ Great for essay-style or descriptive questions
+
+### Grading for Open-Ended Questions:
+- Exact matches (case-insensitive) are always correct
+- For longer answers (3+ words), system checks for 70% keyword match
+- Punctuation is normalized
+- Perfect for definitions, explanations, and technical terms
+
+---
+
 ## Answer Extraction
 
 The system automatically extracts answers from these patterns:
@@ -74,6 +113,8 @@ Examples:
 - "What is 2+2? Answer: 4" → Answer extracted: "4"
 - "Capital of France? ANSWER: Paris" → Answer extracted: "Paris"
 - "Best color? Correct: Blue" → Answer extracted: "Blue"
+
+### Column Descriptions (Multiple-Choice Formats):
 - **Question**: The question text
 - **ChoiceA**: First answer choice
 - **ChoiceB**: Second answer choice
@@ -81,12 +122,19 @@ Examples:
 - **ChoiceD**: Fourth answer choice
 - **Answer**: The correct answer (must match one of the choices exactly)
 
+### Column Descriptions (Open-Ended Format):
+- **Question_Number**: Sequential question number
+- **Difficulty**: Easy, Medium, or Hard
+- **Question_Text**: The open-ended question
+- **Correct_Answer**: The expected answer (in separate answer key file)
+
 ### Important Notes:
 - Use quotes around text that contains commas
 - The Answer can be in a separate column OR embedded in the question text
-- All three formats are automatically detected
+- All formats are automatically detected
 - First row can be a header (will be auto-detected and skipped)
 - System extracts and removes "Answer: ..." from question text automatically
+- **Open-ended format requires BOTH files**: questions + answer key
 
 ---
 

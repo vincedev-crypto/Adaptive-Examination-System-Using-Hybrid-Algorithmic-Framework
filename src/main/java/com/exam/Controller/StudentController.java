@@ -245,8 +245,8 @@ public class StudentController {
                 String correctAns = key.get(i);
                 answerList.add(studentAns != null ? studentAns : "");
                 
-                boolean isCorrect = studentAns != null && correctAns != null && 
-                                   studentAns.trim().equalsIgnoreCase(correctAns.trim());
+                // Flexible answer matching
+                boolean isCorrect = isAnswerCorrect(studentAns, correctAns);
                 
                 if (isCorrect) {
                     score++;
@@ -410,6 +410,59 @@ public class StudentController {
             return 0.0; // Return default value instead of NaN/Infinity
         }
         return value;
+    }
+    
+    /**
+     * Flexible answer matching that supports:
+     * 1. Exact match (case-insensitive)
+     * 2. Multiple-choice letter answers (A, B, C, D)
+     * 3. Text answers with partial matching for open-ended questions
+     */
+    private boolean isAnswerCorrect(String studentAnswer, String correctAnswer) {
+        if (studentAnswer == null || correctAnswer == null) {
+            return false;
+        }
+        
+        String student = studentAnswer.trim();
+        String correct = correctAnswer.trim();
+        
+        // Empty answer is wrong
+        if (student.isEmpty()) {
+            return false;
+        }
+        
+        // Exact match (case-insensitive)
+        if (student.equalsIgnoreCase(correct)) {
+            return true;
+        }
+        
+        // For single-letter answers (A, B, C, D) - exact match only
+        if (correct.length() == 1 && correct.matches("[A-Da-d]")) {
+            return student.equalsIgnoreCase(correct);
+        }
+        
+        // For text answers, check if student answer contains key terms from correct answer
+        // Normalize: remove punctuation, lowercase, split into words
+        String[] correctWords = correct.toLowerCase()
+            .replaceAll("[^a-z0-9\\s]", "")
+            .split("\\s+");
+        String studentLower = student.toLowerCase()
+            .replaceAll("[^a-z0-9\\s]", "");
+        
+        // If correct answer has multiple key words, check if student answer contains most of them
+        if (correctWords.length >= 3) {
+            int matchCount = 0;
+            for (String word : correctWords) {
+                if (word.length() > 2 && studentLower.contains(word)) {
+                    matchCount++;
+                }
+            }
+            // Accept if student got at least 70% of key words
+            return matchCount >= (correctWords.length * 0.7);
+        }
+        
+        // For shorter answers, require exact or very close match
+        return false;
     }
     
     /**

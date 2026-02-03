@@ -195,31 +195,52 @@
             const question = exam[currentPage];
             const questionNumber = currentPage + 1;
             
-            // Parse question (format: "Question text\nA) choice1\nB) choice2...")
-            const lines = question.split('\n');
-            const questionText = lines[0];
-            const choices = lines.slice(1).filter(line => line.trim());
+            // Check if it's a text-input question
+            const isTextInput = question.startsWith('[TEXT_INPUT]');
+            const actualQuestion = isTextInput ? question.substring(12) : question;
             
-            let html = `
-                <h5 class="mb-4">Question ${questionNumber}</h5>
-                <p class="lead mb-4">${questionText}</p>
-                <div class="choices">
-            `;
+            let html = `<h5 class="mb-4">Question ${questionNumber}</h5>`;
             
-            choices.forEach((choice, idx) => {
-                const choiceLetter = choice.split(')')[0].trim();
-                const choiceText = choice.substring(choice.indexOf(')') + 1).trim();
-                const isSelected = answers['q' + questionNumber] === choiceText;
+            if (isTextInput) {
+                // Text-input question
+                html += `
+                    <p class="lead mb-4">${actualQuestion}</p>
+                    <div class="form-group">
+                        <label class="form-label fw-bold">Your Answer:</label>
+                        <textarea class="form-control" rows="4" 
+                                  id="textAnswer${questionNumber}"
+                                  placeholder="Type your answer here..."
+                                  onblur="saveTextAnswer(${questionNumber}, this.value)">${answers['q' + questionNumber] || ''}</textarea>
+                        <small class="form-text text-muted">This is an open-ended question. Provide a detailed answer.</small>
+                    </div>
+                `;
+            } else {
+                // Multiple-choice question
+                const lines = actualQuestion.split('\n');
+                const questionText = lines[0];
+                const choices = lines.slice(1).filter(line => line.trim());
                 
                 html += `
-                    <button type="button" class="btn choice-btn w-100 ${isSelected ? 'selected' : ''}" 
-                            onclick="selectAnswer(${questionNumber}, '${choiceText.replace(/'/g, "\\'")}', this)">
-                        <strong>${choiceLetter})</strong> ${choiceText}
-                    </button>
+                    <p class="lead mb-4">${questionText}</p>
+                    <div class="choices">
                 `;
-            });
+                
+                choices.forEach((choice, idx) => {
+                    const choiceLetter = choice.split(')')[0].trim();
+                    const choiceText = choice.substring(choice.indexOf(')') + 1).trim();
+                    const isSelected = answers['q' + questionNumber] === choiceText;
+                    
+                    html += `
+                        <button type="button" class="btn choice-btn w-100 ${isSelected ? 'selected' : ''}" 
+                                onclick="selectAnswer(${questionNumber}, '${choiceText.replace(/'/g, "\\'")}', this)">
+                            <strong>${choiceLetter})</strong> ${choiceText}
+                        </button>
+                    `;
+                });
+                
+                html += '</div>';
+            }
             
-            html += '</div>';
             document.getElementById('questionContainer').innerHTML = html;
             
             // Update progress
@@ -231,6 +252,16 @@
             // Update navigation buttons
             document.getElementById('backBtn').disabled = (currentPage === 0);
             document.getElementById('nextBtn').textContent = (currentPage === totalQuestions - 1) ? 'Submit' : 'Next →';
+        }
+        
+        // Save text answer for open-ended questions
+        function saveTextAnswer(questionNumber, value) {
+            if (value && value.trim()) {
+                answers['q' + questionNumber] = value.trim();
+            } else {
+                delete answers['q' + questionNumber];
+            }
+            autoSave();
         }
         
         function updateDifficultyBadge() {
