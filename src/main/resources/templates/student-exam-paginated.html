@@ -4,92 +4,30 @@
     <meta charset="UTF-8">
     <title>Take Exam - ALGO</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link th:href="@{/css/student-exam.css}" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <style>
-        .student-header {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 1.5rem;
-            border-radius: 10px;
-            margin-bottom: 2rem;
-        }
-        .question-card {
-            min-height: 400px;
-            transition: all 0.3s ease;
-        }
-        .progress-indicator {
-            font-size: 0.9rem;
-            margin-bottom: 1rem;
-        }
-        .choice-btn {
-            text-align: left;
-            margin-bottom: 0.75rem;
-            padding: 1rem;
-            border: 2px solid #dee2e6;
-            transition: all 0.2s;
-        }
-        .choice-btn:hover {
-            border-color: #667eea;
-            background-color: #f8f9fa;
-        }
-        .choice-btn.selected {
-            border-color: #667eea;
-            background-color: #e7f1ff;
-        }
-        .navigation-btns {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            background: white;
-            padding: 1rem;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-            z-index: 1000;
-        }
-        .main-content {
-            padding-bottom: 100px;
-        }
-        .auto-save-indicator {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            background: #28a745;
-            color: white;
-            font-size: 0.85rem;
-            display: none;
-            z-index: 1001;
-        }
-        .difficulty-easy {
-            background-color: #28a745;
-            color: white;
-        }
-        .difficulty-medium {
-            background-color: #ffc107;
-            color: #000;
-        }
-        .difficulty-hard {
-            background-color: #dc3545;
-            color: white;
-        }
-        .timer-warning {
-            animation: pulse 1s infinite;
-        }
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.7; }
-        }
-        .deadline-info {
-            font-size: 0.85rem;
-            color: #6c757d;
-        }
-    </style>
 </head>
 <body class="bg-light">
     <!-- Auto-save indicator -->
     <div id="autoSaveIndicator" class="auto-save-indicator">
         ✓ Saved
+    </div>
+
+    <!-- Violation Counter -->
+    <div id="violationCounter" class="violation-counter">
+        ⚠️ Violations: <span id="violationCount">0</span>/5
+    </div>
+
+    <!-- Cheating Warning Modal -->
+    <div id="cheatingModal" class="cheating-modal">
+        <div class="cheating-modal-content">
+            <div class="warning-icon">⚠️</div>
+            <h3>Warning: Suspicious Activity Detected!</h3>
+            <p id="cheatingMessage">Please stay on the exam page and do not switch tabs or take screenshots.</p>
+            <p><strong>Violations: <span id="modalViolationCount">0</span>/5</strong></p>
+            <p class="text-danger"><small>Your exam will be automatically submitted after 5 violations.</small></p>
+            <button class="btn btn-warning mt-3" onclick="closeWarningModal()">I Understand</button>
+        </div>
     </div>
 
     <div class="container main-content py-4">
@@ -157,320 +95,19 @@
         </div>
     </div>
 
+    <!-- Load external JavaScript files -->
+    <script th:src="@{/js/student-exam.js}"></script>
+    <script th:src="@{/js/anti-cheating.js}"></script>
+    
+    <!-- Initialize exam with Thymeleaf data (minimal inline script) -->
     <script th:inline="javascript">
         /*<![CDATA[*/
-        const exam = /*[[${exam}]]*/ [];
-        const difficulties = /*[[${difficulties}]]*/ [];
-        const examInfo = /*[[${examInfo}]]*/ {};
-        const totalQuestions = exam.length;
-        let currentPage = 0;
-        let answers = {};
-        let timerInterval;
-        let timeRemainingSeconds;
-
-        // Load saved answers from localStorage
-        function loadSavedAnswers() {
-            const saved = localStorage.getItem('examAnswers');
-            if (saved) {
-                answers = JSON.parse(saved);
-            }
-        }
-
-        // Auto-save answers
-        function autoSave() {
-            localStorage.setItem('examAnswers', JSON.stringify(answers));
-            showSaveIndicator();
-        }
-
-        function showSaveIndicator() {
-            const indicator = document.getElementById('autoSaveIndicator');
-            indicator.style.display = 'block';
-            setTimeout(() => {
-                indicator.style.display = 'none';
-            }, 1500);
-        }
-
-        // Display current question
-        function displayQuestion() {
-            let question = exam[currentPage];
-            const questionNumber = currentPage + 1;
-            
-            // Remove [TEXT_INPUT] prefix if present
-            const isTextInput = question.includes('[TEXT_INPUT]');
-            if (isTextInput) {
-                question = question.replace('[TEXT_INPUT]', '').trim();
-            }
-            
-            let html = `<h5 class="mb-4">Question ${questionNumber}</h5>`;
-            
-            if (isTextInput) {
-                // Text-input question (prefix hidden from student)
-                html += `
-                    <p class="lead mb-4">${question}</p>
-                    <div class="form-group">
-                        <label class="form-label fw-bold">Your Answer:</label>
-                        <textarea class="form-control" rows="4" 
-                                  id="textAnswer${questionNumber}"
-                                  placeholder="Type your answer here..."
-                                  onblur="saveTextAnswer(${questionNumber}, this.value)">${answers['q' + questionNumber] || ''}</textarea>
-                        <small class="form-text text-muted">This is an open-ended question. Provide a detailed answer.</small>
-                    </div>
-                `;
-            } else {
-                // Multiple-choice question
-                const lines = actualQuestion.split('\n');
-                const questionText = lines[0];
-                const choices = lines.slice(1).filter(line => line.trim());
-                
-                html += `
-                    <p class="lead mb-4">${questionText}</p>
-                    <div class="choices">
-                `;
-                
-                choices.forEach((choice, idx) => {
-                    const choiceLetter = choice.split(')')[0].trim();
-                    const choiceText = choice.substring(choice.indexOf(')') + 1).trim();
-                    const isSelected = answers['q' + questionNumber] === choiceText;
-                    
-                    html += `
-                        <button type="button" class="btn choice-btn w-100 ${isSelected ? 'selected' : ''}" 
-                                onclick="selectAnswer(${questionNumber}, '${choiceText.replace(/'/g, "\\'")}', this)">
-                            <strong>${choiceLetter})</strong> ${choiceText}
-                        </button>
-                    `;
-                });
-                
-                html += '</div>';
-            }
-            
-            document.getElementById('questionContainer').innerHTML = html;
-            
-            // Update progress
-            updateProgress();
-            
-            // Update difficulty badge
-            updateDifficultyBadge();
-            
-            // Update navigation buttons
-            document.getElementById('backBtn').disabled = (currentPage === 0);
-            document.getElementById('nextBtn').textContent = (currentPage === totalQuestions - 1) ? 'Submit' : 'Next →';
-        }
-        
-        // Save text answer for open-ended questions
-        function saveTextAnswer(questionNumber, value) {
-            if (value && value.trim()) {
-                answers['q' + questionNumber] = value.trim();
-            } else {
-                delete answers['q' + questionNumber];
-            }
-            autoSave();
-        }
-        
-        function updateDifficultyBadge() {
-            const difficulty = difficulties[currentPage] || 'Medium';
-            const badge = document.getElementById('difficultyBadge');
-            
-            // Remove all difficulty classes
-            badge.classList.remove('difficulty-easy', 'difficulty-medium', 'difficulty-hard');
-            badge.classList.remove('bg-success', 'bg-warning', 'bg-danger');
-            
-            // Add appropriate class based on difficulty
-            if (difficulty === 'Easy') {
-                badge.classList.add('difficulty-easy');
-            } else if (difficulty === 'Hard') {
-                badge.classList.add('difficulty-hard');
-            } else {
-                badge.classList.add('difficulty-medium');
-            }
-            
-            badge.textContent = difficulty;
-        }
-
-        function selectAnswer(questionNum, answer, button) {
-            // Remove selected class from all choices
-            document.querySelectorAll('.choice-btn').forEach(btn => btn.classList.remove('selected'));
-            
-            // Add selected class to clicked choice
-            button.classList.add('selected');
-            
-            // Save answer
-            answers['q' + questionNum] = answer;
-            autoSave();
-        }
-
-        function updateProgress() {
-            const questionNum = currentPage + 1;
-            const percentage = (questionNum / totalQuestions) * 100;
-            
-            document.getElementById('progressText').textContent = `Question ${questionNum} of ${totalQuestions}`;
-            document.getElementById('progressBar').style.width = percentage + '%';
-            document.getElementById('questionNumber').textContent = `${questionNum} / ${totalQuestions}`;
-        }
-
-        // Navigation
-        document.getElementById('backBtn').addEventListener('click', () => {
-            if (currentPage > 0) {
-                currentPage--;
-                displayQuestion();
-            }
-        });
-
-        document.getElementById('nextBtn').addEventListener('click', () => {
-            if (currentPage < totalQuestions - 1) {
-                currentPage++;
-                displayQuestion();
-            } else {
-                // Submit the exam
-                submitExam();
-            }
-        });
-
-        function submitExam() {
-            if (confirm('Are you sure you want to submit your exam? You cannot change your answers after submission.')) {
-                // Clear timer
-                if (timerInterval) {
-                    clearInterval(timerInterval);
-                }
-                
-                // Create form and submit
-                const form = document.getElementById('examForm');
-                form.innerHTML = '';
-                
-                for (const [key, value] of Object.entries(answers)) {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = key;
-                    input.value = value;
-                    form.appendChild(input);
-                }
-                
-                // Clear localStorage
-                localStorage.removeItem('examAnswers');
-                
-                form.submit();
-            }
-        }
-
-        // Initialize
-        loadSavedAnswers();
-        displayQuestion();
-        initializeTimer();
-        displayDeadline();
-
-        // Timer functions
-        function initializeTimer() {
-            const timeLimitMinutes = parseInt(examInfo.timeLimit) || 60;
-            const startTimeMillis = parseInt(examInfo.startTimeMillis);
-            
-            console.log('🕒 Initializing timer - Time limit:', timeLimitMinutes, 'minutes');
-            console.log('🕒 Start time (epoch ms):', startTimeMillis);
-            
-            // Calculate remaining time using epoch milliseconds (no Date parsing needed)
-            if (!startTimeMillis || isNaN(startTimeMillis)) {
-                console.warn('⚠️ No valid start time provided, using full time limit');
-                timeRemainingSeconds = timeLimitMinutes * 60;
-            } else {
-                const nowMillis = Date.now();
-                const elapsedSeconds = Math.floor((nowMillis - startTimeMillis) / 1000);
-                timeRemainingSeconds = (timeLimitMinutes * 60) - elapsedSeconds;
-                
-                console.log('🕒 Current time (epoch ms):', nowMillis);
-                console.log('🕒 Elapsed:', elapsedSeconds, 'seconds');
-                console.log('🕒 Remaining:', timeRemainingSeconds, 'seconds');
-                
-                // Minimum 5 seconds to prevent immediate auto-submit on page load
-                if (timeRemainingSeconds < 5) {
-                    console.warn('⚠️ Timer shows < 5 seconds. Check if this is correct!');
-                    if (elapsedSeconds < 5) {
-                        // If exam just started, reset to full time
-                        console.log('✅ Exam just started, using full time limit');
-                        timeRemainingSeconds = timeLimitMinutes * 60;
-                    } else {
-                        // Time actually expired
-                        timeRemainingSeconds = 0;
-                    }
-                }
-            }
-            
-            console.log('✅ Timer initialized with', timeRemainingSeconds, 'seconds remaining');
-            
-            updateTimerDisplay();
-            timerInterval = setInterval(() => {
-                timeRemainingSeconds--;
-                updateTimerDisplay();
-                
-                if (timeRemainingSeconds <= 0) {
-                    clearInterval(timerInterval);
-                    autoSubmitExam();
-                }
-            }, 1000);
-        }
-        
-        function updateTimerDisplay() {
-            const hours = Math.floor(timeRemainingSeconds / 3600);
-            const minutes = Math.floor((timeRemainingSeconds % 3600) / 60);
-            const seconds = timeRemainingSeconds % 60;
-            
-            const timerElement = document.getElementById('timerDisplay');
-            const formattedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-            timerElement.textContent = `Time: ${formattedTime}`;
-            
-            // Add warning animation when less than 5 minutes
-            if (timeRemainingSeconds <= 300) {
-                timerElement.classList.add('timer-warning');
-            }
-            
-            // Change color based on remaining time
-            if (timeRemainingSeconds <= 60) {
-                timerElement.className = 'badge bg-danger fs-6 timer-warning';
-            } else if (timeRemainingSeconds <= 300) {
-                timerElement.className = 'badge bg-warning text-dark fs-6 timer-warning';
-            } else {
-                timerElement.className = 'badge bg-success fs-6';
-            }
-        }
-        
-        function displayDeadline() {
-            const deadline = examInfo.deadline;
-            if (deadline) {
-                const deadlineDate = new Date(deadline);
-                const options = { 
-                    month: 'short', 
-                    day: 'numeric', 
-                    year: 'numeric',
-                    hour: '2-digit', 
-                    minute: '2-digit'
-                };
-                document.getElementById('deadlineDisplay').textContent = deadlineDate.toLocaleString('en-US', options);
-            }
-        }
-        
-        function autoSubmitExam() {
-            alert('Time is up! Your exam will be automatically submitted.');
-            
-            // Create form and submit without confirmation
-            const form = document.getElementById('examForm');
-            form.innerHTML = '';
-            
-            for (const [key, value] of Object.entries(answers)) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = key;
-                input.value = value;
-                form.appendChild(input);
-            }
-            
-            localStorage.removeItem('examAnswers');
-            form.submit();
-        }
-
-        // Prevent accidental page leave
-        window.addEventListener('beforeunload', (e) => {
-            if (Object.keys(answers).length > 0 && timeRemainingSeconds > 0) {
-                e.preventDefault();
-                e.returnValue = '';
-            }
-        });
+        // Pass server data to external JS
+        window.startExam(
+            /*[[${exam}]]*/ [],
+            /*[[${difficulties}]]*/ [],
+            /*[[${examInfo}]]*/ {}
+        );
         /*]]>*/
     </script>
 </body>

@@ -1,0 +1,26 @@
+/* Student Results Page Styles */
+
+.hidden { 
+    display: none; 
+}
+
+#chartSection { 
+    margin-top: 2rem; 
+}
+
+.performance-badge {
+    font-size: 1.2rem;
+    padding: 0.5rem 1rem;
+}
+
+.accordion-button:not(.collapsed) {
+    background-color: #e7f1ff;
+}
+
+.answer-correct {
+    border-left: 4px solid #198754;
+}
+
+.answer-incorrect {
+    border-left: 4px solid #dc3545;
+}
