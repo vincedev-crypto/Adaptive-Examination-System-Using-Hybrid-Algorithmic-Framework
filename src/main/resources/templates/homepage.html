@@ -111,24 +111,46 @@
                 </div>
                 
                 <ul class="list-group list-group-flush">
-                    <li th:each="enrollment : ${enrolledStudents}" class="list-group-item d-flex justify-content-between align-items-center bg-transparent px-0">
-                        <div>
-                            <span class="badge bg-info text-dark me-2">STUDENT</span>
-                            <span th:text="${enrollment.studentName}" class="fw-bold"></span>
-                            <br>
-                            <small class="text-muted" th:text="${enrollment.studentEmail}"></small>
-                        </div>
-                        <div class="btn-group">
-                            <button type="button" class="btn btn-sm btn-success fw-bold" 
-                                    th:disabled="${#lists.isEmpty(uploadedExams)}"
-                                    data-bs-toggle="modal" 
-                                    th:attr="data-bs-target='#examSelectModal' + ${enrollment.id}">
-                                Distribute Exam
-                            </button>
-                            <form th:action="@{/teacher/remove-student}" method="post" class="d-inline ms-2">
-                                <input type="hidden" name="enrollmentId" th:value="${enrollment.id}">
-                                <button type="submit" class="btn btn-sm btn-danger">Remove</button>
-                            </form>
+                    <li th:each="enrollment : ${enrolledStudents}" class="list-group-item bg-transparent px-0">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="badge bg-info text-dark me-2">STUDENT</span>
+                                <span th:text="${enrollment.studentName}" class="fw-bold"></span>
+                                <br>
+                                <small class="text-muted" th:text="${enrollment.studentEmail}"></small>
+                                
+                                <!-- Show distributed exam status -->
+                                <div th:if="${distributedExamStatus != null && distributedExamStatus[enrollment.studentEmail] != null}" class="mt-2">
+                                    <span class="badge bg-primary">Distributed Exam</span>
+                                    <small class="text-muted ms-2">
+                                        <span th:if="${distributedExamStatus[enrollment.studentEmail].hasSubmitted}" class="text-success">✓ Submitted</span>
+                                        <span th:if="${!distributedExamStatus[enrollment.studentEmail].hasSubmitted}" class="text-warning">⏳ Pending</span>
+                                        <span th:if="${distributedExamStatus[enrollment.studentEmail].isUnlocked}" class="text-info ms-2">🔓 Unlocked</span>
+                                    </small>
+                                </div>
+                            </div>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-success fw-bold" 
+                                        th:disabled="${#lists.isEmpty(uploadedExams)}"
+                                        data-bs-toggle="modal" 
+                                        th:attr="data-bs-target='#examSelectModal' + ${enrollment.id}">
+                                    Distribute Exam
+                                </button>
+                                
+                                <!-- Unlock button (only show if exam distributed and submitted) -->
+                                <form th:if="${distributedExamStatus != null && distributedExamStatus[enrollment.studentEmail] != null && distributedExamStatus[enrollment.studentEmail].hasSubmitted}" 
+                                      th:action="@{/teacher/unlock-exam}" method="post" class="d-inline ms-2">
+                                    <input type="hidden" name="studentEmail" th:value="${enrollment.studentEmail}">
+                                    <button type="submit" class="btn btn-sm btn-warning" title="Allow student to retake this exam">
+                                        🔓 Unlock Exam
+                                    </button>
+                                </form>
+                                
+                                <form th:action="@{/teacher/remove-student}" method="post" class="d-inline ms-2">
+                                    <input type="hidden" name="enrollmentId" th:value="${enrollment.id}">
+                                    <button type="submit" class="btn btn-sm btn-danger">Remove</button>
+                                </form>
+                            </div>
                         </div>
                         
                         <!-- Exam Selection Modal -->
