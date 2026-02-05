@@ -159,9 +159,11 @@ public class StudentController {
         
         // Check if student has already submitted this exam (ONE-TIME EXAM ENFORCEMENT)
         String examName = (String) session.getAttribute("examName_" + studentId);
+        boolean isUnlocked = false;
+        
         if (examName != null) {
-            // Check if exam is unlocked by teacher (allows retake)
-            boolean isUnlocked = HomepageController.isExamUnlocked(studentId, examName);
+            // Check if exam is unlocked by teacher (allows retake AND bypasses deadline)
+            isUnlocked = HomepageController.isExamUnlocked(studentId, examName);
             
             if (!isUnlocked) {
                 List<ExamSubmission> existingSubmissions = examSubmissionRepository
@@ -175,25 +177,28 @@ public class StudentController {
                 }
             } else {
                 System.out.println("🔓 UNLOCKED ACCESS: Student " + studentId + " accessing unlocked exam: " + examName);
+                System.out.println("   Bypassing deadline and submission checks");
             }
         }
         
-        // Check if deadline has passed
-        String deadline = (String) session.getAttribute("examDeadline_" + studentId);
-        if (deadline != null && !deadline.isEmpty()) {
-            try {
-                java.time.LocalDateTime deadlineDateTime = java.time.LocalDateTime.parse(deadline);
-                java.time.LocalDateTime now = java.time.LocalDateTime.now();
-                
-                if (now.isAfter(deadlineDateTime)) {
-                    System.out.println("🚫 DEADLINE EXCEEDED: Student " + studentId + " tried to access exam after deadline");
-                    System.out.println("   Deadline: " + deadlineDateTime + ", Current: " + now);
-                    model.addAttribute("error", "The exam deadline has passed. You can no longer access this exam.");
-                    model.addAttribute("deadline", deadlineDateTime.format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy hh:mm a")));
-                    return "student-dashboard";
+        // Check if deadline has passed (SKIP if exam is unlocked)
+        if (!isUnlocked) {
+            String deadline = (String) session.getAttribute("examDeadline_" + studentId);
+            if (deadline != null && !deadline.isEmpty()) {
+                try {
+                    java.time.LocalDateTime deadlineDateTime = java.time.LocalDateTime.parse(deadline);
+                    java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                    
+                    if (now.isAfter(deadlineDateTime)) {
+                        System.out.println("🚫 DEADLINE EXCEEDED: Student " + studentId + " tried to access exam after deadline");
+                        System.out.println("   Deadline: " + deadlineDateTime + ", Current: " + now);
+                        model.addAttribute("error", "The exam deadline has passed. You can no longer access this exam.");
+                        model.addAttribute("deadline", deadlineDateTime.format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy hh:mm a")));
+                        return "student-dashboard";
+                    }
+                } catch (Exception e) {
+                    System.out.println("⚠️ Error parsing deadline: " + e.getMessage());
                 }
-            } catch (Exception e) {
-                System.out.println("⚠️ Error parsing deadline: " + e.getMessage());
             }
         }
         

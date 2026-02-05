@@ -455,15 +455,6 @@ function showTimesUpModal() {
     `;
     document.body.appendChild(modal);
 }
-        input.type = 'hidden';
-        input.name = key;
-        input.value = value;
-        form.appendChild(input);
-    }
-    
-    localStorage.removeItem('examAnswers');
-    form.submit();
-}
 
 /**
  * Prevent accidental page leave
