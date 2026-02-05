@@ -794,6 +794,13 @@ public class HomepageController {
         System.out.println("=== PROCESSING EXAM PDF ===");
         System.out.println("Total lines: " + rawLines.size());
         
+        // Debug: Print first 60 lines to understand the structure
+        System.out.println("=== FIRST 60 LINES OF PDF ===");
+        for (int i = 0; i < Math.min(60, rawLines.size()); i++) {
+            System.out.println("Line " + i + ": " + rawLines.get(i));
+        }
+        System.out.println("=== END OF SAMPLE ===");
+        
         // Improved skipPattern: Skip metadata, headers, page numbers, etc.
         Pattern skipPattern = Pattern.compile(
             "(?i)(page\\s*\\d+|examination\\s+paper|name:|date:|confidential|date\\s+generated|instructions?|total\\s+marks)", 
@@ -819,11 +826,14 @@ public class HomepageController {
             if (trimmed.matches("^\\d+\\.\\s+.*")) {
                 // Save previous question block if exists
                 if (currentBlock.length() > 0) {
+                    System.out.println("Processing block for Q" + (qID + 1) + ": " + currentBlock.toString().substring(0, Math.min(50, currentBlock.length())) + "...");
                     String processed = extractAnswerAndShuffle(currentBlock.toString(), rand, answerKey, qID);
                     if (!processed.isEmpty()) {
                         questionBlocks.add(processed);
-                        System.out.println("Processed Q" + (qID + 1));
+                        System.out.println("Successfully processed Q" + (qID + 1));
                         qID++;
+                    } else {
+                        System.out.println("WARNING: Empty result for Q" + (qID + 1));
                     }
                 }
                 // Start new question block (remove the number prefix like "1. ")
@@ -838,11 +848,14 @@ public class HomepageController {
         
         // Don't forget the last question
         if (currentBlock.length() > 0) {
+            System.out.println("Processing final block for Q" + (qID + 1) + ": " + currentBlock.toString().substring(0, Math.min(50, currentBlock.length())) + "...");
             String processed = extractAnswerAndShuffle(currentBlock.toString(), rand, answerKey, qID);
             if (!processed.isEmpty()) {
                 questionBlocks.add(processed);
-                System.out.println("Processed Q" + (qID + 1));
+                System.out.println("Successfully processed Q" + (qID + 1));
                 qID++;
+            } else {
+                System.out.println("WARNING: Empty result for final Q" + (qID + 1));
             }
         }
 
@@ -903,7 +916,9 @@ public class HomepageController {
 
     private String extractAnswerAndShuffle(String block, SecureRandom rand, Map<Integer, String> key, int id) {
         String[] lines = block.split("\n");
-        if (lines.length <= 1) return ""; // Need at least question + 1 choice
+        
+        // Allow single-line questions (could be open-ended)
+        if (lines.length == 0 || block.trim().isEmpty()) return "";
 
         String questionText = lines[0].trim();
         List<String> choices = new ArrayList<>();
