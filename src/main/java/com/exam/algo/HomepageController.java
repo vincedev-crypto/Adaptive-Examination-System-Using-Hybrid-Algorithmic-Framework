@@ -1088,7 +1088,13 @@ public class HomepageController {
         // Add questions
         int questionNumber = 1;
         for (String question : exam) {
-            document.add(new Paragraph(questionNumber + ". " + question.replace("\n", "\n   ")));
+            // Clean up question text: remove [TEXT_INPUT] and difficulty markers
+            String cleanQuestion = question
+                .replaceAll("\\[TEXT_INPUT\\]", "")
+                .replaceAll("\\[(Easy|Medium|Hard|Essay|Open-Ended|Open Ended)\\]", "")
+                .trim();
+            
+            document.add(new Paragraph(questionNumber + ". " + cleanQuestion.replace("\n", "\n   ")));
             document.add(new Paragraph("\n"));
             questionNumber++;
         }
@@ -1143,10 +1149,16 @@ public class HomepageController {
         // Add questions
         int questionNumber = 1;
         for (String question : exam) {
+            // Clean up question text: remove [TEXT_INPUT] and difficulty markers
+            String cleanQuestion = question
+                .replaceAll("\\[TEXT_INPUT\\]", "")
+                .replaceAll("\\[(Easy|Medium|Hard|Essay|Open-Ended|Open Ended)\\]", "")
+                .trim();
+            
             XWPFParagraph questionPara = document.createParagraph();
             XWPFRun questionRun = questionPara.createRun();
             
-            String[] lines = question.split("\n");
+            String[] lines = cleanQuestion.split("\n");
             questionRun.setText(questionNumber + ". " + lines[0]);
             questionRun.addBreak();
             

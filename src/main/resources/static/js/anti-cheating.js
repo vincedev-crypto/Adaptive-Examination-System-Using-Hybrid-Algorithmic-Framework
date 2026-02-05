@@ -177,9 +177,57 @@ function logViolation(type) {
     // Auto-submit after max violations
     if (violationCount >= MAX_VIOLATIONS) {
         isExamActive = false;
-        alert('Maximum violations reached (' + MAX_VIOLATIONS + '). Your exam will be submitted now.');
-        autoSubmitExam();
+        console.log('🚫 MAX VIOLATIONS REACHED - Auto-submitting exam');
+        showViolationMaxModal();
+        
+        // Wait 3 seconds then submit
+        setTimeout(() => {
+            autoSubmitExam();
+        }, 3000);
     }
+}
+
+/**
+ * Show max violations modal
+ */
+function showViolationMaxModal() {
+    const modal = document.createElement('div');
+    modal.id = 'violationMaxModal';
+    modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                    background: rgba(0,0,0,0.95); z-index: 99999; display: flex; 
+                    align-items: center; justify-content: center;">
+            <div style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); 
+                        padding: 60px; border-radius: 20px; text-align: center; 
+                        max-width: 550px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+                        animation: shake 0.5s ease-in-out;">
+                <div style="font-size: 80px; margin-bottom: 20px;">🚫</div>
+                <h1 style="color: white; font-size: 42px; margin: 20px 0; 
+                           font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
+                    MAXIMUM VIOLATIONS REACHED!
+                </h1>
+                <p style="color: #fff; font-size: 20px; margin: 20px 0; line-height: 1.5;">
+                    You have reached the maximum number of violations (${MAX_VIOLATIONS}).
+                </p>
+                <p style="color: #ffeb3b; font-size: 22px; font-weight: bold; margin: 20px 0;">
+                    Your exam will be automatically submitted now.
+                </p>
+                <div style="margin-top: 30px;">
+                    <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Submitting...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <style>
+            @keyframes shake {
+                0%, 100% { transform: translateX(0); }
+                25% { transform: translateX(-10px); }
+                75% { transform: translateX(10px); }
+            }
+        </style>
+    `;
+    document.body.appendChild(modal);
 }
 
 /**

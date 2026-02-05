@@ -156,6 +156,20 @@ public class StudentController {
             return "redirect:/student/dashboard";
         }
         
+        // Check if student has already submitted this exam (ONE-TIME EXAM ENFORCEMENT)
+        String examName = (String) session.getAttribute("examName_" + studentId);
+        if (examName != null) {
+            Optional<ExamSubmission> existingSubmission = examSubmissionRepository
+                .findByStudentEmailAndExamName(studentId, examName);
+            
+            if (existingSubmission.isPresent()) {
+                System.out.println("🔒 EXAM LOCKED: Student " + studentId + " already submitted this exam");
+                model.addAttribute("error", "You have already submitted this exam. Each exam can only be taken once.");
+                model.addAttribute("submittedAt", existingSubmission.get().getSubmittedAt());
+                return "student-dashboard";
+            }
+        }
+        
         // Check if deadline has passed
         String deadline = (String) session.getAttribute("examDeadline_" + studentId);
         if (deadline != null && !deadline.isEmpty()) {

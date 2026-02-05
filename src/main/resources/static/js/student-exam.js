@@ -385,14 +385,76 @@ function checkDeadline(deadlineDate) {
  * Auto-submit exam when time expires
  */
 function autoSubmitExam() {
-    alert('Time is up! Your exam will be automatically submitted.');
+    // Show time's up modal
+    showTimesUpModal();
     
-    // Create form and submit without confirmation
-    const form = document.getElementById('examForm');
-    form.innerHTML = '';
-    
-    for (const [key, value] of Object.entries(answers)) {
-        const input = document.createElement('input');
+    // Wait 3 seconds then submit
+    setTimeout(() => {
+        console.log('⏰ Time expired - force submitting exam');
+        
+        // Create form and submit without confirmation
+        const form = document.getElementById('examForm');
+        form.innerHTML = '';
+        
+        for (const [key, value] of Object.entries(answers)) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = value;
+            form.appendChild(input);
+        }
+        
+        form.submit();
+    }, 3000);
+}
+
+/**
+ * Show Time's Up modal
+ */
+function showTimesUpModal() {
+    const modal = document.createElement('div');
+    modal.id = 'timesUpModal';
+    modal.innerHTML = `
+        <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+                    background: rgba(0,0,0,0.9); z-index: 99999; display: flex; 
+                    align-items: center; justify-content: center;">
+            <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+                        padding: 60px; border-radius: 20px; text-align: center; 
+                        max-width: 500px; box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+                        animation: slideIn 0.5s ease-out;">
+                <div style="font-size: 80px; margin-bottom: 20px;">⏰</div>
+                <h1 style="color: white; font-size: 48px; margin: 20px 0; 
+                           font-weight: bold; text-shadow: 2px 2px 4px rgba(0,0,0,0.3);">
+                    TIME'S UP!
+                </h1>
+                <p style="color: #f0f0f0; font-size: 20px; margin: 20px 0;">
+                    Your exam time has expired.
+                </p>
+                <p style="color: #ffd700; font-size: 18px; font-weight: bold;">
+                    Submitting your answers automatically...
+                </p>
+                <div style="margin-top: 30px;">
+                    <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <style>
+            @keyframes slideIn {
+                from {
+                    transform: translateY(-100px);
+                    opacity: 0;
+                }
+                to {
+                    transform: translateY(0);
+                    opacity: 1;
+                }
+            }
+        </style>
+    `;
+    document.body.appendChild(modal);
+}
         input.type = 'hidden';
         input.name = key;
         input.value = value;

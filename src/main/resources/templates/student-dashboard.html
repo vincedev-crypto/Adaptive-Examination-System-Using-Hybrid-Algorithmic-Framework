@@ -20,13 +20,19 @@
                 <div class="card dashboard-card p-5">
                     <h3 class="mb-4">Available Examinations</h3>
                     
-                    <!-- Error message for deadline exceeded -->
+                    <!-- Error message for deadline exceeded or already submitted -->
                     <div th:if="${error}" class="alert alert-danger text-start" role="alert">
-                        <h5 class="alert-heading">⚠️ Deadline Exceeded</h5>
+                        <h5 class="alert-heading">⚠️ <span th:if="${submittedAt}">Exam Already Submitted</span><span th:unless="${submittedAt}">Deadline Exceeded</span></h5>
                         <p th:text="${error}"></p>
                         <hr>
                         <p class="mb-0" th:if="${deadline}">
                             <strong>Deadline was:</strong> <span th:text="${deadline}"></span>
+                        </p>
+                        <p class="mb-0" th:if="${submittedAt}">
+                            <strong>You submitted on:</strong> <span th:text="${#temporals.format(submittedAt, 'MMM dd, yyyy hh:mm a')}"></span>
+                        </p>
+                        <p class="mt-2 mb-0">
+                            <small class="text-muted">💡 Each exam can only be taken once. Please check your results below or contact your teacher if you have concerns.</small>
                         </p>
                     </div>
                     
