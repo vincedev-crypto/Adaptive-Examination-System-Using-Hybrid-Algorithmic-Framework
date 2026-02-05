@@ -468,45 +468,26 @@ public class HomepageController {
                                headerLine.toLowerCase().contains("answer") ||
                                headerLine.toLowerCase().contains("difficulty");
             
-            // Detect format type
-            boolean isOpenEndedFormat = headerLine.toLowerCase().contains("question_text") || 
-                                       (headerLine.toLowerCase().contains("question_number") && 
-                                        headerLine.toLowerCase().contains("difficulty"));
+            // Detect if this is a mixed format CSV with Type column
+            boolean isMixedFormat = headerLine.toLowerCase().contains("type") && 
+                                   (headerLine.toLowerCase().contains("difficulty") || 
+                                    headerLine.toLowerCase().contains("id"));
             
-            System.out.println("Format detected: " + (isOpenEndedFormat ? "Open-Ended" : "Multiple-Choice"));
+            System.out.println("Format detected: " + (isMixedFormat ? "Mixed (Multiple Choice + Open-Ended)" : "Standard"));
             
-            if (isOpenEndedFormat) {
-                // Process open-ended format (Question_Number, Difficulty, Question_Text)
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    if (line.trim().isEmpty()) continue;
-                    String[] columns = parseCsvLine(line);
-                    
-                    if (columns.length >= 3) {
-                        int qNum = Integer.parseInt(columns[0].trim());
-                        String difficulty = columns[1].trim();
-                        String questionText = columns[2].trim();
-                        
-                        // Mark as text-input question with special prefix
-                        questionBlocks.add("[TEXT_INPUT]" + questionText);
-                        System.out.println("Parsed Open-Ended Q" + qNum + " (" + difficulty + "): " + questionText);
-                    }
-                }
-            } else {
-                // Process multiple-choice format
-                // Process first line if it's not a header
-                if (!hasHeader && headerLine != null && !headerLine.trim().isEmpty()) {
-                    processCSVRow(headerLine, 1, questionBlocks, answerKey);
-                }
-                
-                String line;
-                int questionNumber = hasHeader ? 1 : 2;
-                
-                while ((line = reader.readLine()) != null) {
-                    if (line.trim().isEmpty()) continue;
-                    processCSVRow(line, questionNumber, questionBlocks, answerKey);
-                    questionNumber++;
-                }
+            // Process all rows using processCSVRow which handles both types
+            // Process first line if it's not a header
+            if (!hasHeader && headerLine != null && !headerLine.trim().isEmpty()) {
+                processCSVRow(headerLine, 1, questionBlocks, answerKey);
+            }
+            
+            String line;
+            int questionNumber = hasHeader ? 1 : 2;
+            
+            while ((line = reader.readLine()) != null) {
+                if (line.trim().isEmpty()) continue;
+                processCSVRow(line, questionNumber, questionBlocks, answerKey);
+                questionNumber++;
             }
         }
         
@@ -562,8 +543,67 @@ public class HomepageController {
                                List<String> questionBlocks, Map<Integer, String> answerKey) {
         String[] columns = parseCsvLine(line);
         
+        // Format 4: ID, Difficulty, Type, Question (with embedded choices)
+        // Example: 1,Easy,Multiple Choice,"What is...? (A) Choice1 (B) Choice2 (C) Choice3"
+        if (columns.length == 4) {
+            String difficulty = columns[1].trim();
+            String type = columns[2].trim();
+            String fullQuestion = columns[3].trim();
+            
+            // Check if it's open-ended
+            if (type.equalsIgnoreCase("Open-Ended") || type.equalsIgnoreCase("Open Ended")) {
+                questionBlocks.add("[TEXT_INPUT]" + fullQuestion);
+                System.out.println("Parsed CSV Q" + questionNumber + " (Open-Ended) -> " + fullQuestion.substring(0, Math.min(50, fullQuestion.length())));
+                return;
+            }
+            
+            // Parse multiple choice with embedded choices
+            // Extract question part and choices part
+            String questionPart;
+            List<String> choices = new ArrayList<>();
+            
+            // Find choices in format (A) ... (B) ... (C) ... (D) ...
+            Pattern choicePattern = Pattern.compile("\\([A-D]\\)\\s*([^(]+?)(?=\\s*\\([A-D]\\)|$)");
+            java.util.regex.Matcher matcher = choicePattern.matcher(fullQuestion);
+            
+            // Find where choices start
+            int choicesStart = fullQuestion.indexOf("(A)");
+            if (choicesStart > 0) {
+                questionPart = fullQuestion.substring(0, choicesStart).trim();
+                
+                // Extract all choices
+                while (matcher.find()) {
+                    String choice = matcher.group(1).trim();
+                    choices.add(choice);
+                }
+                
+                // Build formatted question block
+                if (choices.size() >= 2) {
+                    StringBuilder questionBlock = new StringBuilder();
+                    questionBlock.append(questionPart).append("\n");
+                    
+                    char choiceLetter = 'A';
+                    for (String choice : choices) {
+                        questionBlock.append(choiceLetter).append(") ").append(choice).append("\n");
+                        choiceLetter++;
+                    }
+                    
+                    // Remove trailing newline
+                    String formattedBlock = questionBlock.toString().trim();
+                    questionBlocks.add(formattedBlock);
+                    System.out.println("Parsed CSV Q" + questionNumber + " (Format 4: Embedded Choices) -> " + questionPart.substring(0, Math.min(40, questionPart.length())));
+                    return;
+                }
+            }
+            
+            // Fallback: treat as simple question
+            questionBlocks.add(fullQuestion);
+            System.out.println("Parsed CSV Q" + questionNumber + " (Format 4: Simple) -> " + fullQuestion.substring(0, Math.min(50, fullQuestion.length())));
+            return;
+        }
+        
+        // Format 1: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD, Answer
         if (columns.length >= 6) {
-            // Format 1: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD, Answer
             String questionText = columns[0].trim();
             String choiceA = columns[1].trim();
             String choiceB = columns[2].trim();
@@ -643,7 +683,7 @@ public class HomepageController {
             }
             
         } else {
-            System.out.println("WARNING: Skipping malformed CSV line: " + line);
+            System.out.println("WARNING: Skipping malformed CSV line (" + columns.length + " columns): " + line);
         }
     }
     
@@ -868,9 +908,33 @@ public class HomepageController {
         String questionText = lines[0].trim();
         List<String> choices = new ArrayList<>();
         String correctAnswer = null;
+        boolean isOpenEnded = false;
+        boolean isEssay = false;
+
+        // Check if this is marked as open-ended or essay question
+        if (questionText.toLowerCase().contains("[open-ended]") || 
+            questionText.toLowerCase().contains("[text-input]") ||
+            questionText.toLowerCase().contains("(open-ended)")) {
+            isOpenEnded = true;
+            questionText = questionText.replaceAll("(?i)\\[(open-ended|text-input)\\]|\\(open-ended\\)", "").trim();
+        }
+        
+        if (questionText.toLowerCase().contains("[essay]") || 
+            questionText.toLowerCase().contains("(essay)")) {
+            isEssay = true;
+            questionText = questionText.replaceAll("(?i)\\[(essay)\\]|\\(essay\\)", "").trim();
+        }
 
         for (int i = 1; i < lines.length; i++) {
             String line = lines[i].trim();
+            
+            // Check for question type markers in subsequent lines
+            if (line.equalsIgnoreCase("Type: Open-Ended") || 
+                line.equalsIgnoreCase("Type: Essay") ||
+                line.equalsIgnoreCase("Type: Text Input")) {
+                isOpenEnded = true;
+                continue;
+            }
             
             // Check if this line indicates the correct answer
             if (line.toLowerCase().startsWith("answer:") || 
@@ -899,8 +963,14 @@ public class HomepageController {
             }
         }
 
-        // If no choices found, skip this question
-        if (choices.isEmpty()) return "";
+        // Handle open-ended/essay questions (no multiple choices)
+        if (isOpenEnded || isEssay || choices.isEmpty()) {
+            // Mark as text-input question
+            if (correctAnswer != null) {
+                key.put(id + 1, correctAnswer);
+            }
+            return "[TEXT_INPUT]" + questionText;
+        }
         
         // If correct answer was just a letter like "A", "B", etc., we already stored it above
         // Otherwise store the literal answer text
