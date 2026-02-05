@@ -19,6 +19,17 @@
             <div class="col-md-8 text-center">
                 <div class="card dashboard-card p-5">
                     <h3 class="mb-4">Available Examinations</h3>
+                    
+                    <!-- Error message for deadline exceeded -->
+                    <div th:if="${error}" class="alert alert-danger text-start" role="alert">
+                        <h5 class="alert-heading">⚠️ Deadline Exceeded</h5>
+                        <p th:text="${error}"></p>
+                        <hr>
+                        <p class="mb-0" th:if="${deadline}">
+                            <strong>Deadline was:</strong> <span th:text="${deadline}"></span>
+                        </p>
+                    </div>
+                    
                     <div th:if="${hasExam}">
                         <div class="alert alert-info">You have a new examination ready!</div>
                         <a th:href="@{/student/take-exam}" class="btn btn-success btn-lg w-100">TAKE EXAM NOW</a>

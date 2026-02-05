@@ -358,6 +358,26 @@ function displayDeadline() {
             minute: '2-digit'
         };
         document.getElementById('deadlineDisplay').textContent = deadlineDate.toLocaleString('en-US', options);
+        
+        // Check deadline every minute
+        setInterval(() => {
+            checkDeadline(deadlineDate);
+        }, 60000); // Check every 60 seconds
+        
+        // Also check immediately
+        checkDeadline(deadlineDate);
+    }
+}
+
+/**
+ * Check if deadline has passed and auto-submit if needed
+ */
+function checkDeadline(deadlineDate) {
+    const now = new Date();
+    if (now > deadlineDate) {
+        console.log('🚫 Deadline exceeded - auto-submitting exam');
+        alert('The exam deadline has passed. Your exam will be automatically submitted.');
+        autoSubmitExam();
     }
 }
 

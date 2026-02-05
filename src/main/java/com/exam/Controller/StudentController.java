@@ -156,6 +156,25 @@ public class StudentController {
             return "redirect:/student/dashboard";
         }
         
+        // Check if deadline has passed
+        String deadline = (String) session.getAttribute("examDeadline_" + studentId);
+        if (deadline != null && !deadline.isEmpty()) {
+            try {
+                java.time.LocalDateTime deadlineDateTime = java.time.LocalDateTime.parse(deadline);
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                
+                if (now.isAfter(deadlineDateTime)) {
+                    System.out.println("🚫 DEADLINE EXCEEDED: Student " + studentId + " tried to access exam after deadline");
+                    System.out.println("   Deadline: " + deadlineDateTime + ", Current: " + now);
+                    model.addAttribute("error", "The exam deadline has passed. You can no longer access this exam.");
+                    model.addAttribute("deadline", deadlineDateTime.format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy hh:mm a")));
+                    return "student-dashboard";
+                }
+            } catch (Exception e) {
+                System.out.println("⚠️ Error parsing deadline: " + e.getMessage());
+            }
+        }
+        
         // Get student information
         Optional<User> studentOpt = userRepository.findByEmail(studentId);
         if (studentOpt.isPresent()) {
@@ -176,7 +195,7 @@ public class StudentController {
         String subject = (String) session.getAttribute("examSubject_" + studentId);
         String activityType = (String) session.getAttribute("examActivityType_" + studentId);
         Integer timeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentId);
-        String deadline = (String) session.getAttribute("examDeadline_" + studentId);
+        String examDeadline = (String) session.getAttribute("examDeadline_" + studentId);
         
         // ALWAYS set start time to NOW when student accesses exam page (force reset)
         // Use epoch milliseconds for reliable JavaScript Date handling
@@ -188,7 +207,7 @@ public class StudentController {
         examInfo.put("subject", subject != null ? subject : "General");
         examInfo.put("activityType", activityType != null ? activityType : "Exam");
         examInfo.put("timeLimit", timeLimit != null ? timeLimit.toString() : "60");
-        examInfo.put("deadline", deadline != null ? deadline : "");
+        examInfo.put("deadline", examDeadline != null ? examDeadline : "");
         examInfo.put("startTimeMillis", String.valueOf(startTimeMillis));
         model.addAttribute("examInfo", examInfo);
         
@@ -213,6 +232,24 @@ public class StudentController {
                             HttpSession session, Model model,
                             java.security.Principal principal) {
         String studentId = principal != null ? principal.getName() : "guest";
+        
+        // Check if deadline has passed (allow submission with warning if just exceeded)
+        String deadline = (String) session.getAttribute("examDeadline_" + studentId);
+        boolean deadlineExceeded = false;
+        if (deadline != null && !deadline.isEmpty()) {
+            try {
+                java.time.LocalDateTime deadlineDateTime = java.time.LocalDateTime.parse(deadline);
+                java.time.LocalDateTime now = java.time.LocalDateTime.now();
+                
+                if (now.isAfter(deadlineDateTime)) {
+                    deadlineExceeded = true;
+                    System.out.println("⚠️ LATE SUBMISSION: Student " + studentId + " submitted after deadline");
+                    System.out.println("   Deadline: " + deadlineDateTime + ", Submitted: " + now);
+                }
+            } catch (Exception e) {
+                System.out.println("⚠️ Error parsing deadline during submission: " + e.getMessage());
+            }
+        }
         
         // Prevent immediate auto-submit: Check if exam just started (< 10 seconds ago)
         Object startTimeObj = session.getAttribute("examStartTime_" + studentId);
