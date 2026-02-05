@@ -102,9 +102,26 @@ public class HomepageController {
         }
     }
 
+    // Store for unlocked exams (studentEmail -> examName)
+    private static Map<String, Set<String>> unlockedExams = new HashMap<>();
+
     // Public getter for accessing distributed exams from other controllers
     public static Map<String, List<String>> getDistributedExams() {
         return distributedExams;
+    }
+    
+    // Check if exam is unlocked for student
+    public static boolean isExamUnlocked(String studentEmail, String examName) {
+        Set<String> studentUnlocks = unlockedExams.get(studentEmail);
+        return studentUnlocks != null && studentUnlocks.contains(examName);
+    }
+    
+    // Remove unlock after submission
+    public static void removeUnlock(String studentEmail, String examName) {
+        Set<String> studentUnlocks = unlockedExams.get(studentEmail);
+        if (studentUnlocks != null) {
+            studentUnlocks.remove(examName);
+        }
     }
 
     @GetMapping("/homepage")
@@ -122,11 +139,33 @@ public class HomepageController {
         // Fetch exam submissions
         List<ExamSubmission> submissions = examSubmissionRepository.findAll();
         
+        // Create a map to track distributed exams and their status
+        Map<String, Map<String, Object>> distributedExamStatus = new HashMap<>();
+        for (EnrolledStudent student : enrolledStudents) {
+            String studentEmail = student.getStudentEmail();
+            if (distributedExams.containsKey(studentEmail)) {
+                Map<String, Object> status = new HashMap<>();
+                status.put("studentName", student.getStudentName());
+                status.put("studentEmail", studentEmail);
+                status.put("hasExam", true);
+                
+                // Check if student has submitted
+                String examNameForStudent = (String) null; // We'll need to track this
+                boolean hasSubmitted = submissions.stream()
+                    .anyMatch(sub -> sub.getStudentEmail().equals(studentEmail));
+                status.put("hasSubmitted", hasSubmitted);
+                status.put("isUnlocked", unlockedExams.containsKey(studentEmail) && !unlockedExams.get(studentEmail).isEmpty());
+                
+                distributedExamStatus.put(studentEmail, status);
+            }
+        }
+        
         model.addAttribute("teacherEmail", teacherEmail);
         model.addAttribute("enrolledStudents", enrolledStudents);
         model.addAttribute("allStudents", allStudents);
         model.addAttribute("submissions", submissions);
         model.addAttribute("uploadedExams", new ArrayList<>(uploadedExams.values()));
+        model.addAttribute("distributedExamStatus", distributedExamStatus);
         return "homepage";
     }
 
@@ -205,6 +244,20 @@ public class HomepageController {
             System.out.println("Distributed unique shuffled exam to: " + targetStudent);
             System.out.println("Time limit: " + timeLimit + " minutes, Deadline: " + deadline);
         }
+        return "redirect:/teacher/homepage";
+    }
+    
+    @PostMapping("/unlock-exam")
+    public String unlockExam(@RequestParam String studentEmail,
+                            HttpSession session) {
+        String examName = (String) session.getAttribute("examName_" + studentEmail);
+        
+        if (examName != null) {
+            // Add to unlocked exams
+            unlockedExams.computeIfAbsent(studentEmail, k -> new HashSet<>()).add(examName);
+            System.out.println("🔓 EXAM UNLOCKED: " + examName + " for student " + studentEmail);
+        }
+        
         return "redirect:/teacher/homepage";
     }
     

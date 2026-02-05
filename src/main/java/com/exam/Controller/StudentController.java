@@ -159,14 +159,21 @@ public class StudentController {
         // Check if student has already submitted this exam (ONE-TIME EXAM ENFORCEMENT)
         String examName = (String) session.getAttribute("examName_" + studentId);
         if (examName != null) {
-            Optional<ExamSubmission> existingSubmission = examSubmissionRepository
-                .findByStudentEmailAndExamName(studentId, examName);
+            // Check if exam is unlocked by teacher (allows retake)
+            boolean isUnlocked = HomepageController.isExamUnlocked(studentId, examName);
             
-            if (existingSubmission.isPresent()) {
-                System.out.println("🔒 EXAM LOCKED: Student " + studentId + " already submitted this exam");
-                model.addAttribute("error", "You have already submitted this exam. Each exam can only be taken once.");
-                model.addAttribute("submittedAt", existingSubmission.get().getSubmittedAt());
-                return "student-dashboard";
+            if (!isUnlocked) {
+                Optional<ExamSubmission> existingSubmission = examSubmissionRepository
+                    .findByStudentEmailAndExamName(studentId, examName);
+                
+                if (existingSubmission.isPresent()) {
+                    System.out.println("🔒 EXAM LOCKED: Student " + studentId + " already submitted this exam");
+                    model.addAttribute("error", "You have already submitted this exam. Each exam can only be taken once.");
+                    model.addAttribute("submittedAt", existingSubmission.get().getSubmittedAt());
+                    return "student-dashboard";
+                }
+            } else {
+                System.out.println("🔓 UNLOCKED ACCESS: Student " + studentId + " accessing unlocked exam: " + examName);
             }
         }
         
@@ -415,6 +422,13 @@ public class StudentController {
             
             ExamSubmission savedSubmission = examSubmissionRepository.save(submission);
             System.out.println("Submission saved to database. Results automatically available.");
+            
+            // Remove unlock status after successful submission (lock exam again)
+            String submittedExamName = (String) session.getAttribute("examName_" + studentId);
+            if (submittedExamName != null) {
+                HomepageController.removeUnlock(studentId, submittedExamName);
+                System.out.println("🔒 EXAM RE-LOCKED after submission: " + submittedExamName + " for " + studentId);
+            }
             
             // Store results in session for display after redirect
             session.setAttribute("lastSubmissionId", savedSubmission.getId());
