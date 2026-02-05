@@ -164,13 +164,13 @@ public class StudentController {
             boolean isUnlocked = HomepageController.isExamUnlocked(studentId, examName);
             
             if (!isUnlocked) {
-                Optional<ExamSubmission> existingSubmission = examSubmissionRepository
+                List<ExamSubmission> existingSubmissions = examSubmissionRepository
                     .findByStudentEmailAndExamName(studentId, examName);
                 
-                if (existingSubmission.isPresent()) {
+                if (!existingSubmissions.isEmpty()) {
                     System.out.println("🔒 EXAM LOCKED: Student " + studentId + " already submitted this exam");
                     model.addAttribute("error", "You have already submitted this exam. Each exam can only be taken once.");
-                    model.addAttribute("submittedAt", existingSubmission.get().getSubmittedAt());
+                    model.addAttribute("submittedAt", existingSubmissions.get(0).getSubmittedAt());
                     return "student-dashboard";
                 }
             } else {

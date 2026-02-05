@@ -10,7 +10,7 @@ import java.util.Optional;
 @Repository
 public interface ExamSubmissionRepository extends JpaRepository<ExamSubmission, Long> {
     List<ExamSubmission> findByStudentEmail(String studentEmail);
-    Optional<ExamSubmission> findByStudentEmailAndExamName(String studentEmail, String examName);
+    List<ExamSubmission> findByStudentEmailAndExamName(String studentEmail, String examName);
     List<ExamSubmission> findByResultsReleasedFalse(); // Pending release
     List<ExamSubmission> findAll();
 }
