@@ -103,6 +103,9 @@ function displayQuestion() {
         question = question.replace('[TEXT_INPUT]', '').trim();
     }
     
+    // Remove difficulty markers like [Easy], [Medium], [Hard], [Essay], [Open-Ended]
+    question = question.replace(/\[(Easy|Medium|Hard|Essay|Open-Ended|Open Ended|TEXT_INPUT)\]/gi, '').trim();
+    
     let html = `<h5 class="mb-4">Question ${questionNumber}</h5>`;
     
     if (isTextInput) {

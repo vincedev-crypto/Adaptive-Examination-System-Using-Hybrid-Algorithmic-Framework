@@ -550,34 +550,39 @@ public class HomepageController {
             String type = columns[2].trim();
             String fullQuestion = columns[3].trim();
             
-            // Check if it's open-ended
-            if (type.equalsIgnoreCase("Open-Ended") || type.equalsIgnoreCase("Open Ended")) {
+            // Check if it's open-ended or essay
+            if (type.equalsIgnoreCase("Open-Ended") || 
+                type.equalsIgnoreCase("Open Ended") || 
+                type.equalsIgnoreCase("Essay") ||
+                type.equalsIgnoreCase("Text Input")) {
                 questionBlocks.add("[TEXT_INPUT]" + fullQuestion);
-                System.out.println("Parsed CSV Q" + questionNumber + " (Open-Ended) -> " + fullQuestion.substring(0, Math.min(50, fullQuestion.length())));
+                System.out.println("Parsed CSV Q" + questionNumber + " (Open-Ended/Essay) -> " + fullQuestion.substring(0, Math.min(50, fullQuestion.length())));
                 return;
             }
             
             // Parse multiple choice with embedded choices
-            // Extract question part and choices part
-            String questionPart;
-            List<String> choices = new ArrayList<>();
-            
-            // Find choices in format (A) ... (B) ... (C) ... (D) ...
-            Pattern choicePattern = Pattern.compile("\\([A-D]\\)\\s*([^(]+?)(?=\\s*\\([A-D]\\)|$)");
-            java.util.regex.Matcher matcher = choicePattern.matcher(fullQuestion);
-            
-            // Find where choices start
-            int choicesStart = fullQuestion.indexOf("(A)");
-            if (choicesStart > 0) {
+            // Check if question has embedded choices like (A) (B) (C) (D)
+            if (fullQuestion.contains("(A)") && fullQuestion.contains("(B)")) {
+                String questionPart;
+                List<String> choices = new ArrayList<>();
+                
+                // Find where choices start
+                int choicesStart = fullQuestion.indexOf("(A)");
                 questionPart = fullQuestion.substring(0, choicesStart).trim();
+                
+                // Extract choices using regex
+                Pattern choicePattern = Pattern.compile("\\([A-D]\\)\\s*([^(]+?)(?=\\s*\\([A-D]\\)|$)");
+                java.util.regex.Matcher matcher = choicePattern.matcher(fullQuestion);
                 
                 // Extract all choices
                 while (matcher.find()) {
                     String choice = matcher.group(1).trim();
-                    choices.add(choice);
+                    if (!choice.isEmpty()) {
+                        choices.add(choice);
+                    }
                 }
                 
-                // Build formatted question block
+                // Build formatted question block if we found choices
                 if (choices.size() >= 2) {
                     StringBuilder questionBlock = new StringBuilder();
                     questionBlock.append(questionPart).append("\n");
@@ -591,14 +596,20 @@ public class HomepageController {
                     // Remove trailing newline
                     String formattedBlock = questionBlock.toString().trim();
                     questionBlocks.add(formattedBlock);
-                    System.out.println("Parsed CSV Q" + questionNumber + " (Format 4: Embedded Choices) -> " + questionPart.substring(0, Math.min(40, questionPart.length())));
+                    System.out.println("Parsed CSV Q" + questionNumber + " (Multiple Choice with " + choices.size() + " choices)");
                     return;
                 }
             }
             
-            // Fallback: treat as simple question
-            questionBlocks.add(fullQuestion);
-            System.out.println("Parsed CSV Q" + questionNumber + " (Format 4: Simple) -> " + fullQuestion.substring(0, Math.min(50, fullQuestion.length())));
+            // If no embedded choices found but type is Multiple Choice, log warning
+            if (type.equalsIgnoreCase("Multiple Choice")) {
+                System.out.println("WARNING: Q" + questionNumber + " marked as Multiple Choice but no embedded choices found!");
+                System.out.println("Question text: " + fullQuestion);
+            }
+            
+            // Fallback: treat as text input since no choices found
+            questionBlocks.add("[TEXT_INPUT]" + fullQuestion);
+            System.out.println("Parsed CSV Q" + questionNumber + " (Fallback to Text Input)");
             return;
         }
         
@@ -939,7 +950,34 @@ public class HomepageController {
             isEssay = true;
             questionText = questionText.replaceAll("(?i)\\[(essay)\\]|\\(essay\\)", "").trim();
         }
+        
+        // Check if choices are embedded in the question text itself (e.g., "What is...? (A) HTML (B) SQL (C) CSS")
+        if (!isOpenEnded && !isEssay && questionText.contains("(A)") && questionText.contains("(B)")) {
+            // Extract question part before choices
+            int choicesStart = questionText.indexOf("(A)");
+            String pureQuestion = questionText.substring(0, choicesStart).trim();
+            
+            // Extract choices using regex
+            Pattern choicePattern = Pattern.compile("\\([A-D]\\)\\s*([^(]+?)(?=\\s*\\([A-D]\\)|$)");
+            java.util.regex.Matcher matcher = choicePattern.matcher(questionText);
+            
+            List<String> embeddedChoices = new ArrayList<>();
+            while (matcher.find()) {
+                String choice = matcher.group(1).trim();
+                if (!choice.isEmpty()) {
+                    embeddedChoices.add(choice);
+                }
+            }
+            
+            // If we found embedded choices, use them
+            if (embeddedChoices.size() >= 2) {
+                questionText = pureQuestion;
+                choices.addAll(embeddedChoices);
+                System.out.println("Detected embedded choices in Q" + (id + 1) + ": " + embeddedChoices.size() + " choices found");
+            }
+        }
 
+        // Process remaining lines for traditional format (choices on separate lines)
         for (int i = 1; i < lines.length; i++) {
             String line = lines[i].trim();
             
@@ -962,8 +1000,8 @@ public class HomepageController {
                 continue;
             }
             
-            // Check if it's an answer choice (A), B), C), D) or just add as choice
-            if (!line.isEmpty() && !line.equalsIgnoreCase("choices:") && !line.equalsIgnoreCase("options:")) {
+            // Check if it's an answer choice (A), B), C), D) - only if we haven't found embedded choices
+            if (choices.isEmpty() && !line.isEmpty() && !line.equalsIgnoreCase("choices:") && !line.equalsIgnoreCase("options:")) {
                 // Remove choice labels like "A)", "B)", etc. for storage
                 String cleanedChoice = line.replaceFirst("^[A-Za-z]\\)\\s*", "").trim();
                 if (!cleanedChoice.isEmpty()) {
@@ -984,6 +1022,7 @@ public class HomepageController {
             if (correctAnswer != null) {
                 key.put(id + 1, correctAnswer);
             }
+            System.out.println("Q" + (id + 1) + " treated as TEXT_INPUT (isOpenEnded=" + isOpenEnded + ", isEssay=" + isEssay + ", choices.size=" + choices.size() + ")");
             return "[TEXT_INPUT]" + questionText;
         }
         
