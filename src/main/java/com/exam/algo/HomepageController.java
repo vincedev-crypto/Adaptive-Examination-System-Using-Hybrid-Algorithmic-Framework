@@ -1026,9 +1026,17 @@ public class HomepageController {
             return "[TEXT_INPUT]" + questionText;
         }
         
-        // If correct answer was just a letter like "A", "B", etc., we already stored it above
-        // Otherwise store the literal answer text
-        if (correctAnswer != null && !key.containsKey(id + 1)) {
+        // Convert answer letter to actual choice text BEFORE shuffling
+        if (correctAnswer != null) {
+            // Check if answer is just a single letter (A, B, C, D)
+            if (correctAnswer.length() == 1 && correctAnswer.matches("[A-Da-d]")) {
+                int answerIndex = Character.toUpperCase(correctAnswer.charAt(0)) - 'A';
+                if (answerIndex >= 0 && answerIndex < choices.size()) {
+                    correctAnswer = choices.get(answerIndex);
+                    System.out.println("Q" + (id + 1) + " converted answer letter to text: " + correctAnswer);
+                }
+            }
+            // Store the actual choice text as the answer
             key.put(id + 1, correctAnswer);
         }
 
