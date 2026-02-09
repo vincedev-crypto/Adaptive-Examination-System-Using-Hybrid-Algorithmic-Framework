@@ -152,7 +152,6 @@ function displayQuestion() {
     
     // Update UI elements
     updateProgress();
-    updateDifficultyBadge();
     
     // Update navigation buttons
     document.getElementById('backBtn').disabled = (currentPage === 0);
@@ -169,29 +168,6 @@ function saveTextAnswer(questionNumber, value) {
         delete answers['q' + questionNumber];
     }
     autoSave();
-}
-
-/**
- * Update difficulty badge
- */
-function updateDifficultyBadge() {
-    const difficulty = difficulties[currentPage] || 'Medium';
-    const badge = document.getElementById('difficultyBadge');
-    
-    // Remove all difficulty classes
-    badge.classList.remove('difficulty-easy', 'difficulty-medium', 'difficulty-hard');
-    badge.classList.remove('bg-success', 'bg-warning', 'bg-danger');
-    
-    // Add appropriate class based on difficulty
-    if (difficulty === 'Easy') {
-        badge.classList.add('difficulty-easy');
-    } else if (difficulty === 'Hard') {
-        badge.classList.add('difficulty-hard');
-    } else {
-        badge.classList.add('difficulty-medium');
-    }
-    
-    badge.textContent = difficulty;
 }
 
 /**

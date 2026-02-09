@@ -66,16 +66,18 @@ public class HomepageController {
         private String subject;
         private String activityType;
         private List<String> questions;
+        private List<String> difficulties; // Store difficulty for each question
         private Map<Integer, String> answerKey;
         private java.time.LocalDateTime uploadedAt;
         
         public UploadedExam(String examId, String examName, String subject, String activityType, 
-                          List<String> questions, Map<Integer, String> answerKey) {
+                          List<String> questions, List<String> difficulties, Map<Integer, String> answerKey) {
             this.examId = examId;
             this.examName = examName;
             this.subject = subject;
             this.activityType = activityType;
             this.questions = questions;
+            this.difficulties = difficulties;
             this.answerKey = answerKey;
             this.uploadedAt = java.time.LocalDateTime.now();
         }
@@ -85,6 +87,7 @@ public class HomepageController {
         public String getSubject() { return subject; }
         public String getActivityType() { return activityType; }
         public List<String> getQuestions() { return questions; }
+        public List<String> getDifficulties() { return difficulties; }
         public Map<Integer, String> getAnswerKey() { return answerKey; }
         public java.time.LocalDateTime getUploadedAt() { return uploadedAt; }
     }
@@ -93,12 +96,25 @@ public class HomepageController {
     private static class QuestionWithAnswer {
         String question;
         String answer;
+        String difficulty;
         int originalNumber;
         
-        QuestionWithAnswer(String question, String answer, int originalNumber) {
+        QuestionWithAnswer(String question, String answer, String difficulty, int originalNumber) {
             this.question = question;
             this.answer = answer;
+            this.difficulty = difficulty;
             this.originalNumber = originalNumber;
+        }
+    }
+    
+    // Helper class to return both questions and difficulties from CSV processing
+    private static class CsvProcessResult {
+        List<String> questions;
+        List<String> difficulties;
+        
+        CsvProcessResult(List<String> questions, List<String> difficulties) {
+            this.questions = questions;
+            this.difficulties = difficulties;
         }
     }
 
@@ -212,21 +228,23 @@ public class HomepageController {
         UploadedExam selectedExam = uploadedExams.get(examId);
         
         if (selectedExam != null) {
-            // Create a fresh copy of questions for this student
+            // Create a fresh copy of questions and difficulties for this student
             List<String> allQuestions = new ArrayList<>(selectedExam.getQuestions());
+            List<String> allDifficulties = new ArrayList<>(selectedExam.getDifficulties());
             
-            // Categorize questions by difficulty
-            List<String> easyQuestions = new ArrayList<>();
-            List<String> mediumQuestions = new ArrayList<>();
-            List<String> hardQuestions = new ArrayList<>();
+            // Categorize questions by difficulty using stored difficulty levels
+            List<Integer> easyIndices = new ArrayList<>();
+            List<Integer> mediumIndices = new ArrayList<>();
+            List<Integer> hardIndices = new ArrayList<>();
             
-            for (String question : allQuestions) {
-                if (question.contains("[Easy]")) {
-                    easyQuestions.add(question);
-                } else if (question.contains("[Hard]")) {
-                    hardQuestions.add(question);
+            for (int i = 0; i < allQuestions.size(); i++) {
+                String difficulty = allDifficulties.get(i);
+                if (difficulty.equalsIgnoreCase("Easy")) {
+                    easyIndices.add(i);
+                } else if (difficulty.equalsIgnoreCase("Hard")) {
+                    hardIndices.add(i);
                 } else {
-                    mediumQuestions.add(question); // Default to medium
+                    mediumIndices.add(i); // Medium or default
                 }
             }
             
@@ -244,41 +262,58 @@ public class HomepageController {
                 mediumCount -= (calculatedTotal - totalQuestions);
             }
             
-            // Shuffle and select questions
+            // Shuffle and select questions by indices
             SecureRandom rand = new SecureRandom();
-            Collections.shuffle(easyQuestions, rand);
-            Collections.shuffle(mediumQuestions, rand);
-            Collections.shuffle(hardQuestions, rand);
+            Collections.shuffle(easyIndices, rand);
+            Collections.shuffle(mediumIndices, rand);
+            Collections.shuffle(hardIndices, rand);
             
+            // Select questions and their difficulties
             List<String> selectedQuestions = new ArrayList<>();
-            selectedQuestions.addAll(easyQuestions.subList(0, Math.min(easyCount, easyQuestions.size())));
-            selectedQuestions.addAll(mediumQuestions.subList(0, Math.min(mediumCount, mediumQuestions.size())));
-            selectedQuestions.addAll(hardQuestions.subList(0, Math.min(hardCount, hardQuestions.size())));
+            List<String> selectedDifficulties = new ArrayList<>();
             
-            // Shuffle the final selection
-            Collections.shuffle(selectedQuestions, rand);
+            // Add Easy questions
+            for (int i = 0; i < Math.min(easyCount, easyIndices.size()); i++) {
+                int idx = easyIndices.get(i);
+                selectedQuestions.add(allQuestions.get(idx));
+                selectedDifficulties.add(allDifficulties.get(idx));
+            }
+            // Add Medium questions
+            for (int i = 0; i < Math.min(mediumCount, mediumIndices.size()); i++) {
+                int idx = mediumIndices.get(i);
+                selectedQuestions.add(allQuestions.get(idx));
+                selectedDifficulties.add(allDifficulties.get(idx));
+            }
+            // Add Hard questions
+            for (int i = 0; i < Math.min(hardCount, hardIndices.size()); i++) {
+                int idx = hardIndices.get(i);
+                selectedQuestions.add(allQuestions.get(idx));
+                selectedDifficulties.add(allDifficulties.get(idx));
+            }
+            
+            // Shuffle the final selection together
+            List<Integer> shuffleIndices = new ArrayList<>();
+            for (int i = 0; i < selectedQuestions.size(); i++) shuffleIndices.add(i);
+            Collections.shuffle(shuffleIndices, rand);
+            
+            List<String> finalQuestions = new ArrayList<>();
+            List<String> finalDifficulties = new ArrayList<>();
+            for (int idx : shuffleIndices) {
+                finalQuestions.add(selectedQuestions.get(idx));
+                finalDifficulties.add(selectedDifficulties.get(idx));
+            }
             
             // Re-shuffle answer choices for each question block to make it unique per student
             List<String> uniqueExam = new ArrayList<>();
-            for (String questionBlock : selectedQuestions) {
+            for (String questionBlock : finalQuestions) {
                 uniqueExam.add(reshuffleQuestionChoices(questionBlock, rand));
             }
             
             // Store the uniquely shuffled exam for this student
             distributedExams.put(targetStudent, uniqueExam);
             
-            // Generate difficulty levels for each question based on markers
-            List<String> difficultyLevels = new ArrayList<>();
-            for (String question : uniqueExam) {
-                if (question.contains("[Easy]")) {
-                    difficultyLevels.add("Easy");
-                } else if (question.contains("[Hard]")) {
-                    difficultyLevels.add("Hard");
-                } else {
-                    difficultyLevels.add("Medium");
-                }
-            }
-            session.setAttribute("questionDifficulties_" + targetStudent, difficultyLevels);
+            // Store difficulty levels (already extracted from CSV)
+            session.setAttribute("questionDifficulties_" + targetStudent, finalDifficulties);
             
             // Store exam metadata for student display
             session.setAttribute("examSubject_" + targetStudent, selectedExam.getSubject());
@@ -294,8 +329,13 @@ public class HomepageController {
                 answerKeyService.storeStudentAnswerKey(targetStudent, selectedExam.getAnswerKey());
             }
             
+            // Count actual distribution
+            long actualEasy = finalDifficulties.stream().filter(d -> d.equalsIgnoreCase("Easy")).count();
+            long actualMedium = finalDifficulties.stream().filter(d -> d.equalsIgnoreCase("Medium")).count();
+            long actualHard = finalDifficulties.stream().filter(d -> d.equalsIgnoreCase("Hard")).count();
+            
             System.out.println("Distributed exam to: " + targetStudent);
-            System.out.println("Distribution: " + easyCount + " Easy, " + mediumCount + " Medium, " + hardCount + " Hard");
+            System.out.println("Distribution: " + actualEasy + " Easy, " + actualMedium + " Medium, " + actualHard + " Hard");
             System.out.println("Time limit: " + timeLimit + " minutes, Deadline: " + deadline);
         }
         return "redirect:/teacher/homepage";
@@ -401,10 +441,18 @@ public class HomepageController {
             
             // Process exam based on file type
             List<String> randomizedLines;
+            List<String> difficultyLevels = new ArrayList<>();
+            
             if (isCsvFormat) {
-                randomizedLines = processCsvExam(examCreated, session, answerKey);
+                CsvProcessResult csvResult = processCsvExam(examCreated, session, answerKey);
+                randomizedLines = csvResult.questions;
+                difficultyLevels = csvResult.difficulties;
             } else {
                 randomizedLines = processFisherYates(examCreated, session, answerKey);
+                // For PDF files, generate default difficulties (Medium)
+                for (int i = 0; i < randomizedLines.size(); i++) {
+                    difficultyLevels.add("Medium");
+                }
             }
             session.setAttribute("shuffledExam", randomizedLines);
             
@@ -418,7 +466,7 @@ public class HomepageController {
             String examActivityType = (activityType != null && !activityType.isEmpty()) ? activityType : "Exam";
             
             UploadedExam uploadedExam = new UploadedExam(examId, examName, examSubject, examActivityType, 
-                                                         randomizedLines, finalAnswerKey);
+                                                         randomizedLines, difficultyLevels, finalAnswerKey);
             uploadedExams.put(examId, uploadedExam);
             
             model.addAttribute("type", "exam");
@@ -556,10 +604,12 @@ public class HomepageController {
      * 2. Compact format with embedded answer: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD
      *    (Answer extracted from question text if it contains "Answer: ...")
      * 3. Simple format: Question (with embedded "Answer: ...")
+     * 4. ID, Difficulty, Type, Question format
      */
-    private List<String> processCsvExam(MultipartFile file, HttpSession session, 
+    private CsvProcessResult processCsvExam(MultipartFile file, HttpSession session, 
                                         Map<Integer, String> externalAnswerKey) throws IOException {
         List<String> questionBlocks = new ArrayList<>();
+        List<String> difficultyList = new ArrayList<>();
         Map<Integer, String> answerKey = new HashMap<>();
         
         System.out.println("=== PROCESSING CSV EXAM ===");
@@ -585,7 +635,7 @@ public class HomepageController {
             // Process all rows using processCSVRow which handles both types
             // Process first line if it's not a header
             if (!hasHeader && headerLine != null && !headerLine.trim().isEmpty()) {
-                processCSVRow(headerLine, 1, questionBlocks, answerKey);
+                processCSVRow(headerLine, 1, questionBlocks, difficultyList, answerKey);
             }
             
             String line;
@@ -593,7 +643,7 @@ public class HomepageController {
             
             while ((line = reader.readLine()) != null) {
                 if (line.trim().isEmpty()) continue;
-                processCSVRow(line, questionNumber, questionBlocks, answerKey);
+                processCSVRow(line, questionNumber, questionBlocks, difficultyList, answerKey);
                 questionNumber++;
             }
         }
@@ -611,7 +661,8 @@ public class HomepageController {
         for (int i = 0; i < questionBlocks.size(); i++) {
             String question = questionBlocks.get(i);
             String answer = answerKey.get(i + 1);
-            questionsWithAnswers.add(new QuestionWithAnswer(question, answer, i + 1));
+            String difficulty = i < difficultyList.size() ? difficultyList.get(i) : "Medium";
+            questionsWithAnswers.add(new QuestionWithAnswer(question, answer, difficulty, i + 1));
         }
         
         SecureRandom rand = new SecureRandom();
@@ -619,6 +670,7 @@ public class HomepageController {
         
         // Rebuild with shuffled order
         questionBlocks.clear();
+        difficultyList.clear();
         answerKey.clear();
         for (int i = 0; i < questionsWithAnswers.size(); i++) {
             QuestionWithAnswer qa = questionsWithAnswers.get(i);
@@ -634,20 +686,22 @@ public class HomepageController {
             }
             
             questionBlocks.add(shuffledQuestion);
+            difficultyList.add(qa.difficulty);
             answerKey.put(i + 1, qa.answer);
             
-            System.out.println("Shuffled Q" + (i + 1) + " (originally Q" + qa.originalNumber + ") -> " + qa.answer);
+            System.out.println("Shuffled Q" + (i + 1) + " (originally Q" + qa.originalNumber + ") [" + qa.difficulty + "] -> " + qa.answer);
         }
         
         session.setAttribute("correctAnswerKey", answerKey);
-        return questionBlocks;
+        return new CsvProcessResult(questionBlocks, difficultyList);
     }
     
     /**
      * Process a single CSV row - handles multiple formats
      */
     private void processCSVRow(String line, int questionNumber, 
-                               List<String> questionBlocks, Map<Integer, String> answerKey) {
+                               List<String> questionBlocks, List<String> difficultyList, 
+                               Map<Integer, String> answerKey) {
         String[] columns = parseCsvLine(line);
         
         // Format 4: ID, Difficulty, Type, Question (with embedded choices)
@@ -657,10 +711,14 @@ public class HomepageController {
             String type = columns[2].trim();
             String fullQuestion = columns[3].trim();
             
+            // Store difficulty level
+            difficultyList.add(difficulty);
+            
             // Check if it's open-ended or essay
             if (type.equalsIgnoreCase("Open-Ended") || 
                 type.equalsIgnoreCase("Open Ended") || 
                 type.equalsIgnoreCase("Essay") ||
+                type.equalsIgnoreCase("Open") ||
                 type.equalsIgnoreCase("Text Input")) {
                 questionBlocks.add("[TEXT_INPUT]" + fullQuestion);
                 System.out.println("Parsed CSV Q" + questionNumber + " (Open-Ended/Essay) -> " + fullQuestion.substring(0, Math.min(50, fullQuestion.length())));
@@ -738,6 +796,7 @@ public class HomepageController {
             questionBlock.append("D) ").append(choiceD);
             
             questionBlocks.add(questionBlock.toString());
+            difficultyList.add("Medium"); // Default difficulty for old format
             answerKey.put(questionNumber, correctAnswer);
             
             System.out.println("Parsed CSV Q" + questionNumber + " (Format 1) -> " + correctAnswer);
@@ -767,6 +826,7 @@ public class HomepageController {
             questionBlock.append("D) ").append(choiceD);
             
             questionBlocks.add(questionBlock.toString());
+            difficultyList.add("Medium"); // Default difficulty for old format
             if (correctAnswer != null) {
                 answerKey.put(questionNumber, correctAnswer);
                 System.out.println("Parsed CSV Q" + questionNumber + " (Format 2 with embedded answer) -> " + correctAnswer);
@@ -793,6 +853,7 @@ public class HomepageController {
                 questionBlocks.add(fullText);
             }
             
+            difficultyList.add("Medium"); // Default difficulty for old format
             if (correctAnswer != null) {
                 answerKey.put(questionNumber, correctAnswer);
                 System.out.println("Parsed CSV Q" + questionNumber + " (Format 3 with embedded answer) -> " + correctAnswer);
