@@ -157,27 +157,27 @@ public class StudentController {
             return "redirect:/student/dashboard";
         }
         
-        // Check if student has already submitted this exam (ONE-TIME EXAM ENFORCEMENT)
+        // MULTIPLE ATTEMPTS ALLOWED - Students can retake exams, all submissions stored in database
         String examName = (String) session.getAttribute("examName_" + studentId);
         boolean isUnlocked = false;
         
         if (examName != null) {
-            // Check if exam is unlocked by teacher (allows retake AND bypasses deadline)
+            // Check if exam is unlocked by teacher (bypasses deadline only)
             isUnlocked = HomepageController.isExamUnlocked(studentId, examName);
             
-            if (!isUnlocked) {
-                List<ExamSubmission> existingSubmissions = examSubmissionRepository
-                    .findByStudentEmailAndExamName(studentId, examName);
-                
-                if (!existingSubmissions.isEmpty()) {
-                    System.out.println("🔒 EXAM LOCKED: Student " + studentId + " already submitted this exam");
-                    model.addAttribute("error", "You have already submitted this exam. Each exam can only be taken once.");
-                    model.addAttribute("submittedAt", existingSubmissions.get(0).getSubmittedAt());
-                    return "student-dashboard";
-                }
-            } else {
+            if (isUnlocked) {
                 System.out.println("🔓 UNLOCKED ACCESS: Student " + studentId + " accessing unlocked exam: " + examName);
-                System.out.println("   Bypassing deadline and submission checks");
+                System.out.println("   Bypassing deadline check");
+            }
+            
+            // Log previous submissions (informational only, not blocking)
+            List<ExamSubmission> previousSubmissions = examSubmissionRepository
+                .findByStudentEmailAndExamName(studentId, examName);
+            
+            if (!previousSubmissions.isEmpty()) {
+                System.out.println("📝 Student " + studentId + " has " + previousSubmissions.size() + 
+                                 " previous submission(s) for this exam");
+                System.out.println("   Allowing retake - all submissions will be stored");
             }
         }
         

@@ -205,26 +205,79 @@ public class HomepageController {
                                  @RequestParam String examId,
                                  @RequestParam Integer timeLimit,
                                  @RequestParam String deadline,
+                                 @RequestParam(defaultValue = "30") Integer easyPercent,
+                                 @RequestParam(defaultValue = "50") Integer mediumPercent,
+                                 @RequestParam(defaultValue = "20") Integer hardPercent,
                                  HttpSession session) {
         UploadedExam selectedExam = uploadedExams.get(examId);
         
         if (selectedExam != null) {
             // Create a fresh copy of questions for this student
-            List<String> studentExamCopy = new ArrayList<>(selectedExam.getQuestions());
+            List<String> allQuestions = new ArrayList<>(selectedExam.getQuestions());
+            
+            // Categorize questions by difficulty
+            List<String> easyQuestions = new ArrayList<>();
+            List<String> mediumQuestions = new ArrayList<>();
+            List<String> hardQuestions = new ArrayList<>();
+            
+            for (String question : allQuestions) {
+                if (question.contains("[Easy]")) {
+                    easyQuestions.add(question);
+                } else if (question.contains("[Hard]")) {
+                    hardQuestions.add(question);
+                } else {
+                    mediumQuestions.add(question); // Default to medium
+                }
+            }
+            
+            // Calculate number of questions for each difficulty
+            int totalQuestions = allQuestions.size();
+            int easyCount = (int) Math.round(totalQuestions * easyPercent / 100.0);
+            int mediumCount = (int) Math.round(totalQuestions * mediumPercent / 100.0);
+            int hardCount = (int) Math.round(totalQuestions * hardPercent / 100.0);
+            
+            // Adjust if totals don't match due to rounding
+            int calculatedTotal = easyCount + mediumCount + hardCount;
+            if (calculatedTotal < totalQuestions) {
+                mediumCount += (totalQuestions - calculatedTotal);
+            } else if (calculatedTotal > totalQuestions) {
+                mediumCount -= (calculatedTotal - totalQuestions);
+            }
+            
+            // Shuffle and select questions
+            SecureRandom rand = new SecureRandom();
+            Collections.shuffle(easyQuestions, rand);
+            Collections.shuffle(mediumQuestions, rand);
+            Collections.shuffle(hardQuestions, rand);
+            
+            List<String> selectedQuestions = new ArrayList<>();
+            selectedQuestions.addAll(easyQuestions.subList(0, Math.min(easyCount, easyQuestions.size())));
+            selectedQuestions.addAll(mediumQuestions.subList(0, Math.min(mediumCount, mediumQuestions.size())));
+            selectedQuestions.addAll(hardQuestions.subList(0, Math.min(hardCount, hardQuestions.size())));
+            
+            // Shuffle the final selection
+            Collections.shuffle(selectedQuestions, rand);
             
             // Re-shuffle answer choices for each question block to make it unique per student
             List<String> uniqueExam = new ArrayList<>();
-            SecureRandom rand = new SecureRandom();
-            
-            for (String questionBlock : studentExamCopy) {
+            for (String questionBlock : selectedQuestions) {
                 uniqueExam.add(reshuffleQuestionChoices(questionBlock, rand));
             }
             
             // Store the uniquely shuffled exam for this student
             distributedExams.put(targetStudent, uniqueExam);
             
-            // Generate difficulty levels for each question
-            List<String> difficultyLevels = generateQuestionDifficulties(uniqueExam.size(), rand);
+            // Generate difficulty levels for each question based on markers
+            List<String> difficultyLevels = new ArrayList<>();
+            for (String question : uniqueExam) {
+                if (question.contains("[Easy]")) {
+                    difficultyLevels.add("Easy");
+                } else if (question.contains("[Hard]")) {
+                    difficultyLevels.add("Hard");
+                } else {
+                    difficultyLevels.add("Medium");
+                }
+            }
             session.setAttribute("questionDifficulties_" + targetStudent, difficultyLevels);
             
             // Store exam metadata for student display
@@ -241,7 +294,8 @@ public class HomepageController {
                 answerKeyService.storeStudentAnswerKey(targetStudent, selectedExam.getAnswerKey());
             }
             
-            System.out.println("Distributed unique shuffled exam to: " + targetStudent);
+            System.out.println("Distributed exam to: " + targetStudent);
+            System.out.println("Distribution: " + easyCount + " Easy, " + mediumCount + " Medium, " + hardCount + " Hard");
             System.out.println("Time limit: " + timeLimit + " minutes, Deadline: " + deadline);
         }
         return "redirect:/teacher/homepage";

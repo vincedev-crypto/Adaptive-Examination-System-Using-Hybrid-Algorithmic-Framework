@@ -177,20 +177,120 @@
                                                         <span class="text-muted" th:text="${#lists.size(exam.questions)} + ' questions'">20 questions</span>
                                                     </p>
                                                     
+                                                    <!-- Difficulty Distribution -->
+                                                    <div class="mb-3">
+                                                        <label class="form-label small fw-bold">📊 Difficulty Distribution (%)</label>
+                                                        <div class="row">
+                                                            <div class="col-4">
+                                                                <label class="form-label small text-success">Easy</label>
+                                                                <input type="number" name="easyPercent" class="form-control form-control-sm" 
+                                                                       min="0" max="100" value="30" required
+                                                                       onchange="validatePercentages(this)">
+                                                            </div>
+                                                            <div class="col-4">
+                                                                <label class="form-label small text-warning">Medium</label>
+                                                                <input type="number" name="mediumPercent" class="form-control form-control-sm" 
+                                                                       min="0" max="100" value="50" required
+                                                                       onchange="validatePercentages(this)">
+                                                            </div>
+                                                            <div class="col-4">
+                                                                <label class="form-label small text-danger">Hard</label>
+                                                                <input type="number" name="hardPercent" class="form-control form-control-sm" 
+                                                                       min="0" max="100" value="20" required
+                                                                       onchange="validatePercentages(this)">
+                                                            </div>
+                                                        </div>
+                                                        <small class="form-text text-muted d-block mt-1">Total must equal 100%</small>
+                                                        <div class="alert alert-danger mt-2 d-none" id="percentError">⚠️ Total percentage must equal 100%</div>
+                                                    </div>
+                                                    
+                                                    <script>
+                                                        function validatePercentages(input) {
+                                                            const form = input.closest('form');
+                                                            const easy = parseInt(form.querySelector('[name="easyPercent"]').value) || 0;
+                                                            const medium = parseInt(form.querySelector('[name="mediumPercent"]').value) || 0;
+                                                            const hard = parseInt(form.querySelector('[name="hardPercent"]').value) || 0;
+                                                            const total = easy + medium + hard;
+                                                            const errorDiv = form.querySelector('#percentError');
+                                                            const submitBtn = form.querySelector('button[type="submit"]');
+                                                            
+                                                            if (total !== 100) {
+                                                                errorDiv.classList.remove('d-none');
+                                                                submitBtn.disabled = true;
+                                                            } else {
+                                                                errorDiv.classList.add('d-none');
+                                                                submitBtn.disabled = false;
+                                                            }
+                                                        }
+                                                    </script>
+                                                    
                                                     <div class="row">
                                                         <div class="col-md-6 mb-2">
-                                                            <label class="form-label small fw-bold">Time Limit (minutes)</label>
-                                                            <input type="number" name="timeLimit" class="form-control form-control-sm" 
-                                                                   min="5" max="300" value="60" required>
+                                                            <label class="form-label small fw-bold">Time Limit</label>
+                                                            <select name="timeLimit" class="form-select form-select-sm" required>
+                                                                <option value="15">15 minutes</option>
+                                                                <option value="30">30 minutes</option>
+                                                                <option value="45">45 minutes</option>
+                                                                <option value="60" selected>1 hour</option>
+                                                                <option value="90">1.5 hours</option>
+                                                                <option value="120">2 hours</option>
+                                                                <option value="150">2.5 hours</option>
+                                                                <option value="180">3 hours</option>
+                                                            </select>
                                                         </div>
                                                         <div class="col-md-6 mb-2">
-                                                            <label class="form-label small fw-bold">Submission Deadline</label>
+                                                            <label class="form-label small fw-bold">Deadline</label>
+                                                            <select name="deadlinePreset" class="form-select form-select-sm mb-2" id="deadlinePreset" onchange="updateDeadline(this)">
+                                                                <option value="1">1 hour from now</option>
+                                                                <option value="3">3 hours from now</option>
+                                                                <option value="6">6 hours from now</option>
+                                                                <option value="12">12 hours from now</option>
+                                                                <option value="24" selected>1 day from now</option>
+                                                                <option value="48">2 days from now</option>
+                                                                <option value="72">3 days from now</option>
+                                                                <option value="168">1 week from now</option>
+                                                                <option value="custom">Custom Date/Time</option>
+                                                            </select>
                                                             <input type="datetime-local" name="deadline" class="form-control form-control-sm" 
+                                                                   id="customDeadline"
                                                                    th:min="${#temporals.format(#temporals.createNow(), 'yyyy-MM-dd''T''HH:mm')}"
+                                                                   style="display: none;"
                                                                    required>
-                                                            <small class="form-text text-muted">Choose date and time for deadline</small>
                                                         </div>
                                                     </div>
+                                                    
+                                                    <script>
+                                                        function updateDeadline(select) {
+                                                            const customInput = select.closest('.col-md-6').querySelector('#customDeadline');
+                                                            const value = select.value;
+                                                            
+                                                            if (value === 'custom') {
+                                                                customInput.style.display = 'block';
+                                                                customInput.required = true;
+                                                                customInput.value = '';
+                                                            } else {
+                                                                customInput.style.display = 'none';
+                                                                customInput.required = false;
+                                                                
+                                                                // Calculate deadline based on hours from now
+                                                                const now = new Date();
+                                                                now.setHours(now.getHours() + parseInt(value));
+                                                                const year = now.getFullYear();
+                                                                const month = String(now.getMonth() + 1).padStart(2, '0');
+                                                                const day = String(now.getDate()).padStart(2, '0');
+                                                                const hours = String(now.getHours()).padStart(2, '0');
+                                                                const minutes = String(now.getMinutes()).padStart(2, '0');
+                                                                customInput.value = `${year}-${month}-${day}T${hours}:${minutes}`;
+                                                            }
+                                                        }
+                                                        
+                                                        // Initialize deadline on page load
+                                                        document.addEventListener('DOMContentLoaded', function() {
+                                                            document.querySelectorAll('#deadlinePreset').forEach(select => {
+                                                                updateDeadline(select);
+                                                            });
+                                                        });
+                                                    </script>
                                                 </div>
                                                 
                                                 <button type="submit" class="btn btn-primary w-100">

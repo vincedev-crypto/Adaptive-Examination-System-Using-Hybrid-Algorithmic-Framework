@@ -48,17 +48,13 @@
                                      data-bs-parent="#answerAccordion">
                                     <div class="accordion-body text-start">
                                         <div class="row">
-                                            <div class="col-md-6">
+                                            <div class="col-12">
                                                 <p class="mb-2"><strong>Your Answer:</strong></p>
                                                 <div class="alert" 
                                                      th:classappend="${detail.isCorrect ? 'alert-success' : 'alert-danger'}">
                                                     <span th:text="${detail.studentAnswer}"></span>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <p class="mb-2"><strong>Correct Answer:</strong></p>
-                                                <div class="alert alert-info">
-                                                    <span th:text="${detail.correctAnswer}"></span>
+                                                    <span th:if="${detail.isCorrect}" class="ms-2">✓</span>
+                                                    <span th:if="${!detail.isCorrect}" class="ms-2">✗</span>
                                                 </div>
                                             </div>
                                         </div>
