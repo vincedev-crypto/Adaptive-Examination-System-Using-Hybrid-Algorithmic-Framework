@@ -1071,7 +1071,7 @@ public class HomepageController {
                 answer = "Not Set"; // Provide a default to make it visible
             }
             
-            questionsWithAnswers.add(new QuestionWithAnswer(question, answer, i + 1));
+            questionsWithAnswers.add(new QuestionWithAnswer(question, answer, "Medium", i + 1));
         }
         
         // Shuffle questions with their answers
