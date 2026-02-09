@@ -671,10 +671,39 @@ public class HomepageController {
         
         System.out.println("=== CSV EXAM PARSED: " + questionBlocks.size() + " questions ===");
         
-        // Merge external answer key if provided
+        // Merge external answer key if provided and convert letter answers to text
         if (externalAnswerKey != null && !externalAnswerKey.isEmpty()) {
             System.out.println("Merging external answer key with " + externalAnswerKey.size() + " answers");
-            answerKey.putAll(externalAnswerKey);
+            
+            // Convert letter answers (A, B, C, D) to actual choice text
+            for (int i = 0; i < questionBlocks.size(); i++) {
+                String question = questionBlocks.get(i);
+                String answer = externalAnswerKey.get(i + 1);
+                
+                if (answer != null && !question.startsWith("[TEXT_INPUT]")) {
+                    // Check if answer is a single letter (A, B, C, D)
+                    String answerTrimmed = answer.trim();
+                    if (answerTrimmed.length() == 1 && answerTrimmed.matches("[A-Da-d]")) {
+                        // Convert letter to actual choice text
+                        String actualAnswer = convertLetterToChoiceText(question, answerTrimmed);
+                        if (actualAnswer != null) {
+                            answerKey.put(i + 1, actualAnswer);
+                            System.out.println("Q" + (i + 1) + " converted answer '" + answerTrimmed + "' to: " + actualAnswer);
+                        } else {
+                            answerKey.put(i + 1, answer);
+                            System.out.println("WARNING: Q" + (i + 1) + " could not convert letter '" + answerTrimmed + "'");
+                        }
+                    } else {
+                        // Answer is already text, use as-is
+                        answerKey.put(i + 1, answer);
+                    }
+                } else {
+                    // Text input or no answer
+                    if (answer != null) {
+                        answerKey.put(i + 1, answer);
+                    }
+                }
+            }
         }
         
         // Shuffle questions with Fisher-Yates
@@ -884,6 +913,43 @@ public class HomepageController {
             
         } else {
             System.out.println("WARNING: Skipping malformed CSV line (" + columns.length + " columns): " + line);
+        }
+    }
+    
+    /**
+     * Convert letter answer (A, B, C, D) to actual choice text from question block
+     */
+    private String convertLetterToChoiceText(String questionBlock, String letter) {
+        try {
+            // Split question into lines
+            String[] lines = questionBlock.split("\n");
+            
+            // Extract choices (lines that start with A), B), C), or D))
+            List<String> choices = new ArrayList<>();
+            for (int i = 1; i < lines.length; i++) {
+                String line = lines[i].trim();
+                if (line.matches("^[A-Da-d]\\)\\s+.+")) {
+                    // Extract choice text after the letter and parenthesis
+                    String choiceText = line.replaceFirst("^[A-Da-d]\\)\\s+", "").trim();
+                    choices.add(choiceText);
+                }
+            }
+            
+            // Convert letter to index (A=0, B=1, C=2, D=3)
+            char letterUpper = letter.toUpperCase().charAt(0);
+            int index = letterUpper - 'A';
+            
+            // Return choice at index
+            if (index >= 0 && index < choices.size()) {
+                return choices.get(index);
+            } else {
+                System.out.println("ERROR: Letter '" + letter + "' index " + index + " out of range for " + choices.size() + " choices");
+                return null;
+            }
+            
+        } catch (Exception e) {
+            System.out.println("ERROR converting letter '" + letter + "' to choice text: " + e.getMessage());
+            return null;
         }
     }
     
