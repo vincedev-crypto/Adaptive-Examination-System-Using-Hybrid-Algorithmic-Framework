@@ -231,6 +231,7 @@ public class HomepageController {
             // Create a fresh copy of questions and difficulties for this student
             List<String> allQuestions = new ArrayList<>(selectedExam.getQuestions());
             List<String> allDifficulties = new ArrayList<>(selectedExam.getDifficulties());
+            Map<Integer, String> originalAnswerKey = selectedExam.getAnswerKey();
             
             // Categorize questions by difficulty using stored difficulty levels
             List<Integer> easyIndices = new ArrayList<>();
@@ -268,42 +269,61 @@ public class HomepageController {
             Collections.shuffle(mediumIndices, rand);
             Collections.shuffle(hardIndices, rand);
             
-            // Select questions and their difficulties
+            // Select questions and their difficulties WITH their original indices
             List<String> selectedQuestions = new ArrayList<>();
             List<String> selectedDifficulties = new ArrayList<>();
+            List<Integer> selectedOriginalIndices = new ArrayList<>(); // Track which question from original exam
             
             // Add Easy questions
             for (int i = 0; i < Math.min(easyCount, easyIndices.size()); i++) {
                 int idx = easyIndices.get(i);
                 selectedQuestions.add(allQuestions.get(idx));
                 selectedDifficulties.add(allDifficulties.get(idx));
+                selectedOriginalIndices.add(idx + 1); // Store 1-based index
             }
             // Add Medium questions
             for (int i = 0; i < Math.min(mediumCount, mediumIndices.size()); i++) {
                 int idx = mediumIndices.get(i);
                 selectedQuestions.add(allQuestions.get(idx));
                 selectedDifficulties.add(allDifficulties.get(idx));
+                selectedOriginalIndices.add(idx + 1); // Store 1-based index
             }
             // Add Hard questions
             for (int i = 0; i < Math.min(hardCount, hardIndices.size()); i++) {
                 int idx = hardIndices.get(i);
                 selectedQuestions.add(allQuestions.get(idx));
                 selectedDifficulties.add(allDifficulties.get(idx));
+                selectedOriginalIndices.add(idx + 1); // Store 1-based index
             }
             
-            // Shuffle the final selection together
+            // Shuffle the final selection together - need to track original indices for answer key
             List<Integer> shuffleIndices = new ArrayList<>();
             for (int i = 0; i < selectedQuestions.size(); i++) shuffleIndices.add(i);
             Collections.shuffle(shuffleIndices, rand);
             
             List<String> finalQuestions = new ArrayList<>();
             List<String> finalDifficulties = new ArrayList<>();
-            for (int idx : shuffleIndices) {
-                finalQuestions.add(selectedQuestions.get(idx));
-                finalDifficulties.add(selectedDifficulties.get(idx));
+            Map<Integer, String> studentAnswerKey = new HashMap<>();
+            
+            // Rebuild questions, difficulties, and answer key in new shuffled order
+            for (int newPos = 0; newPos < shuffleIndices.size(); newPos++) {
+                int oldPos = shuffleIndices.get(newPos);
+                finalQuestions.add(selectedQuestions.get(oldPos));
+                finalDifficulties.add(selectedDifficulties.get(oldPos));
+                
+                // Get the original question index from the full exam
+                int originalQuestionIndex = selectedOriginalIndices.get(oldPos);
+                
+                // Map the answer from original exam to new position
+                String answer = originalAnswerKey.get(originalQuestionIndex);
+                if (answer != null) {
+                    studentAnswerKey.put(newPos + 1, answer); // Store with new 1-based position
+                    System.out.println("Q" + (newPos + 1) + " (originally Q" + originalQuestionIndex + ") -> Answer: " + answer);
+                }
             }
             
             // Re-shuffle answer choices for each question block to make it unique per student
+            // This only shuffles the CHOICE ORDER, not the correct answer
             List<String> uniqueExam = new ArrayList<>();
             for (String questionBlock : finalQuestions) {
                 uniqueExam.add(reshuffleQuestionChoices(questionBlock, rand));
@@ -324,9 +344,10 @@ public class HomepageController {
             session.setAttribute("examTimeLimit_" + targetStudent, timeLimit);
             session.setAttribute("examDeadline_" + targetStudent, deadline);
             
-            // Store the answer key for this student (answers remain the same, just choice order changes)
-            if (selectedExam.getAnswerKey() != null) {
-                answerKeyService.storeStudentAnswerKey(targetStudent, selectedExam.getAnswerKey());
+            // Store the CORRECT answer key for this student (mapped to new question order)
+            if (studentAnswerKey != null && !studentAnswerKey.isEmpty()) {
+                answerKeyService.storeStudentAnswerKey(targetStudent, studentAnswerKey);
+                System.out.println("Stored answer key for " + targetStudent + " with " + studentAnswerKey.size() + " answers");
             }
             
             // Count actual distribution
