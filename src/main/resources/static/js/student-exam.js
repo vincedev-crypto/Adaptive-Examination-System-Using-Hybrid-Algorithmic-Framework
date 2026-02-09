@@ -152,6 +152,7 @@ function displayQuestion() {
     
     // Update UI elements
     updateProgress();
+    updateDifficultyBadge();
     
     // Update navigation buttons
     document.getElementById('backBtn').disabled = (currentPage === 0);
@@ -195,6 +196,31 @@ function updateProgress() {
     document.getElementById('progressText').textContent = `Question ${questionNum} of ${totalQuestions}`;
     document.getElementById('progressBar').style.width = percentage + '%';
     document.getElementById('questionNumber').textContent = `${questionNum} / ${totalQuestions}`;
+}
+
+/**
+ * Update difficulty badge based on current question
+ */
+function updateDifficultyBadge() {
+    const difficultyBadge = document.getElementById('difficultyBadge');
+    if (!difficultyBadge) return;
+    
+    const currentDifficulty = difficulties[currentPage] || 'Medium';
+    
+    // Remove all difficulty classes
+    difficultyBadge.classList.remove('difficulty-easy', 'difficulty-medium', 'difficulty-hard');
+    
+    // Add appropriate class and update text
+    if (currentDifficulty.toLowerCase() === 'easy') {
+        difficultyBadge.classList.add('difficulty-easy');
+        difficultyBadge.textContent = 'Easy';
+    } else if (currentDifficulty.toLowerCase() === 'hard') {
+        difficultyBadge.classList.add('difficulty-hard');
+        difficultyBadge.textContent = 'Hard';
+    } else {
+        difficultyBadge.classList.add('difficulty-medium');
+        difficultyBadge.textContent = 'Medium';
+    }
 }
 
 /**
