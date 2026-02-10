@@ -224,6 +224,7 @@ public class HomepageController {
                                  @RequestParam(defaultValue = "30") Integer easyPercent,
                                  @RequestParam(defaultValue = "50") Integer mediumPercent,
                                  @RequestParam(defaultValue = "20") Integer hardPercent,
+                                 @RequestParam(required = false) Integer questionCount,
                                  HttpSession session) {
         UploadedExam selectedExam = uploadedExams.get(examId);
         
@@ -250,7 +251,13 @@ public class HomepageController {
             }
             
             // Calculate number of questions for each difficulty
-            int totalQuestions = allQuestions.size();
+            // Use questionCount parameter if provided, otherwise use all questions
+            int totalQuestions = (questionCount != null && questionCount > 0 && questionCount <= allQuestions.size()) 
+                ? questionCount 
+                : allQuestions.size();
+            
+            System.out.println("Distributing " + totalQuestions + " questions out of " + allQuestions.size() + " available");
+            
             int easyCount = (int) Math.round(totalQuestions * easyPercent / 100.0);
             int mediumCount = (int) Math.round(totalQuestions * mediumPercent / 100.0);
             int hardCount = (int) Math.round(totalQuestions * hardPercent / 100.0);

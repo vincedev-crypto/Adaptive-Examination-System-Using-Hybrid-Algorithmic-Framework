@@ -174,8 +174,18 @@
                                                     <p class="mb-2 small">
                                                         <span class="badge bg-primary" th:text="${exam.subject}">Subject</span>
                                                         <span class="badge bg-info" th:text="${exam.activityType}">Type</span>
-                                                        <span class="text-muted" th:text="${#lists.size(exam.questions)} + ' questions'">20 questions</span>
+                                                        <span class="text-muted" th:text="${#lists.size(exam.questions)} + ' questions available'">100 questions available</span>
                                                     </p>
+                                                    
+                                                    <!-- Number of Questions to Distribute -->
+                                                    <div class="mb-3">
+                                                        <label class="form-label small fw-bold">📝 Number of Questions to Distribute</label>
+                                                        <input type="number" name="questionCount" class="form-control form-control-sm" 
+                                                               th:min="1" th:max="${#lists.size(exam.questions)}" 
+                                                               th:value="${#lists.size(exam.questions)}" 
+                                                               th:placeholder="'Max: ' + ${#lists.size(exam.questions)}" required>
+                                                        <small class="form-text text-muted">Select how many questions to distribute from the available pool</small>
+                                                    </div>
                                                     
                                                     <!-- Difficulty Distribution -->
                                                     <div class="mb-3">
