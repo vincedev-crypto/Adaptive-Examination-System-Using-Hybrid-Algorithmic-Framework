@@ -63,6 +63,19 @@ public class ExamSubmission {
     @Column(name = "performance_category")
     private String performanceCategory;
     
+    // Manual grading fields for open-ended questions
+    @Column(name = "manual_score")
+    private Integer manualScore; // Points from teacher's manual grading
+    
+    @Column(name = "is_graded")
+    private boolean isGraded = false; // True when teacher finalizes the score
+    
+    @Column(name = "graded_at")
+    private LocalDateTime gradedAt; // When teacher finalized the grading
+    
+    @Column(name = "teacher_comments", columnDefinition = "TEXT")
+    private String teacherComments; // Optional feedback from teacher
+    
     // Constructors
     public ExamSubmission() {
         this.submittedAt = LocalDateTime.now();
@@ -134,6 +147,38 @@ public class ExamSubmission {
     
     public String getPerformanceCategory() { return performanceCategory; }
     public void setPerformanceCategory(String performanceCategory) { this.performanceCategory = performanceCategory; }
+    
+    public Integer getManualScore() { return manualScore; }
+    public void setManualScore(Integer manualScore) { this.manualScore = manualScore; }
+    
+    public boolean isGraded() { return isGraded; }
+    public void setGraded(boolean isGraded) { this.isGraded = isGraded; }
+    
+    public LocalDateTime getGradedAt() { return gradedAt; }
+    public void setGradedAt(LocalDateTime gradedAt) { this.gradedAt = gradedAt; }
+    
+    public String getTeacherComments() { return teacherComments; }
+    public void setTeacherComments(String teacherComments) { this.teacherComments = teacherComments; }
+    
+    /**
+     * Get final score (auto + manual if graded, otherwise just auto score)
+     */
+    public int getFinalScore() {
+        if (isGraded && manualScore != null) {
+            return score + manualScore;
+        }
+        return score;
+    }
+    
+    /**
+     * Get final percentage based on final score
+     */
+    public double getFinalPercentage() {
+        if (totalQuestions > 0) {
+            return (getFinalScore() * 100.0) / totalQuestions;
+        }
+        return 0.0;
+    }
     
     /**
      * Validate double values to prevent NaN or Infinity from being saved to database

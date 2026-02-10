@@ -105,6 +105,7 @@ public class StudentController {
         model.addAttribute("percentage", submission.getPercentage());
         model.addAttribute("answerDetails", answerDetails);
         model.addAttribute("analytics", analytics);
+        model.addAttribute("submission", submission); // Pass full submission for grading status
         
         return "student-results";
     }

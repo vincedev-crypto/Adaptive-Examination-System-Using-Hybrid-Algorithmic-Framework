@@ -1611,4 +1611,123 @@ public class HomepageController {
     public AnswerKeyService getAnswerKeyService() {
         return answerKeyService;
     }
+    
+    /**
+     * Teacher grading page - view submissions needing manual grading
+     */
+    @GetMapping("/grade-submissions")
+    public String gradeSubmissions(Model model, java.security.Principal principal) {
+        String teacherEmail = principal.getName();
+        
+        // Get all submissions from enrolled students
+        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
+        List<String> studentEmails = enrolledStudents.stream()
+                .map(EnrolledStudent::getStudentEmail)
+                .collect(Collectors.toList());
+        
+        // Get all submissions for these students
+        List<ExamSubmission> allSubmissions = examSubmissionRepository.findAll().stream()
+                .filter(s -> studentEmails.contains(s.getStudentEmail()))
+                .sorted((a, b) -> b.getSubmittedAt().compareTo(a.getSubmittedAt()))
+                .collect(Collectors.toList());
+        
+        // Separate pending and graded
+        List<ExamSubmission> pendingGrading = allSubmissions.stream()
+                .filter(s -> !s.isGraded())
+                .collect(Collectors.toList());
+        
+        List<ExamSubmission> graded = allSubmissions.stream()
+                .filter(ExamSubmission::isGraded)
+                .collect(Collectors.toList());
+        
+        model.addAttribute("pendingGrading", pendingGrading);
+        model.addAttribute("gradedSubmissions", graded);
+        model.addAttribute("totalPending", pendingGrading.size());
+        
+        return "teacher-grade-submissions";
+    }
+    
+    /**
+     * View specific submission for grading
+     */
+    @GetMapping("/grade/{submissionId}")
+    public String gradeSubmission(@PathVariable Long submissionId, Model model) {
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
+        
+        if (submissionOpt.isEmpty()) {
+            return "redirect:/teacher/grade-submissions";
+        }
+        
+        ExamSubmission submission = submissionOpt.get();
+        
+        // Parse answer details to show individual answers
+        List<Map<String, Object>> answerDetails = new ArrayList<>();
+        if (submission.getAnswerDetailsJson() != null && !submission.getAnswerDetailsJson().isEmpty()) {
+            String[] details = submission.getAnswerDetailsJson().split(";");
+            for (String detail : details) {
+                if (!detail.trim().isEmpty()) {
+                    String[] parts = detail.split("\\|");
+                    if (parts.length >= 4) {
+                        Map<String, Object> detailMap = new HashMap<>();
+                        detailMap.put("questionNumber", Integer.parseInt(parts[0]));
+                        detailMap.put("studentAnswer", parts[1]);
+                        detailMap.put("correctAnswer", parts[2]);
+                        detailMap.put("isCorrect", Boolean.parseBoolean(parts[3]));
+                        
+                        // Check if it's a text input question (might need manual grading)
+                        boolean isTextInput = parts[1].length() > 50 || !parts[1].matches("[A-D]\\).+");
+                        detailMap.put("isTextInput", isTextInput);
+                        detailMap.put("needsManualGrade", isTextInput && !Boolean.parseBoolean(parts[3]));
+                        
+                        answerDetails.add(detailMap);
+                    }
+                }
+            }
+        }
+        
+        // Count questions needing manual grading
+        long textInputCount = answerDetails.stream()
+                .filter(d -> (Boolean) d.getOrDefault("needsManualGrade", false))
+                .count();
+        
+        model.addAttribute("submission", submission);
+        model.addAttribute("answerDetails", answerDetails);
+        model.addAttribute("textInputCount", textInputCount);
+        model.addAttribute("currentManualScore", submission.getManualScore() != null ? submission.getManualScore() : 0);
+        
+        return "teacher-grade-exam";
+    }
+    
+    /**
+     * Save manual grade and finalize score
+     */
+    @PostMapping("/finalize-grade")
+    public String finalizeGrade(@RequestParam Long submissionId,
+                               @RequestParam(required = false, defaultValue = "0") Integer manualScore,
+                               @RequestParam(required = false) String teacherComments) {
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
+        
+        if (submissionOpt.isPresent()) {
+            ExamSubmission submission = submissionOpt.get();
+            submission.setManualScore(manualScore);
+            submission.setGraded(true);
+            submission.setGradedAt(java.time.LocalDateTime.now());
+            submission.setTeacherComments(teacherComments);
+            
+            // Update percentage to include manual score
+            int totalScore = submission.getScore() + manualScore;
+            double newPercentage = (totalScore * 100.0) / submission.getTotalQuestions();
+            submission.setPercentage(newPercentage);
+            
+            examSubmissionRepository.save(submission);
+            
+            System.out.println("✅ Teacher finalized grade for submission #" + submissionId);
+            System.out.println("   Auto Score: " + submission.getScore());
+            System.out.println("   Manual Score: " + manualScore);
+            System.out.println("   Final Score: " + totalScore + "/" + submission.getTotalQuestions());
+            System.out.println("   Final Percentage: " + String.format("%.2f%%", newPercentage));
+        }
+        
+        return "redirect:/teacher/grade-submissions";
+    }
 }

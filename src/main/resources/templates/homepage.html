@@ -330,9 +330,14 @@
                         <h5 class="text-primary mb-0">📝 Student Submissions</h5>
                         <p class="small text-muted mb-0">View all exam submissions and results.</p>
                     </div>
-                    <a th:href="@{/teacher/download-results}" class="btn btn-success btn-sm">
-                        <i class="bi bi-download"></i> Download All Results
-                    </a>
+                    <div>
+                        <a th:href="@{/teacher/grade-submissions}" class="btn btn-warning btn-sm me-2">
+                            <i class="bi bi-pencil-square"></i> Grade Submissions
+                        </a>
+                        <a th:href="@{/teacher/download-results}" class="btn btn-success btn-sm">
+                            <i class="bi bi-download"></i> Download All Results
+                        </a>
+                    </div>
                 </div>
                 
                 <div class="table-responsive">
