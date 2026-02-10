@@ -462,6 +462,7 @@ public class StudentController {
     @GetMapping("/submission-success")
     public String submissionSuccess(HttpSession session, Model model) {
         // Retrieve results from session
+        Long submissionId = (Long) session.getAttribute("lastSubmissionId");
         Integer score = (Integer) session.getAttribute("lastScore");
         Integer total = (Integer) session.getAttribute("lastTotal");
         Double percentage = (Double) session.getAttribute("lastPercentage");
@@ -476,13 +477,21 @@ public class StudentController {
             return "redirect:/student/dashboard";
         }
         
+        // Retrieve the submission object for grading status
+        ExamSubmission submission = null;
+        if (submissionId != null) {
+            submission = examSubmissionRepository.findById(submissionId).orElse(null);
+        }
+        
         model.addAttribute("score", score);
         model.addAttribute("total", total);
         model.addAttribute("percentage", percentage);
         model.addAttribute("answerDetails", answerDetails);
         model.addAttribute("analytics", analytics);
+        model.addAttribute("submission", submission);  // Pass submission for grading status
         
         // Clear session data after displaying
+        session.removeAttribute("lastSubmissionId");
         session.removeAttribute("lastScore");
         session.removeAttribute("lastTotal");
         session.removeAttribute("lastPercentage");

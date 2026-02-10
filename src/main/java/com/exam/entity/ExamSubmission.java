@@ -68,7 +68,7 @@ public class ExamSubmission {
     private Integer manualScore; // Points from teacher's manual grading
     
     @Column(name = "is_graded")
-    private boolean isGraded = false; // True when teacher finalizes the score
+    private Boolean isGraded; // True when teacher finalizes the score
     
     @Column(name = "graded_at")
     private LocalDateTime gradedAt; // When teacher finalized the grading
@@ -151,8 +151,8 @@ public class ExamSubmission {
     public Integer getManualScore() { return manualScore; }
     public void setManualScore(Integer manualScore) { this.manualScore = manualScore; }
     
-    public boolean isGraded() { return isGraded; }
-    public void setGraded(boolean isGraded) { this.isGraded = isGraded; }
+    public Boolean isGraded() { return isGraded != null && isGraded; }
+    public void setGraded(Boolean isGraded) { this.isGraded = isGraded; }
     
     public LocalDateTime getGradedAt() { return gradedAt; }
     public void setGradedAt(LocalDateTime gradedAt) { this.gradedAt = gradedAt; }

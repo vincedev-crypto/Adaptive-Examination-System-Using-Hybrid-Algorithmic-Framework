@@ -19,14 +19,14 @@
                     </div>
                     
                     <!-- Pending Grading Alert -->
-                    <div th:if="${!submission.isGraded()}" class="alert alert-warning mb-4">
+                    <div th:if="${submission != null && !submission.isGraded()}" class="alert alert-warning mb-4">
                         <i class="bi bi-hourglass-split"></i> 
                         <strong>Pending Teacher Grading</strong>
                         <p class="mb-0 mt-2">Your exam includes open-ended questions that require manual grading. Your teacher will review and finalize your score soon.</p>
                     </div>
                     
                     <!-- Finalized Score Alert -->
-                    <div th:if="${submission.isGraded()}" class="alert alert-success mb-4">
+                    <div th:if="${submission != null && submission.isGraded()}" class="alert alert-success mb-4">
                         <i class="bi bi-check-circle"></i> 
                         <strong>Grade Finalized!</strong>
                         <p class="mb-0 mt-2">Your teacher has reviewed and finalized your score on <span th:text="${#temporals.format(submission.gradedAt, 'MMM dd, yyyy')}"></span></p>
@@ -34,14 +34,14 @@
                     
                     <hr>
                     <div class="py-4">
-                        <h4 class="text-secondary" th:text="${submission.isGraded() ? 'Your Final Score' : 'Current Score (Pending Grading)'}">Your Final Score</h4>
-                        <h1 class="display-2 fw-bold text-primary" th:text="${submission.isGraded() ? (submission.finalScore + ' / ' + total) : (score + ' / ' + total)}"></h1>
+                        <h4 class="text-secondary" th:text="${submission != null && submission.isGraded() ? 'Your Final Score' : 'Current Score (Pending Grading)'}">Your Final Score</h4>
+                        <h1 class="display-2 fw-bold text-primary" th:text="${submission != null && submission.isGraded() ? (submission.finalScore + ' / ' + total) : (score + ' / ' + total)}"></h1>
                         <p class="text-muted mt-2">
-                            <span th:text="${submission.isGraded() ? #numbers.formatDecimal(submission.finalPercentage, 1, 2) + '%' : (percentage != null ? #numbers.formatDecimal(percentage, 1, 2) + '%' : '0%')}"></span>
+                            <span th:text="${submission != null && submission.isGraded() ? #numbers.formatDecimal(submission.finalPercentage, 1, 2) + '%' : (percentage != null ? #numbers.formatDecimal(percentage, 1, 2) + '%' : '0%')}"></span>
                         </p>
                         
                         <!-- Score Breakdown if graded -->
-                        <div th:if="${submission.isGraded() && submission.manualScore != null && submission.manualScore > 0}" class="mt-3">
+                        <div th:if="${submission != null && submission.isGraded() && submission.manualScore != null && submission.manualScore > 0}" class="mt-3">
                             <small class="text-muted">
                                 Auto-graded: <span class="badge bg-secondary" th:text="${score}"></span> + 
                                 Manual grade: <span class="badge bg-primary" th:text="${submission.manualScore}"></span>
@@ -49,7 +49,7 @@
                         </div>
                         
                         <!-- Teacher Comments -->
-                        <div th:if="${submission.isGraded() && submission.teacherComments != null && !#strings.isEmpty(submission.teacherComments)}" class="alert alert-info mt-4 text-start">
+                        <div th:if="${submission != null && submission.isGraded() && submission.teacherComments != null && !#strings.isEmpty(submission.teacherComments)}" class="alert alert-info mt-4 text-start">
                             <h6><i class="bi bi-chat-left-text"></i> Teacher's Feedback:</h6>
                             <p class="mb-0" th:text="${submission.teacherComments}"></p>
                         </div>
