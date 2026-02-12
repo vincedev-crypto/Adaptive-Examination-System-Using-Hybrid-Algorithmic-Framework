@@ -1730,4 +1730,162 @@ public class HomepageController {
         
         return "redirect:/teacher/grade-submissions";
     }
+    
+    /**
+     * View all student results - comprehensive results dashboard for teachers
+     */
+    @GetMapping("/view-results")
+    public String viewResults(Model model, 
+                             @RequestParam(required = false) String examFilter,
+                             @RequestParam(required = false) String subjectFilter,
+                             @RequestParam(required = false) String statusFilter,
+                             java.security.Principal principal) {
+        String teacherEmail = principal.getName();
+        
+        // Get all enrolled students for this teacher
+        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
+        List<String> studentEmails = enrolledStudents.stream()
+                .map(EnrolledStudent::getStudentEmail)
+                .collect(Collectors.toList());
+        
+        // Get all submissions for enrolled students
+        List<ExamSubmission> allSubmissions = examSubmissionRepository.findAll().stream()
+                .filter(s -> studentEmails.contains(s.getStudentEmail()))
+                .sorted((a, b) -> b.getSubmittedAt().compareTo(a.getSubmittedAt()))
+                .collect(Collectors.toList());
+        
+        // Apply filters
+        List<ExamSubmission> filteredSubmissions = allSubmissions;
+        
+        if (examFilter != null && !examFilter.isEmpty()) {
+            filteredSubmissions = filteredSubmissions.stream()
+                    .filter(s -> s.getExamName().equalsIgnoreCase(examFilter))
+                    .collect(Collectors.toList());
+        }
+        
+        if (subjectFilter != null && !subjectFilter.isEmpty()) {
+            filteredSubmissions = filteredSubmissions.stream()
+                    .filter(s -> s.getSubject().equalsIgnoreCase(subjectFilter))
+                    .collect(Collectors.toList());
+        }
+        
+        if (statusFilter != null && !statusFilter.isEmpty()) {
+            switch (statusFilter.toLowerCase()) {
+                case "graded":
+                    filteredSubmissions = filteredSubmissions.stream()
+                            .filter(ExamSubmission::isGraded)
+                            .collect(Collectors.toList());
+                    break;
+                case "pending":
+                    filteredSubmissions = filteredSubmissions.stream()
+                            .filter(s -> !s.isGraded())
+                            .collect(Collectors.toList());
+                    break;
+                case "released":
+                    filteredSubmissions = filteredSubmissions.stream()
+                            .filter(ExamSubmission::isResultsReleased)
+                            .collect(Collectors.toList());
+                    break;
+                case "unreleased":
+                    filteredSubmissions = filteredSubmissions.stream()
+                            .filter(s -> !s.isResultsReleased())
+                            .collect(Collectors.toList());
+                    break;
+            }
+        }
+        
+        // Calculate statistics
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalSubmissions", filteredSubmissions.size());
+        stats.put("gradedCount", filteredSubmissions.stream().filter(ExamSubmission::isGraded).count());
+        stats.put("pendingCount", filteredSubmissions.stream().filter(s -> !s.isGraded()).count());
+        stats.put("releasedCount", filteredSubmissions.stream().filter(ExamSubmission::isResultsReleased).count());
+        
+        if (!filteredSubmissions.isEmpty()) {
+            double avgScore = filteredSubmissions.stream()
+                    .mapToInt(ExamSubmission::getFinalScore)
+                    .average()
+                    .orElse(0.0);
+            double avgPercentage = filteredSubmissions.stream()
+                    .mapToDouble(ExamSubmission::getFinalPercentage)
+                    .average()
+                    .orElse(0.0);
+            stats.put("averageScore", String.format("%.1f", avgScore));
+            stats.put("averagePercentage", String.format("%.1f", avgPercentage));
+        } else {
+            stats.put("averageScore", "0.0");
+            stats.put("averagePercentage", "0.0");
+        }
+        
+        // Get unique exams and subjects for filter dropdowns
+        List<String> uniqueExams = allSubmissions.stream()
+                .map(ExamSubmission::getExamName)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+        
+        List<String> uniqueSubjects = allSubmissions.stream()
+                .map(ExamSubmission::getSubject)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+        
+        model.addAttribute("submissions", filteredSubmissions);
+        model.addAttribute("stats", stats);
+        model.addAttribute("uniqueExams", uniqueExams);
+        model.addAttribute("uniqueSubjects", uniqueSubjects);
+        model.addAttribute("examFilter", examFilter);
+        model.addAttribute("subjectFilter", subjectFilter);
+        model.addAttribute("statusFilter", statusFilter);
+        
+        return "teacher-view-results";
+    }
+    
+    /**
+     * View detailed result for a specific submission
+     */
+    @GetMapping("/view-result/{submissionId}")
+    public String viewStudentResult(@PathVariable Long submissionId, Model model) {
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
+        
+        if (submissionOpt.isEmpty()) {
+            return "redirect:/teacher/view-results";
+        }
+        
+        ExamSubmission submission = submissionOpt.get();
+        
+        // Parse answer details
+        List<Map<String, Object>> answerDetails = new ArrayList<>();
+        if (submission.getAnswerDetailsJson() != null && !submission.getAnswerDetailsJson().isEmpty()) {
+            String[] details = submission.getAnswerDetailsJson().split(";");
+            for (String detail : details) {
+                if (!detail.trim().isEmpty()) {
+                    String[] parts = detail.split("\\|");
+                    if (parts.length >= 4) {
+                        Map<String, Object> detailMap = new HashMap<>();
+                        detailMap.put("questionNumber", Integer.parseInt(parts[0]));
+                        detailMap.put("studentAnswer", parts[1]);
+                        detailMap.put("correctAnswer", parts[2]);
+                        detailMap.put("isCorrect", Boolean.parseBoolean(parts[3]));
+                        answerDetails.add(detailMap);
+                    }
+                }
+            }
+        }
+        
+        // Calculate question statistics
+        int totalQuestions = answerDetails.size();
+        int correctAnswers = (int) answerDetails.stream()
+                .filter(d -> (Boolean) d.get("isCorrect"))
+                .count();
+        int incorrectAnswers = totalQuestions - correctAnswers;
+        
+        model.addAttribute("submission", submission);
+        model.addAttribute("answerDetails", answerDetails);
+        model.addAttribute("totalQuestions", totalQuestions);
+        model.addAttribute("correctAnswers", correctAnswers);
+        model.addAttribute("incorrectAnswers", incorrectAnswers);
+        
+        return "teacher-view-student-result";
+    }
 }

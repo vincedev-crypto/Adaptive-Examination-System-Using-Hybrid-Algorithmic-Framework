@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Result Details</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            padding-top: 30px;
+            padding-bottom: 30px;
+        }
+        .result-card {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+            padding: 30px;
+            margin-bottom: 20px;
+        }
+        .score-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .score-number {
+            font-size: 4rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+        .score-percentage {
+            font-size: 2rem;
+            opacity: 0.9;
+        }
+        .info-section {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .info-item:last-child {
+            border-bottom: none;
+        }
+        .answer-item {
+            border: 1px solid #dee2e6;
+            border-radius: 8px;
+            padding: 15px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+        .answer-item:hover {
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .correct-answer {
+            border-left: 4px solid #28a745;
+            background: #d4edda;
+        }
+        .incorrect-answer {
+            border-left: 4px solid #dc3545;
+            background: #f8d7da;
+        }
+        .answer-text {
+            margin: 5px 0;
+            padding: 8px;
+            background: white;
+            border-radius: 5px;
+        }
+        .stat-badge {
+            padding: 15px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .teacher-comments {
+            background: #e7f3ff;
+            border-left: 4px solid #0d6efd;
+            padding: 20px;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h2 class="text-white"><i class="bi bi-person-circle"></i> Student Result Details</h2>
+                <p class="text-white-50 mb-0">Detailed view of student's exam submission and performance.</p>
+            </div>
+            <div>
+                <a th:href="@{/teacher/view-results}" class="btn btn-light me-2">
+                    <i class="bi bi-arrow-left"></i> Back to Results
+                </a>
+                <a th:unless="${submission.isGraded()}"
+                   th:href="@{/teacher/grade/{id}(id=${submission.id})}" 
+                   class="btn btn-warning">
+                    <i class="bi bi-pencil"></i> Grade This Submission
+                </a>
+            </div>
+        </div>
+
+        <!-- Student & Exam Information -->
+        <div class="result-card">
+            <div class="row">
+                <div class="col-md-8">
+                    <h4><i class="bi bi-file-earmark-text"></i> Exam Information</h4>
+                    <div class="info-section">
+                        <div class="info-item">
+                            <strong>Student Email:</strong>
+                            <span th:text="${submission.studentEmail}">student@example.com</span>
+                        </div>
+                        <div class="info-item">
+                            <strong>Exam Name:</strong>
+                            <span th:text="${submission.examName}">Exam Name</span>
+                        </div>
+                        <div class="info-item">
+                            <strong>Subject:</strong>
+                            <span class="badge bg-info" th:text="${submission.subject}">Subject</span>
+                        </div>
+                        <div class="info-item">
+                            <strong>Activity Type:</strong>
+                            <span class="badge" 
+                                  th:classappend="${submission.activityType == 'Exam' ? 'bg-danger' : 'bg-primary'}"
+                                  th:text="${submission.activityType}">Type</span>
+                        </div>
+                        <div class="info-item">
+                            <strong>Submitted:</strong>
+                            <span th:text="${#temporals.format(submission.submittedAt, 'MMM dd, yyyy HH:mm')}">Date</span>
+                        </div>
+                        <div class="info-item" th:if="${submission.isGraded()}">
+                            <strong>Graded:</strong>
+                            <span th:text="${#temporals.format(submission.gradedAt, 'MMM dd, yyyy HH:mm')}">Date</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <!-- Score Display -->
+                    <div class="score-display">
+                        <div class="score-number" th:text="${submission.finalScore + '/' + submission.totalQuestions}">0/0</div>
+                        <div class="score-percentage" th:text="${#numbers.formatDecimal(submission.finalPercentage, 1, 1) + '%'}">0%</div>
+                        <div class="mt-3">
+                            <span th:if="${submission.isGraded()}" class="badge bg-success">
+                                <i class="bi bi-check-circle"></i> Graded
+                            </span>
+                            <span th:unless="${submission.isGraded()}" class="badge bg-warning text-dark">
+                                <i class="bi bi-clock"></i> Pending
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Score Breakdown -->
+            <div class="row g-3 mt-3">
+                <div class="col-md-3">
+                    <div class="stat-badge bg-success text-white">
+                        <i class="bi bi-check-circle" style="font-size: 1.5rem;"></i>
+                        <h4 class="mt-2" th:text="${correctAnswers}">0</h4>
+                        <p class="mb-0">Correct</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-badge bg-danger text-white">
+                        <i class="bi bi-x-circle" style="font-size: 1.5rem;"></i>
+                        <h4 class="mt-2" th:text="${incorrectAnswers}">0</h4>
+                        <p class="mb-0">Incorrect</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-badge bg-primary text-white">
+                        <i class="bi bi-calculator" style="font-size: 1.5rem;"></i>
+                        <h4 class="mt-2" th:text="${submission.score}">0</h4>
+                        <p class="mb-0">Auto Score</p>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="stat-badge bg-info text-white">
+                        <i class="bi bi-pencil-square" style="font-size: 1.5rem;"></i>
+                        <h4 class="mt-2" th:text="${submission.manualScore != null ? submission.manualScore : 0}">0</h4>
+                        <p class="mb-0">Manual Score</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Teacher Comments -->
+            <div th:if="${submission.isGraded() && submission.teacherComments != null && !#strings.isEmpty(submission.teacherComments)}" 
+                 class="teacher-comments mt-4">
+                <h5><i class="bi bi-chat-left-text"></i> Teacher's Feedback</h5>
+                <p class="mb-0" th:text="${submission.teacherComments}">No comments provided.</p>
+            </div>
+        </div>
+
+        <!-- Answer Details -->
+        <div class="result-card">
+            <h4 class="mb-4"><i class="bi bi-list-check"></i> Answer Details</h4>
+            
+            <div th:if="${answerDetails.isEmpty()}" class="text-center text-muted py-4">
+                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                <p class="mt-2">No answer details available.</p>
+            </div>
+
+            <div th:each="detail : ${answerDetails}" 
+                 th:classappend="${detail.isCorrect ? 'correct-answer' : 'incorrect-answer'}"
+                 class="answer-item">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="mb-0">
+                        Question <span th:text="${detail.questionNumber}">1</span>
+                    </h6>
+                    <span th:if="${detail.isCorrect}" class="badge bg-success">
+                        <i class="bi bi-check-lg"></i> Correct
+                    </span>
+                    <span th:unless="${detail.isCorrect}" class="badge bg-danger">
+                        <i class="bi bi-x-lg"></i> Incorrect
+                    </span>
+                </div>
+                
+                <div class="mt-2">
+                    <strong><i class="bi bi-person-fill"></i> Student's Answer:</strong>
+                    <div class="answer-text" th:text="${detail.studentAnswer}">Student answer</div>
+                </div>
+                
+                <div class="mt-2">
+                    <strong><i class="bi bi-check2-square"></i> Correct Answer:</strong>
+                    <div class="answer-text" th:text="${detail.correctAnswer}">Correct answer</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Analytics (if available) -->
+        <div th:if="${submission.performanceCategory != null}" class="result-card">
+            <h4 class="mb-4"><i class="bi bi-bar-chart"></i> Performance Analytics</h4>
+            
+            <div class="text-center mb-4">
+                <span class="badge fs-5 px-4 py-2" 
+                      th:classappend="${submission.performanceCategory == 'Excellent' ? 'bg-success' : 
+                                      submission.performanceCategory == 'Good' ? 'bg-info' : 
+                                      submission.performanceCategory == 'Fair' ? 'bg-warning text-dark' : 'bg-danger'}"
+                      th:text="${submission.performanceCategory}">Performance</span>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-md-4">
+                    <div class="info-section text-center">
+                        <strong>Topic Mastery</strong>
+                        <div class="progress mt-2" style="height: 20px;">
+                            <div class="progress-bar bg-primary" 
+                                 th:style="'width: ' + ${submission.topicMastery} + '%'"
+                                 th:text="${#numbers.formatDecimal(submission.topicMastery, 1, 1) + '%'}">0%</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-section text-center">
+                        <strong>Difficulty Resilience</strong>
+                        <div class="progress mt-2" style="height: 20px;">
+                            <div class="progress-bar bg-success" 
+                                 th:style="'width: ' + ${submission.difficultyResilience} + '%'"
+                                 th:text="${#numbers.formatDecimal(submission.difficultyResilience, 1, 1) + '%'}">0%</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="info-section text-center">
+                        <strong>Accuracy</strong>
+                        <div class="progress mt-2" style="height: 20px;">
+                            <div class="progress-bar bg-info" 
+                                 th:style="'width: ' + ${submission.accuracy} + '%'"
+                                 th:text="${#numbers.formatDecimal(submission.accuracy, 1, 1) + '%'}">0%</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
