@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Performance Analytics - Random Forest Analysis</title>
+    
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Custom CSS -->
+    <link rel="stylesheet" th:href="@{/css/student-performance-analytics.css}">
+</head>
+<body>
+    <div class="container mt-5">
+        <!-- Header -->
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-center mb-2">
+                    <i class="fas fa-chart-line"></i> Performance Analytics
+                </h1>
+                <p class="text-center text-muted mb-1">Random Forest Algorithm Analysis</p>
+                <p class="text-center">
+                    <span class="badge bg-info" th:text="${submission.examName}">Exam Name</span>
+                    <span class="badge bg-secondary" th:text="${submission.subject}">Subject</span>
+                </p>
+            </div>
+        </div>
+
+        <!-- Overall Performance Summary -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card performance-card" 
+                     th:classappend="${submission.percentage >= 80 ? 'border-success' : 
+                                     submission.percentage >= 60 ? 'border-warning' : 'border-danger'}"
+                     id="overallSummaryCard">
+                    <div class="card-body text-center">
+                        <h3 class="card-title">Performance Summary (Random Forest Analysis)</h3>
+                        <h1 class="display-3 score-display" 
+                            th:text="${#numbers.formatDecimal(submission.percentage, 1, 2)} + '%'">0.00%</h1>
+                        <p class="lead category-badge" 
+                           th:text="${submission.performanceCategory}">Performance Category</p>
+                        
+                        <div class="row mt-4">
+                            <div class="col-md-6 strength-section">
+                                <h5><i class="fas fa-check-circle text-success"></i> Strengths:</h5>
+                                <div class="badges-container">
+                                    <span class="badge strength-badge" 
+                                          th:each="strength : ${strengths}" 
+                                          th:text="${strength}"></span>
+                                    <span th:if="${#lists.isEmpty(strengths)}" 
+                                          class="text-muted">No specific strengths identified</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6 weakness-section">
+                                <h5><i class="fas fa-exclamation-triangle text-warning"></i> Areas for Improvement:</h5>
+                                <div class="badges-container">
+                                    <span class="badge weakness-badge" 
+                                          th:each="weakness : ${weaknesses}" 
+                                          th:text="${weakness}"></span>
+                                    <span th:if="${#lists.isEmpty(weaknesses)}" 
+                                          class="text-muted">No specific weaknesses identified</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Random Forest Analytics Profile -->
+        <div class="row mt-4">
+            <div class="col-md-12">
+                <div class="card performance-card">
+                    <div class="card-body">
+                        <h4 class="text-center mb-4">
+                            <i class="fas fa-brain"></i> Student Analytics Profile (Random Forest)
+                        </h4>
+                        
+                        <!-- Radar Chart Container -->
+                        <div class="radar-container">
+                            <canvas id="performanceRadarChart"></canvas>
+                        </div>
+                        
+                        <div class="text-center mt-3">
+                            <small class="text-muted">
+                                This visualization shows your performance across 5 key dimensions analyzed by Random Forest algorithm
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Detailed Metrics Breakdown -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <h4 class="text-center mb-3">The 5 Key Performance Dimensions</h4>
+            </div>
+            
+            <!-- Topic Mastery -->
+            <div class="col-md-4 mb-3">
+                <div class="card metric-card">
+                    <div class="card-body">
+                        <h5 class="metric-title">
+                            <i class="fas fa-book text-primary"></i> Topic Mastery
+                        </h5>
+                        <div class="metric-value" 
+                             th:text="${#numbers.formatDecimal(submission.topicMastery, 1, 2)} + '%'">0%</div>
+                        <div class="progress metric-progress">
+                            <div class="progress-bar bg-primary" 
+                                 role="progressbar"
+                                 th:style="'width: ' + ${submission.topicMastery} + '%'"
+                                 th:attr="aria-valuenow=${submission.topicMastery}">
+                            </div>
+                        </div>
+                        <p class="metric-description">How well you understand the subject material overall</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Difficulty Resilience -->
+            <div class="col-md-4 mb-3">
+                <div class="card metric-card">
+                    <div class="card-body">
+                        <h5 class="metric-title">
+                            <i class="fas fa-dumbbell text-danger"></i> Difficulty Resilience
+                        </h5>
+                        <div class="metric-value" 
+                             th:text="${#numbers.formatDecimal(submission.difficultyResilience, 1, 2)} + '%'">0%</div>
+                        <div class="progress metric-progress">
+                            <div class="progress-bar bg-danger" 
+                                 role="progressbar"
+                                 th:style="'width: ' + ${submission.difficultyResilience} + '%'"
+                                 th:attr="aria-valuenow=${submission.difficultyResilience}">
+                            </div>
+                        </div>
+                        <p class="metric-description">Your ability to handle challenging questions</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Accuracy -->
+            <div class="col-md-4 mb-3">
+                <div class="card metric-card">
+                    <div class="card-body">
+                        <h5 class="metric-title">
+                            <i class="fas fa-bullseye text-info"></i> Accuracy
+                        </h5>
+                        <div class="metric-value" 
+                             th:text="${#numbers.formatDecimal(submission.accuracy, 1, 2)} + '%'">0%</div>
+                        <div class="progress metric-progress">
+                            <div class="progress-bar bg-info" 
+                                 role="progressbar"
+                                 th:style="'width: ' + ${submission.accuracy} + '%'"
+                                 th:attr="aria-valuenow=${submission.accuracy}">
+                            </div>
+                        </div>
+                        <p class="metric-description">Precision when answering questions</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Time Efficiency -->
+            <div class="col-md-6 mb-3">
+                <div class="card metric-card">
+                    <div class="card-body">
+                        <h5 class="metric-title">
+                            <i class="fas fa-clock text-warning"></i> Time Efficiency
+                        </h5>
+                        <div class="metric-value" 
+                             th:text="${#numbers.formatDecimal(submission.timeEfficiency, 1, 2)} + '%'">0%</div>
+                        <div class="progress metric-progress">
+                            <div class="progress-bar bg-warning" 
+                                 role="progressbar"
+                                 th:style="'width: ' + ${submission.timeEfficiency} + '%'"
+                                 th:attr="aria-valuenow=${submission.timeEfficiency}">
+                            </div>
+                        </div>
+                        <p class="metric-description">Time management skills during exam</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Confidence -->
+            <div class="col-md-6 mb-3">
+                <div class="card metric-card">
+                    <div class="card-body">
+                        <h5 class="metric-title">
+                            <i class="fas fa-smile text-success"></i> Confidence
+                        </h5>
+                        <div class="metric-value" 
+                             th:text="${#numbers.formatDecimal(submission.confidence, 1, 2)} + '%'">0%</div>
+                        <div class="progress metric-progress">
+                            <div class="progress-bar bg-success" 
+                                 role="progressbar"
+                                 th:style="'width: ' + ${submission.confidence} + '%'"
+                                 th:attr="aria-valuenow=${submission.confidence}">
+                            </div>
+                        </div>
+                        <p class="metric-description">Engagement and willingness to attempt questions</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Personalized Recommendations -->
+        <div class="row mt-4" th:if="${recommendations != null and !#lists.isEmpty(recommendations)}">
+            <div class="col-12">
+                <div class="card performance-card border-primary recommendations-card">
+                    <div class="card-header bg-primary text-white">
+                        <h4 class="mb-0">
+                            <i class="fas fa-lightbulb"></i> Personalized Recommendations
+                        </h4>
+                    </div>
+                    <div class="card-body">
+                        <ul class="recommendations-list">
+                            <li th:each="rec : ${recommendations}" class="recommendation-item">
+                                <i class="fas fa-check-circle text-success"></i> 
+                                <span th:text="${rec}"></span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Score Details -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card performance-card">
+                    <div class="card-body">
+                        <h4 class="text-center mb-3">Score Breakdown</h4>
+                        <div class="row text-center">
+                            <div class="col-md-4">
+                                <div class="score-detail">
+                                    <h3 th:text="${submission.score}">0</h3>
+                                    <p class="text-muted">Questions Correct</p>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="score-detail">
+                                    <h3 th:text="${submission.totalQuestions}">0</h3>
+                                    <p class="text-muted">Total Questions</p>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="score-detail">
+                                    <h3 th:text="${#temporals.format(submission.submittedAt, 'MMM dd, yyyy HH:mm')}">Date</h3>
+                                    <p class="text-muted">Submission Date</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Buttons -->
+        <div class="row mt-4 mb-5">
+            <div class="col-12 text-center">
+                <a href="/student/dashboard" class="btn btn-primary btn-lg me-2">
+                    <i class="fas fa-home"></i> Back to Dashboard
+                </a>
+                <a th:href="@{/student/results/{id}(id=${submission.id})}" 
+                   class="btn btn-secondary btn-lg">
+                    <i class="fas fa-list"></i> View Detailed Answers
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    
+    <!-- Custom JS with data -->
+    <script th:inline="javascript">
+        // Pass data from Thymeleaf to JavaScript (with null-safe fallbacks)
+        const performanceData = {
+            topicMastery: /*[[${submission.topicMastery != null ? submission.topicMastery : 0}]]*/ 0,
+            difficultyResilience: /*[[${submission.difficultyResilience != null ? submission.difficultyResilience : 0}]]*/ 0,
+            accuracy: /*[[${submission.accuracy != null ? submission.accuracy : 0}]]*/ 0,
+            timeEfficiency: /*[[${submission.timeEfficiency != null ? submission.timeEfficiency : 0}]]*/ 0,
+            confidence: /*[[${submission.confidence != null ? submission.confidence : 0}]]*/ 0
+        };
+        
+        console.log('📊 Performance Data Loaded:', performanceData);
+    </script>
+    <script th:src="@{/js/student-performance-analytics.js}"></script>
+</body>
+</html>

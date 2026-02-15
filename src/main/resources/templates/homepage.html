@@ -378,11 +378,23 @@
                                     <span class="badge bg-success">Completed</span>
                                 </td>
                                 <td>
-                                    <a th:href="@{/teacher/download-result/{id}(id=${submission.id})}" 
-                                       class="btn btn-sm btn-outline-primary" 
-                                       title="Download this result">
-                                        <i class="bi bi-download"></i> Download
-                                    </a>
+                                    <div class="btn-group" role="group">
+                                        <a th:href="@{/teacher/view-result/{id}(id=${submission.id})}" 
+                                           class="btn btn-sm btn-primary" 
+                                           title="View Student Result">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                        <a th:href="@{/teacher/performance-analytics/{id}(id=${submission.id})}" 
+                                           class="btn btn-sm btn-success" 
+                                           title="View Random Forest Performance Analytics">
+                                            <i class="bi bi-graph-up"></i> Analytics
+                                        </a>
+                                        <a th:href="@{/teacher/download-result/{id}(id=${submission.id})}" 
+                                           class="btn btn-sm btn-outline-secondary" 
+                                           title="Download this result">
+                                            <i class="bi bi-download"></i> Download
+                                        </a>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>
