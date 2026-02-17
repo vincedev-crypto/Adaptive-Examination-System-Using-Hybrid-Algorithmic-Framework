@@ -328,12 +328,9 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <div>
                         <h5 class="text-primary mb-0">📝 Student Submissions</h5>
-                        <p class="small text-muted mb-0">View all exam submissions and results.</p>
+                        <p class="small text-muted mb-0">View all quiz and exam results.</p>
                     </div>
                     <div>
-                        <a th:href="@{/teacher/view-results}" class="btn btn-info btn-sm me-2">
-                            <i class="bi bi-bar-chart-line"></i> View All Results
-                        </a>
                         <a th:href="@{/teacher/grade-submissions}" class="btn btn-warning btn-sm me-2">
                             <i class="bi bi-pencil-square"></i> Grade Submissions
                         </a>
@@ -378,6 +375,11 @@
                                     <span class="badge bg-success">Completed</span>
                                 </td>
                                 <td>
+                                    <a th:href="@{/teacher/view-result/{id}(id=${submission.id})}"
+                                       class="btn btn-sm btn-outline-info me-2"
+                                       title="View this result">
+                                        <i class="bi bi-eye"></i> View Result
+                                    </a>
                                     <a th:href="@{/teacher/download-result/{id}(id=${submission.id})}" 
                                        class="btn btn-sm btn-outline-primary" 
                                        title="Download this result">

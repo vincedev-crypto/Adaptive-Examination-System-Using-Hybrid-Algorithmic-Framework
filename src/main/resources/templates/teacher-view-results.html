@@ -74,12 +74,19 @@
         <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
-                <h2 class="text-white"><i class="bi bi-bar-chart-line"></i> Student Results Dashboard</h2>
-                <p class="text-white-50 mb-0">View and analyze all student exam submissions and results.</p>
+                <h2 class="text-white">
+                    <i class="bi bi-bar-chart-line"></i> 
+                    Quiz Results Dashboard
+                </h2>
+                <p class="text-white-50 mb-0">
+                    View all quiz and exam submissions from your students.
+                </p>
             </div>
-            <a th:href="@{/teacher/homepage}" class="btn btn-light">
-                <i class="bi bi-arrow-left"></i> Back to Dashboard
-            </a>
+            <div>
+                <a th:href="@{/teacher/homepage}" class="btn btn-light">
+                    <i class="bi bi-arrow-left"></i> Back to Dashboard
+                </a>
+            </div>
         </div>
 
         <!-- Statistics Cards -->
@@ -130,7 +137,7 @@
                             </option>
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label class="form-label">Subject</label>
                         <select name="subjectFilter" class="form-select">
                             <option value="">All Subjects</option>
@@ -142,6 +149,17 @@
                         </select>
                     </div>
                     <div class="col-md-3">
+                        <label class="form-label">Student</label>
+                        <select name="studentFilter" class="form-select">
+                            <option value="">All Students</option>
+                            <option th:each="student : ${uniqueStudents}" 
+                                    th:value="${student}" 
+                                    th:text="${student}"
+                                    th:selected="${student == studentFilter}">
+                            </option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
                         <label class="form-label">Status</label>
                         <select name="statusFilter" class="form-select">
                             <option value="">All Status</option>
@@ -151,7 +169,7 @@
                             <option value="unreleased" th:selected="${statusFilter == 'unreleased'}">Not Released</option>
                         </select>
                     </div>
-                    <div class="col-md-3 d-flex align-items-end">
+                    <div class="col-md-2 d-flex align-items-end">
                         <button type="submit" class="btn btn-primary w-100">
                             <i class="bi bi-search"></i> Apply Filters
                         </button>
@@ -203,18 +221,18 @@
                             </td>
                             <td>
                                 <span class="score-badge badge bg-secondary">
-                                    <span th:text="${submission.finalScore}">0</span> / 
+                                    <span th:text="${submission.score}">0</span> / 
                                     <span th:text="${submission.totalQuestions}">0</span>
                                 </span>
                             </td>
                             <td>
-                                <strong th:text="${#numbers.formatDecimal(submission.finalPercentage, 1, 1) + '%'}">0%</strong>
+                                <strong th:text="${#numbers.formatDecimal(submission.percentage, 1, 1) + '%'}">0%</strong>
                             </td>
                             <td>
-                                <span th:if="${submission.isGraded()}" class="badge badge-graded">
+                                <span th:if="${submission.graded}" class="badge badge-graded">
                                     <i class="bi bi-check-circle"></i> Graded
                                 </span>
-                                <span th:unless="${submission.isGraded()}" class="badge badge-pending">
+                                <span th:unless="${submission.graded}" class="badge badge-pending">
                                     <i class="bi bi-clock"></i> Pending
                                 </span>
                             </td>
@@ -241,6 +259,16 @@
                                    title="Grade Submission">
                                     <i class="bi bi-pencil"></i> Grade
                                 </a>
+                                <form th:action="@{/teacher/toggle-result-release/{id}(id=${submission.id})}" 
+                                      method="post" style="display: inline;">
+                                    <button type="submit" 
+                                            th:classappend="${submission.resultsReleased ? 'btn-secondary' : 'btn-success'}"
+                                            class="btn btn-sm action-btn"
+                                            th:title="${submission.resultsReleased ? 'Hide from student' : 'Release to student'}">
+                                        <i th:class="${submission.resultsReleased ? 'bi bi-eye-slash' : 'bi bi-eye'}"></i>
+                                        <span th:text="${submission.resultsReleased ? 'Hide' : 'Release'}"></span>
+                                    </button>
+                                </form>
                             </td>
                         </tr>
                     </tbody>

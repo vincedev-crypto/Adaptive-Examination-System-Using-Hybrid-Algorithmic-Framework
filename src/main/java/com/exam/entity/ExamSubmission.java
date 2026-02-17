@@ -32,8 +32,8 @@ public class ExamSubmission {
     @Column(nullable = false)
     private double percentage;
     
-    @Column(name = "results_released", nullable = false)
-    private boolean resultsReleased = false; // Teacher controls this
+    @Column(name = "results_released")
+    private Boolean resultsReleased = false; // Teacher controls this
     
     @Column(name = "submitted_at", nullable = false)
     private LocalDateTime submittedAt;
@@ -108,8 +108,8 @@ public class ExamSubmission {
         this.percentage = validateDouble(percentage);
     }
     
-    public boolean isResultsReleased() { return resultsReleased; }
-    public void setResultsReleased(boolean resultsReleased) { this.resultsReleased = resultsReleased; }
+    public boolean isResultsReleased() { return resultsReleased != null && resultsReleased; }
+    public void setResultsReleased(Boolean resultsReleased) { this.resultsReleased = resultsReleased; }
     
     public LocalDateTime getSubmittedAt() { return submittedAt; }
     public void setSubmittedAt(LocalDateTime submittedAt) { this.submittedAt = submittedAt; }

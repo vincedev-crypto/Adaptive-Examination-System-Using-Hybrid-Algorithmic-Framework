@@ -105,9 +105,20 @@
                 </a>
                 <a th:unless="${submission.isGraded()}"
                    th:href="@{/teacher/grade/{id}(id=${submission.id})}" 
-                   class="btn btn-warning">
+                   class="btn btn-warning me-2">
                     <i class="bi bi-pencil"></i> Grade This Submission
                 </a>
+                <form th:action="@{/teacher/toggle-result-release/{id}(id=${submission.id})}" 
+                      method="post" style="display: inline;">
+                    <input type="hidden" name="redirectTo" value="detail">
+                    <button type="submit" 
+                            th:classappend="${submission.resultsReleased ? 'btn-secondary' : 'btn-success'}"
+                            class="btn"
+                            th:title="${submission.resultsReleased ? 'Hide result from student' : 'Release result to student'}">
+                        <i th:class="${submission.resultsReleased ? 'bi bi-eye-slash' : 'bi bi-eye'}"></i>
+                        <span th:text="${submission.resultsReleased ? 'Hide Result' : 'Release Result'}"></span>
+                    </button>
+                </form>
             </div>
         </div>
 
