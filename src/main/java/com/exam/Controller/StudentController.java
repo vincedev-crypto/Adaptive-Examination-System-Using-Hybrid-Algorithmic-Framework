@@ -51,7 +51,43 @@ public class StudentController {
     public String studentDashboard(HttpSession session, Model model, java.security.Principal principal) {
         String studentId = principal.getName();
         model.addAttribute("studentEmail", studentId);
-        model.addAttribute("hasExam", getDistributedExams().containsKey(studentId));
+        boolean hasExam = getDistributedExams().containsKey(studentId);
+        model.addAttribute("hasExam", hasExam);
+        
+        // If student has an exam, get its metadata
+        if (hasExam) {
+            String examName = (String) session.getAttribute("examName_" + studentId);
+            String examSubject = (String) session.getAttribute("examSubject_" + studentId);
+            String examActivityType = (String) session.getAttribute("examActivityType_" + studentId);
+            Integer examTimeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentId);
+            String examDeadline = (String) session.getAttribute("examDeadline_" + studentId);
+            
+            // Get question count
+            List<String> examQuestions = getDistributedExams().get(studentId);
+            int questionCount = examQuestions != null ? examQuestions.size() : 0;
+            
+            // Format deadline for display
+            String formattedDeadline = "";
+            if (examDeadline != null && !examDeadline.isEmpty()) {
+                try {
+                    java.time.LocalDateTime deadlineDateTime = java.time.LocalDateTime.parse(examDeadline);
+                    formattedDeadline = deadlineDateTime.format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy hh:mm a"));
+                } catch (Exception e) {
+                    formattedDeadline = examDeadline;
+                }
+            }
+            
+            // Create exam metadata map
+            Map<String, Object> examMetadata = new HashMap<>();
+            examMetadata.put("examName", examName != null ? examName : "Untitled Exam");
+            examMetadata.put("subject", examSubject != null ? examSubject : "N/A");
+            examMetadata.put("activityType", examActivityType != null ? examActivityType : "Exam");
+            examMetadata.put("timeLimit", examTimeLimit != null ? examTimeLimit : 60);
+            examMetadata.put("deadline", formattedDeadline);
+            examMetadata.put("questionCount", questionCount);
+            
+            model.addAttribute("examMetadata", examMetadata);
+        }
         
         // Check if student has submitted exams - sorted by latest first
         List<ExamSubmission> submissions = examSubmissionRepository.findByStudentEmail(studentId);
