@@ -4,8 +4,12 @@ import Service.RandomForestService;
 import com.exam.algo.HomepageController;
 import com.exam.entity.ExamSubmission;
 import com.exam.entity.User;
+import com.exam.entity.EnrolledStudent;
+import com.exam.entity.Subject;
 import com.exam.repository.ExamSubmissionRepository;
 import com.exam.repository.UserRepository;
+import com.exam.repository.EnrolledStudentRepository;
+import com.exam.repository.SubjectRepository;
 import com.exam.service.AnswerKeyService;
 import com.exam.service.IRT3PLService;
 import com.exam.service.RandomForestAnalyticsService;
@@ -17,6 +21,7 @@ import jakarta.servlet.http.HttpSession;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Controller
 @RequestMapping("/student")
@@ -39,6 +44,12 @@ public class StudentController {
     
     @Autowired
     private UserRepository userRepository;
+    
+    @Autowired
+    private EnrolledStudentRepository enrolledStudentRepository;
+    
+    @Autowired
+    private SubjectRepository subjectRepository;
 
     // This would normally be injected from a service, but for now we'll reference the static map
     // In production, this should be stored in database
@@ -49,57 +60,142 @@ public class StudentController {
 
     @GetMapping("/dashboard")
     public String studentDashboard(HttpSession session, Model model, java.security.Principal principal) {
-        String studentId = principal.getName();
-        model.addAttribute("studentEmail", studentId);
-        boolean hasExam = getDistributedExams().containsKey(studentId);
-        model.addAttribute("hasExam", hasExam);
+        String studentEmail = principal.getName();
+        model.addAttribute("studentEmail", studentEmail);
         
-        // If student has an exam, get its metadata
-        if (hasExam) {
-            String examName = (String) session.getAttribute("examName_" + studentId);
-            String examSubject = (String) session.getAttribute("examSubject_" + studentId);
-            String examActivityType = (String) session.getAttribute("examActivityType_" + studentId);
-            Integer examTimeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentId);
-            String examDeadline = (String) session.getAttribute("examDeadline_" + studentId);
+        // Get subjects student is enrolled in
+        List<EnrolledStudent> enrollments = enrolledStudentRepository.findByStudentEmail(studentEmail);
+        
+        // Create a map of subject data with activities
+        List<Map<String, Object>> subjectCards = new ArrayList<>();
+        
+        for (EnrolledStudent enrollment : enrollments) {
+            Long subjectId = enrollment.getSubjectId();
+            String subjectName = enrollment.getSubjectName();
             
-            // Get question count
-            List<String> examQuestions = getDistributedExams().get(studentId);
-            int questionCount = examQuestions != null ? examQuestions.size() : 0;
-            
-            // Format deadline for display
-            String formattedDeadline = "";
-            if (examDeadline != null && !examDeadline.isEmpty()) {
-                try {
-                    java.time.LocalDateTime deadlineDateTime = java.time.LocalDateTime.parse(examDeadline);
-                    formattedDeadline = deadlineDateTime.format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy hh:mm a"));
-                } catch (Exception e) {
-                    formattedDeadline = examDeadline;
+            if (subjectId != null) {
+                // Get subject details
+                Optional<Subject> subjectOpt = subjectRepository.findById(subjectId);
+                
+                if (subjectOpt.isPresent()) {
+                    Subject subject = subjectOpt.get();
+                    Map<String, Object> subjectCard = new HashMap<>();
+                    subjectCard.put("id", subject.getId());
+                    subjectCard.put("name", subject.getSubjectName());
+                    subjectCard.put("description", subject.getDescription());
+                    subjectCard.put("teacherEmail", subject.getTeacherEmail());
+                    
+                    // Get activities (exams) for this subject
+                    List<Map<String, Object>> activities = new ArrayList<>();
+                    
+                    // Check if student has exam distributed for this subject
+                    boolean hasExam = getDistributedExams().containsKey(studentEmail);
+                    if (hasExam) {
+                        String examSubject = (String) session.getAttribute("examSubject_" + studentEmail);
+                        
+                        if (subjectName.equals(examSubject)) {
+                            String examName = (String) session.getAttribute("examName_" + studentEmail);
+                            String examActivityType = (String) session.getAttribute("examActivityType_" + studentEmail);
+                            Integer examTimeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentEmail);
+                            String examDeadline = (String) session.getAttribute("examDeadline_" + studentEmail);
+                            List<String> examQuestions = getDistributedExams().get(studentEmail);
+                            
+                            Map<String, Object> activity = new HashMap<>();
+                            activity.put("name", examName != null ? examName : "Untitled Exam");
+                            activity.put("type", examActivityType != null ? examActivityType : "Exam");
+                            activity.put("timeLimit", examTimeLimit != null ? examTimeLimit : 60);
+                            activity.put("questionCount", examQuestions != null ? examQuestions.size() : 0);
+                            activity.put("deadline", formatDeadline(examDeadline));
+                            activity.put("status", "pending");
+                            activity.put("icon", getActivityIcon(examActivityType));
+                            activity.put("color", getActivityColor(examActivityType));
+                            activities.add(activity);
+                        }
+                    }
+                    
+                    // Get recent submissions for this subject
+                    List<ExamSubmission> subjectSubmissions = examSubmissionRepository.findByStudentEmail(studentEmail)
+                        .stream()
+                        .filter(sub -> subjectName.equals(sub.getSubject()))
+                        .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, 
+                                                   Comparator.nullsLast(Comparator.reverseOrder())))
+                        .limit(3)
+                        .collect(Collectors.toList());
+                    
+                    for (ExamSubmission submission : subjectSubmissions) {
+                        Map<String, Object> activity = new HashMap<>();
+                        activity.put("name", submission.getExamName());
+                        activity.put("type", submission.getActivityType() != null ? submission.getActivityType() : "Exam");
+                        activity.put("status", "completed");
+                        activity.put("score", submission.getScore() + "/" + submission.getTotalQuestions());
+                        activity.put("percentage", submission.getPercentage());
+                        activity.put("submittedAt", submission.getSubmittedAt());
+                        activity.put("submissionId", submission.getId());
+                        activity.put("icon", getActivityIcon(submission.getActivityType()));
+                        activity.put("color", getActivityColor(submission.getActivityType()));
+                        activities.add(activity);
+                    }
+                    
+                    subjectCard.put("activities", activities);
+                    subjectCard.put("activityCount", activities.size());
+                    subjectCards.add(subjectCard);
                 }
             }
-            
-            // Create exam metadata map
-            Map<String, Object> examMetadata = new HashMap<>();
-            examMetadata.put("examName", examName != null ? examName : "Untitled Exam");
-            examMetadata.put("subject", examSubject != null ? examSubject : "N/A");
-            examMetadata.put("activityType", examActivityType != null ? examActivityType : "Exam");
-            examMetadata.put("timeLimit", examTimeLimit != null ? examTimeLimit : 60);
-            examMetadata.put("deadline", formattedDeadline);
-            examMetadata.put("questionCount", questionCount);
-            
-            model.addAttribute("examMetadata", examMetadata);
         }
         
-        // Check if student has submitted exams - sorted by latest first
-        List<ExamSubmission> submissions = examSubmissionRepository.findByStudentEmail(studentId);
+        model.addAttribute("subjectCards", subjectCards);
+        model.addAttribute("hasSubjects", !subjectCards.isEmpty());
         
-        // Sort by submitted date - latest first (null-safe)
-        submissions.sort(Comparator.comparing(ExamSubmission::getSubmittedAt, 
-                                             Comparator.nullsLast(Comparator.reverseOrder())));
-        
-        model.addAttribute("hasSubmission", !submissions.isEmpty());
-        model.addAttribute("submissions", submissions);
+        // Get all submissions for history section
+        List<ExamSubmission> allSubmissions = examSubmissionRepository.findByStudentEmail(studentEmail);
+        allSubmissions.sort(Comparator.comparing(ExamSubmission::getSubmittedAt, 
+                                               Comparator.nullsLast(Comparator.reverseOrder())));
+        model.addAttribute("allSubmissions", allSubmissions);
+        model.addAttribute("hasSubmissions", !allSubmissions.isEmpty());
         
         return "student-dashboard";
+    }
+    
+    private String formatDeadline(String examDeadline) {
+        if (examDeadline != null && !examDeadline.isEmpty()) {
+            try {
+                java.time.LocalDateTime deadlineDateTime = java.time.LocalDateTime.parse(examDeadline);
+                return deadlineDateTime.format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy hh:mm a"));
+            } catch (Exception e) {
+                return examDeadline;
+            }
+        }
+        return "";
+    }
+    
+    private String getActivityIcon(String activityType) {
+        if (activityType == null) return "bi-file-earmark-text";
+        switch (activityType.toLowerCase()) {
+            case "assignment":
+                return "bi-journal-text";
+            case "practical exam":
+            case "practical":
+                return "bi-laptop";
+            case "quiz":
+                return "bi-question-circle";
+            default:
+                return "bi-file-earmark-text";
+        }
+    }
+    
+    private String getActivityColor(String activityType) {
+        if (activityType == null) return "primary";
+        switch (activityType.toLowerCase()) {
+            case "assignment":
+                return "success";
+            case "practical exam":
+            case "practical":
+                return "warning";
+            case "quiz":
+                return "info";
+            default:
+                return "primary";
+        }
     }
     
     @GetMapping("/results/{submissionId}")

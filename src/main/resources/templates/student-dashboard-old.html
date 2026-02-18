@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Student Dashboard - ALGO</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link th:href="@{/css/student-dashboard.css}" rel="stylesheet">
+</head>
+<body>
+    <nav class="navbar navbar-dark bg-primary mb-5">
+        <div class="container">
+            <span class="navbar-brand">Student Portal: <strong th:text="${#authentication.name}"></strong></span>
+            <form th:action="@{/logout}" method="post"><button class="btn btn-light btn-sm" type="submit">Logout</button></form>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="row justify-content-center">
+            <div class="col-md-8 text-center">
+                <div class="card dashboard-card p-5">
+                    <h3 class="mb-4">Available Examinations</h3>
+                    
+                    <!-- Error message for deadline exceeded or already submitted -->
+                    <div th:if="${error}" class="alert alert-danger text-start" role="alert">
+                        <h5 class="alert-heading">⚠️ <span th:if="${submittedAt}">Exam Already Submitted</span><span th:unless="${submittedAt}">Deadline Exceeded</span></h5>
+                        <p th:text="${error}"></p>
+                        <hr>
+                        <p class="mb-0" th:if="${deadline}">
+                            <strong>Deadline was:</strong> <span th:text="${deadline}"></span>
+                        </p>
+                        <p class="mb-0" th:if="${submittedAt}">
+                            <strong>You submitted on:</strong> <span th:text="${#temporals.format(submittedAt, 'MMM dd, yyyy hh:mm a')}"></span>
+                        </p>
+                        <p class="mt-2 mb-0">
+                            <small class="text-muted">💡 Each exam can only be taken once. Please check your results below or contact your teacher if you have concerns.</small>
+                        </p>
+                    </div>
+                    
+                    <div th:if="${hasExam}">
+                        <!-- Google Classroom Style Exam Card -->
+                        <div class="card mb-4 shadow-sm border-primary" style="border-width: 2px;">
+                            <div class="card-header bg-primary text-white d-flex align-items-center">
+                                <i class="bi bi-file-earmark-text-fill me-2" style="font-size: 1.5rem;"></i>
+                                <div>
+                                    <h5 class="mb-0" th:text="${examMetadata.examName}">Exam Title</h5>
+                                    <small th:text="${examMetadata.activityType}">Exam Type</small>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="row mb-3">
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <i class="bi bi-book text-primary me-2"></i>
+                                            <strong class="me-2">Subject:</strong>
+                                            <span th:text="${examMetadata.subject}">Subject Name</span>
+                                        </div>
+                                        <div class="d-flex align-items-center mb-2">
+                                            <i class="bi bi-question-circle text-info me-2"></i>
+                                            <strong class="me-2">Questions:</strong>
+                                            <span th:text="${examMetadata.questionCount} + ' questions'">20 questions</span>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="d-flex align-items-center mb-2">
+                                            <i class="bi bi-clock text-warning me-2"></i>
+                                            <strong class="me-2">Time Limit:</strong>
+                                            <span th:text="${examMetadata.timeLimit} + ' minutes'">60 minutes</span>
+                                        </div>
+                                        <div class="d-flex align-items-center mb-2" th:if="${examMetadata.deadline != null && !examMetadata.deadline.isEmpty()}">
+                                            <i class="bi bi-calendar-event text-danger me-2"></i>
+                                            <strong class="me-2">Deadline:</strong>
+                                            <span th:text="${examMetadata.deadline}">Dec 31, 2024 11:59 PM</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <hr>
+                                
+                                <div class="alert alert-info mb-3">
+                                    <i class="bi bi-info-circle-fill me-2"></i>
+                                    <strong>Instructions:</strong>
+                                    <ul class="mb-0 mt-2">
+                                        <li>Once you start, the timer begins and cannot be paused</li>
+                                        <li>Answer all questions to the best of your ability</li>
+                                        <li>Submit before the time limit expires</li>
+                                        <li>Make sure you have a stable internet connection</li>
+                                    </ul>
+                                </div>
+                                
+                                <div class="d-grid">
+                                    <a th:href="@{/student/take-exam}" class="btn btn-success btn-lg">
+                                        <i class="bi bi-play-circle-fill me-2"></i>START EXAM
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div th:unless="${hasExam}">
+                        <div class="text-center py-4">
+                            <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
+                            <p class="text-muted mt-3">No examinations have been distributed to you yet.</p>
+                            <small class="text-muted">Check back later or contact your teacher.</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Exam Submissions Section -->
+                <div class="card dashboard-card p-5 mt-4" th:if="${hasSubmission}">
+                    <h3 class="mb-4">Your Exam Submissions</h3>
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Exam</th>
+                                    <th>Submitted</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:each="submission : ${submissions}">
+                                    <td th:text="${submission.examName}"></td>
+                                    <td th:text="${#temporals.format(submission.submittedAt, 'MMM dd, yyyy HH:mm')}"></td>
+                                    <td>
+                                        <span class="badge bg-success">Completed</span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group" role="group">
+                                            <a th:href="@{/student/results/{id}(id=${submission.id})}" 
+                                               class="btn btn-sm btn-primary" 
+                                               title="View Results">
+                                               <i class="bi bi-file-text"></i> View Results
+                                            </a>
+                                            <a th:href="@{/student/view-exam/{id}(id=${submission.id})}" 
+                                               class="btn btn-sm btn-outline-secondary" 
+                                               title="View Exam">
+                                               <i class="bi bi-eye"></i> View Exam
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

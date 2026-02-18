@@ -8,134 +8,224 @@
     <link th:href="@{/css/student-dashboard.css}" rel="stylesheet">
 </head>
 <body>
-    <nav class="navbar navbar-dark bg-primary mb-5">
-        <div class="container">
-            <span class="navbar-brand">Student Portal: <strong th:text="${#authentication.name}"></strong></span>
-            <form th:action="@{/logout}" method="post"><button class="btn btn-light btn-sm" type="submit">Logout</button></form>
+    <nav class="navbar navbar-dark bg-primary mb-4">
+        <div class="container-fluid">
+            <span class="navbar-brand">
+                <i class="bi bi-person-circle me-2"></i>
+                <strong th:text="${#authentication.name}"></strong>
+            </span>
+            <form th:action="@{/logout}" method="post">
+                <button class="btn btn-light btn-sm" type="submit">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </button>
+            </form>
         </div>
     </nav>
 
-    <div class="container">
-        <div class="row justify-content-center">
-            <div class="col-md-8 text-center">
-                <div class="card dashboard-card p-5">
-                    <h3 class="mb-4">Available Examinations</h3>
-                    
-                    <!-- Error message for deadline exceeded or already submitted -->
-                    <div th:if="${error}" class="alert alert-danger text-start" role="alert">
-                        <h5 class="alert-heading">⚠️ <span th:if="${submittedAt}">Exam Already Submitted</span><span th:unless="${submittedAt}">Deadline Exceeded</span></h5>
-                        <p th:text="${error}"></p>
-                        <hr>
-                        <p class="mb-0" th:if="${deadline}">
-                            <strong>Deadline was:</strong> <span th:text="${deadline}"></span>
-                        </p>
-                        <p class="mb-0" th:if="${submittedAt}">
-                            <strong>You submitted on:</strong> <span th:text="${#temporals.format(submittedAt, 'MMM dd, yyyy hh:mm a')}"></span>
-                        </p>
-                        <p class="mt-2 mb-0">
-                            <small class="text-muted">💡 Each exam can only be taken once. Please check your results below or contact your teacher if you have concerns.</small>
-                        </p>
+    <div class="container-fluid px-4">
+        <!-- Header -->
+        <div class="mb-4">
+            <h2><i class="bi bi-grid-3x3-gap-fill me-2"></i>My Subjects</h2>
+            <p class="text-muted">View your enrolled subjects and their activities</p>
+        </div>
+
+        <!-- No Subjects Message -->
+        <div th:if="${!hasSubjects}" class="text-center py-5">
+            <div class="card shadow-sm p-5">
+                <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
+                <h4 class="mt-3 text-muted">No Subjects Yet</h4>
+                <p class="text-muted">You haven't been enrolled in any subjects yet.<br>Contact your teacher to get started.</p>
+            </div>
+        </div>
+
+        <!-- Subject Cards Grid -->
+        <div th:if="${hasSubjects}" class="row g-4">
+            <div th:each="subject : ${subjectCards}" class="col-12 col-md-6 col-lg-4">
+                <!-- Subject Card -->
+                <div class="card subject-card shadow-sm h-100">
+                    <!-- Subject Header -->
+                    <div class="card-header subject-header bg-gradient text-white p-4" 
+                         th:style="'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);'">
+                        <h5 class="card-title mb-1" th:text="${subject.name}">Subject Name</h5>
+                        <small th:if="${subject.description != null && !subject.description.isEmpty()}" 
+                               th:text="${subject.description}">Description</small>
+                        <small th:unless="${subject.description != null && !subject.description.isEmpty()}">
+                            <i class="bi bi-person"></i> <span th:text="${subject.teacherEmail}">Teacher</span>
+                        </small>
                     </div>
-                    
-                    <div th:if="${hasExam}">
-                        <!-- Google Classroom Style Exam Card -->
-                        <div class="card mb-4 shadow-sm border-primary" style="border-width: 2px;">
-                            <div class="card-header bg-primary text-white d-flex align-items-center">
-                                <i class="bi bi-file-earmark-text-fill me-2" style="font-size: 1.5rem;"></i>
-                                <div>
-                                    <h5 class="mb-0" th:text="${examMetadata.examName}">Exam Title</h5>
-                                    <small th:text="${examMetadata.activityType}">Exam Type</small>
-                                </div>
-                            </div>
-                            <div class="card-body">
-                                <div class="row mb-3">
-                                    <div class="col-md-6">
-                                        <div class="d-flex align-items-center mb-2">
-                                            <i class="bi bi-book text-primary me-2"></i>
-                                            <strong class="me-2">Subject:</strong>
-                                            <span th:text="${examMetadata.subject}">Subject Name</span>
+
+                    <!-- Activities Section -->
+                    <div class="card-body p-0">
+                        <!-- No Activities -->
+                        <div th:if="${subject.activityCount == 0}" class="p-4 text-center text-muted">
+                            <i class="bi bi-calendar-x" style="font-size: 2rem;"></i>
+                            <p class="mb-0 mt-2">No activities yet</p>
+                        </div>
+
+                        <!-- Activities List -->
+                        <div th:if="${subject.activityCount > 0}" class="activity-list">
+                            <div th:each="activity : ${subject.activities}" 
+                                 class="activity-item border-bottom p-3"
+                                 th:classappend="${activity.status == 'pending' ? 'activity-pending' : ''}">
+                                
+                                <!-- Activity Header -->
+                                <div class="d-flex align-items-start">
+                                    <div class="activity-icon me-3" 
+                                         th:classappend="'bg-' + ${activity.color} + '-subtle'">
+                                        <i th:class="'bi ' + ${activity.icon} + ' text-' + ${activity.color}"></i>
+                                    </div>
+                                    <div class="flex-grow-1">
+                                        <div class="d-flex justify-content-between align-items-start">
+                                            <div>
+                                                <h6 class="mb-1" th:text="${activity.name}">Activity Name</h6>
+                                                <span class="badge" 
+                                                      th:classappend="'bg-' + ${activity.color}"
+                                                      th:text="${activity.type}">Type</span>
+                                            </div>
+                                            <!-- Pending Status -->
+                                            <span th:if="${activity.status == 'pending'}" 
+                                                  class="badge bg-warning text-dark">
+                                                <i class="bi bi-clock"></i> Pending
+                                            </span>
+                                            <!-- Completed Status -->
+                                            <span th:if="${activity.status == 'completed'}" 
+                                                  class="badge"
+                                                  th:classappend="${activity.percentage >= 75 ? 'bg-success' : (activity.percentage >= 50 ? 'bg-warning text-dark' : 'bg-danger')}">
+                                                <span th:text="${activity.score}">Score</span>
+                                                (<span th:text="${#numbers.formatDecimal(activity.percentage, 1, 1)}">0</span>%)
+                                            </span>
                                         </div>
-                                        <div class="d-flex align-items-center mb-2">
-                                            <i class="bi bi-question-circle text-info me-2"></i>
-                                            <strong class="me-2">Questions:</strong>
-                                            <span th:text="${examMetadata.questionCount} + ' questions'">20 questions</span>
+
+                                        <!-- Activity Details -->
+                                        <div class="mt-2">
+                                            <!-- Pending Exam Details -->
+                                            <div th:if="${activity.status == 'pending'}">
+                                                <small class="text-muted d-block">
+                                                    <i class="bi bi-question-circle"></i> 
+                                                    <span th:text="${activity.questionCount}">0</span> questions
+                                                    <span class="mx-2">•</span>
+                                                    <i class="bi bi-clock"></i> 
+                                                    <span th:text="${activity.timeLimit}">0</span> min
+                                                </small>
+                                                <small th:if="${activity.deadline != null && !activity.deadline.isEmpty()}" 
+                                                       class="text-danger d-block mt-1">
+                                                    <i class="bi bi-calendar-event"></i> 
+                                                    Due: <span th:text="${activity.deadline}">Deadline</span>
+                                                </small>
+                                            </div>
+
+                                            <!-- Completed Exam Details -->
+                                            <div th:if="${activity.status == 'completed'}">
+                                                <small class="text-muted">
+                                                    <i class="bi bi-calendar-check"></i>
+                                                    Submitted: <span th:text="${#temporals.format(activity.submittedAt, 'MMM dd, yyyy')}">Date</span>
+                                                </small>
+                                            </div>
+                                        </div>
+
+                                        <!-- Action Buttons -->
+                                        <div class="mt-3">
+                                            <!-- Start Exam Button -->
+                                            <a th:if="${activity.status == 'pending'}" 
+                                               th:href="@{/student/take-exam}" 
+                                               class="btn btn-sm btn-success w-100">
+                                                <i class="bi bi-play-circle"></i> Start Exam
+                                            </a>
+
+                                            <!-- View Results Button -->
+                                            <div th:if="${activity.status == 'completed'}" class="btn-group w-100" role="group">
+                                                <a th:href="@{/student/results/{id}(id=${activity.submissionId})}" 
+                                                   class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-eye"></i> View Results
+                                                </a>
+                                                <a th:href="@{/student/performance-analytics/{id}(id=${activity.submissionId})}" 
+                                                   class="btn btn-sm btn-outline-success">
+                                                    <i class="bi bi-graph-up"></i> Analytics
+                                                </a>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
-                                        <div class="d-flex align-items-center mb-2">
-                                            <i class="bi bi-clock text-warning me-2"></i>
-                                            <strong class="me-2">Time Limit:</strong>
-                                            <span th:text="${examMetadata.timeLimit} + ' minutes'">60 minutes</span>
-                                        </div>
-                                        <div class="d-flex align-items-center mb-2" th:if="${examMetadata.deadline != null && !examMetadata.deadline.isEmpty()}">
-                                            <i class="bi bi-calendar-event text-danger me-2"></i>
-                                            <strong class="me-2">Deadline:</strong>
-                                            <span th:text="${examMetadata.deadline}">Dec 31, 2024 11:59 PM</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <hr>
-                                
-                                <div class="alert alert-info mb-3">
-                                    <i class="bi bi-info-circle-fill me-2"></i>
-                                    <strong>Instructions:</strong>
-                                    <ul class="mb-0 mt-2">
-                                        <li>Once you start, the timer begins and cannot be paused</li>
-                                        <li>Answer all questions to the best of your ability</li>
-                                        <li>Submit before the time limit expires</li>
-                                        <li>Make sure you have a stable internet connection</li>
-                                    </ul>
-                                </div>
-                                
-                                <div class="d-grid">
-                                    <a th:href="@{/student/take-exam}" class="btn btn-success btn-lg">
-                                        <i class="bi bi-play-circle-fill me-2"></i>START EXAM
-                                    </a>
                                 </div>
                             </div>
                         </div>
                     </div>
-                    <div th:unless="${hasExam}">
-                        <div class="text-center py-4">
-                            <i class="bi bi-inbox" style="font-size: 3rem; color: #ccc;"></i>
-                            <p class="text-muted mt-3">No examinations have been distributed to you yet.</p>
-                            <small class="text-muted">Check back later or contact your teacher.</small>
-                        </div>
+
+                    <!-- Card Footer with Activity Count -->
+                    <div class="card-footer bg-light text-center" th:if="${subject.activityCount > 0}">
+                        <small class="text-muted">
+                            <i class="bi bi-list-task"></i>
+                            <span th:text="${subject.activityCount}">0</span> 
+                            <span th:text="${subject.activityCount == 1 ? 'activity' : 'activities'}">activities</span>
+                        </small>
                     </div>
                 </div>
-                
-                <!-- Exam Submissions Section -->
-                <div class="card dashboard-card p-5 mt-4" th:if="${hasSubmission}">
-                    <h3 class="mb-4">Your Exam Submissions</h3>
+            </div>
+        </div>
+
+        <!-- All Exam Attempts Section -->
+        <div th:if="${hasSubmissions}" class="mt-5">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h4 class="mb-0">
+                        <i class="bi bi-clock-history me-2"></i>All Exam Attempts
+                    </h4>
+                    <p class="text-muted mb-0 small">Complete history of your exam submissions</p>
+                </div>
+                <div class="card-body p-0">
                     <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
                                 <tr>
-                                    <th>Exam</th>
+                                    <th>Exam Name</th>
+                                    <th>Subject</th>
+                                    <th>Type</th>
                                     <th>Submitted</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
+                                    <th>Score</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr th:each="submission : ${submissions}">
-                                    <td th:text="${submission.examName}"></td>
-                                    <td th:text="${#temporals.format(submission.submittedAt, 'MMM dd, yyyy HH:mm')}"></td>
+                                <tr th:each="submission : ${allSubmissions}">
                                     <td>
-                                        <span class="badge bg-success">Completed</span>
+                                        <i class="bi bi-file-earmark-text me-2 text-primary"></i>
+                                        <strong th:text="${submission.examName}">Exam Name</strong>
                                     </td>
                                     <td>
-                                        <div class="btn-group" role="group">
+                                        <span class="badge bg-secondary" th:text="${submission.subject}">Subject</span>
+                                    </td>
+                                    <td>
+                                        <span class="badge" 
+                                              th:classappend="${submission.activityType == 'Assignment' ? 'bg-success' : 
+                                                              (submission.activityType == 'Practical Exam' ? 'bg-warning text-dark' : 'bg-primary')}"
+                                              th:text="${submission.activityType != null ? submission.activityType : 'Exam'}">
+                                            Exam
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small class="text-muted">
+                                            <i class="bi bi-calendar-check me-1"></i>
+                                            <span th:text="${#temporals.format(submission.submittedAt, 'MMM dd, yyyy HH:mm')}">Date</span>
+                                        </small>
+                                    </td>
+                                    <td>
+                                        <span class="badge" 
+                                              th:classappend="${submission.percentage >= 75 ? 'bg-success' : 
+                                                              (submission.percentage >= 50 ? 'bg-warning text-dark' : 'bg-danger')}">
+                                            <span th:text="${submission.score}">0</span>/<span th:text="${submission.totalQuestions}">0</span>
+                                            (<span th:text="${#numbers.formatDecimal(submission.percentage, 1, 1)}">0</span>%)
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm" role="group">
                                             <a th:href="@{/student/results/{id}(id=${submission.id})}" 
-                                               class="btn btn-sm btn-primary" 
+                                               class="btn btn-outline-primary"
                                                title="View Results">
-                                               <i class="bi bi-file-text"></i> View Results
+                                                <i class="bi bi-eye"></i>
                                             </a>
-                                            <a th:href="@{/student/view-exam/{id}(id=${submission.id})}" 
-                                               class="btn btn-sm btn-outline-secondary" 
-                                               title="View Exam">
-                                               <i class="bi bi-eye"></i> View Exam
+                                            <a th:href="@{/student/performance-analytics/{id}(id=${submission.id})}" 
+                                               class="btn btn-outline-success"
+                                               title="View Analytics">
+                                                <i class="bi bi-graph-up"></i>
                                             </a>
                                         </div>
                                     </td>
@@ -144,8 +234,17 @@
                         </table>
                     </div>
                 </div>
+                <div class="card-footer bg-light text-center">
+                    <small class="text-muted">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Showing <strong th:text="${#lists.size(allSubmissions)}">0</strong> exam submission(s)
+                    </small>
+                </div>
             </div>
         </div>
     </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script th:src="@{/js/student-dashboard.js}"></script>
 </body>
 </html>

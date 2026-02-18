@@ -10,6 +10,7 @@ import java.util.Optional;
 @Repository
 public interface EnrolledStudentRepository extends JpaRepository<EnrolledStudent, Long> {
     List<EnrolledStudent> findByTeacherEmail(String teacherEmail);
+    List<EnrolledStudent> findByStudentEmail(String studentEmail);
     List<EnrolledStudent> findBySubjectId(Long subjectId);
     Optional<EnrolledStudent> findByTeacherEmailAndStudentEmail(String teacherEmail, String studentEmail);
     Optional<EnrolledStudent> findByTeacherEmailAndStudentEmailAndSubjectId(String teacherEmail, String studentEmail, Long subjectId);

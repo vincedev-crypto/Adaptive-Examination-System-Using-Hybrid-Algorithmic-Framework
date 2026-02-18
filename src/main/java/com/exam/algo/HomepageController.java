@@ -221,6 +221,19 @@ public class HomepageController {
         List<Subject> subjects = subjectRepository.findByTeacherEmail(teacherEmail);
         model.addAttribute("subjects", subjects);
         
+        // Group enrolled students by subject ID for easy template access
+        Map<Long, List<EnrolledStudent>> enrollmentsBySubject = new HashMap<>();
+        Map<Long, Integer> enrollmentCountBySubject = new HashMap<>();
+        for (EnrolledStudent enrollment : enrolledStudents) {
+            Long subjectId = enrollment.getSubjectId();
+            if (subjectId != null) {
+                enrollmentsBySubject.computeIfAbsent(subjectId, k -> new ArrayList<>()).add(enrollment);
+                enrollmentCountBySubject.put(subjectId, enrollmentsBySubject.get(subjectId).size());
+            }
+        }
+        model.addAttribute("enrollmentsBySubject", enrollmentsBySubject);
+        model.addAttribute("enrollmentCountBySubject", enrollmentCountBySubject);
+        
         return "homepage";
     }
 
@@ -296,6 +309,47 @@ public class HomepageController {
         }
         
         return "redirect:/teacher/homepage";
+    }
+    
+    @GetMapping("/subject-classroom/{subjectId}")
+    public String viewSubjectClassroom(@PathVariable Long subjectId, Model model, java.security.Principal principal) {
+        String teacherEmail = principal.getName();
+        
+        // Verify the subject belongs to this teacher
+        Optional<Subject> subjectOpt = subjectRepository.findById(subjectId);
+        if (subjectOpt.isEmpty() || !subjectOpt.get().getTeacherEmail().equals(teacherEmail)) {
+            return "redirect:/teacher/homepage";
+        }
+        
+        Subject subject = subjectOpt.get();
+        
+        // Get enrolled students for this subject
+        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findBySubjectId(subjectId);
+        
+        // Get submissions for students in this subject
+        List<String> studentEmails = enrolledStudents.stream()
+            .map(EnrolledStudent::getStudentEmail)
+            .collect(Collectors.toList());
+        
+        List<ExamSubmission> submissions = examSubmissionRepository.findAll().stream()
+            .filter(sub -> studentEmails.contains(sub.getStudentEmail()) && 
+                          subject.getSubjectName().equals(sub.getSubject()))
+            .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, 
+                                       Comparator.nullsLast(Comparator.reverseOrder())))
+            .collect(Collectors.toList());
+        
+        // Get all students for enrollment
+        List<User> allStudents = userRepository.findAll().stream()
+            .filter(user -> user.getRole() == User.Role.STUDENT)
+            .collect(Collectors.toList());
+        
+        model.addAttribute("subject", subject);
+        model.addAttribute("enrolledStudents", enrolledStudents);
+        model.addAttribute("submissions", submissions);
+        model.addAttribute("teacherEmail", teacherEmail);
+        model.addAttribute("allStudents", allStudents);
+        
+        return "subject-classroom";
     }
 
     @PostMapping("/distribute")
@@ -528,6 +582,12 @@ public class HomepageController {
         }
         
         return result.toString();
+    }
+
+    @GetMapping("/process-exams")
+    public String processExamsGet() {
+        // Redirect to homepage if someone tries to access this endpoint via GET
+        return "redirect:/teacher/homepage";
     }
 
     @PostMapping("/process-exams")
@@ -2187,7 +2247,7 @@ public class HomepageController {
     /**
      * Teacher view of student's Random Forest Performance Analytics
      */
-    @GetMapping("/teacher/performance-analytics/{submissionId}")
+    @GetMapping("/performance-analytics/{submissionId}")
     public String viewTeacherPerformanceAnalytics(@PathVariable Long submissionId, Model model) {
         Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
         
