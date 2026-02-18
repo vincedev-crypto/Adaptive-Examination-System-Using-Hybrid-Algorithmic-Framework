@@ -133,16 +133,11 @@
                                             </a>
 
                                             <!-- View Results Button -->
-                                            <div th:if="${activity.status == 'completed'}" class="btn-group w-100" role="group">
-                                                <a th:href="@{/student/results/{id}(id=${activity.submissionId})}" 
-                                                   class="btn btn-sm btn-outline-primary">
-                                                    <i class="bi bi-eye"></i> View Results
-                                                </a>
-                                                <a th:href="@{/student/performance-analytics/{id}(id=${activity.submissionId})}" 
-                                                   class="btn btn-sm btn-outline-success">
-                                                    <i class="bi bi-graph-up"></i> Analytics
-                                                </a>
-                                            </div>
+                                            <a th:if="${activity.status == 'completed'}" 
+                                               th:href="@{/student/results/{id}(id=${activity.submissionId})}" 
+                                               class="btn btn-sm btn-primary w-100">
+                                                <i class="bi bi-eye"></i> View Results
+                                            </a>
                                         </div>
                                     </div>
                                 </div>
@@ -220,12 +215,12 @@
                                             <a th:href="@{/student/results/{id}(id=${submission.id})}" 
                                                class="btn btn-outline-primary"
                                                title="View Results">
-                                                <i class="bi bi-eye"></i>
+                                                <i class="bi bi-eye"></i> View
                                             </a>
-                                            <a th:href="@{/student/performance-analytics/{id}(id=${submission.id})}" 
+                                            <a th:href="@{/student/download-result/{id}(id=${submission.id})}" 
                                                class="btn btn-outline-success"
-                                               title="View Analytics">
-                                                <i class="bi bi-graph-up"></i>
+                                               title="Download Results">
+                                                <i class="bi bi-download"></i> Download
                                             </a>
                                         </div>
                                     </td>
