@@ -43,7 +43,16 @@
                             <div class="row mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold text-info">Subject Name *</label>
-                                    <input class="form-control" type="text" name="subject" placeholder="e.g., Mathematics, Science" required>
+                                    <select class="form-select" name="subject" id="subjectSelect" required>
+                                        <option value="">Select or type new subject</option>
+                                        <option th:each="subject : ${subjects}" 
+                                                th:value="${subject.subjectName}" 
+                                                th:text="${subject.subjectName}">
+                                        </option>
+                                        <option value="__new__">➕ Add New Subject</option>
+                                    </select>
+                                    <input class="form-control mt-2" type="text" id="newSubjectInput" 
+                                           placeholder="Enter new subject name" style="display: none;">
                                 </div>
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold text-info">Activity Type *</label>
@@ -56,6 +65,25 @@
                                     </select>
                                 </div>
                             </div>
+                            
+                            <script>
+                                document.getElementById('subjectSelect').addEventListener('change', function() {
+                                    const newSubjectInput = document.getElementById('newSubjectInput');
+                                    const subjectSelect = document.getElementById('subjectSelect');
+                                    
+                                    if (this.value === '__new__') {
+                                        newSubjectInput.style.display = 'block';
+                                        newSubjectInput.required = true;
+                                        subjectSelect.removeAttribute('name');
+                                        newSubjectInput.setAttribute('name', 'subject');
+                                    } else {
+                                        newSubjectInput.style.display = 'none';
+                                        newSubjectInput.required = false;
+                                        newSubjectInput.removeAttribute('name');
+                                        subjectSelect.setAttribute('name', 'subject');
+                                    }
+                                });
+                            </script>
                             
                             <label class="form-label fw-bold text-primary">Select Test Questionnaire (PDF or CSV) *</label>
                             <input class="form-control mb-3" type="file" name="examCreated" accept=".pdf,.csv" required>
@@ -85,7 +113,62 @@
                 </div>
             </div>
 
-            <div class="card upload-card p-4 shadow-sm border-0">
+            <!-- Subject Management Section -->
+            <div class="card upload-card p-4 shadow-sm border-0 mt-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <h5 class="text-primary mb-0">📚 Subject Management</h5>
+                        <p class="small text-muted mb-0">Create and manage subjects for organizing your exams.</p>
+                    </div>
+                </div>
+                
+                <form th:action="@{/teacher/create-subject}" method="post" class="mb-3">
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <input type="text" name="subjectName" class="form-control" 
+                                   placeholder="Subject name (e.g., Mathematics)" required>
+                        </div>
+                        <div class="col-md-5">
+                            <input type="text" name="description" class="form-control" 
+                                   placeholder="Description (optional)">
+                        </div>
+                        <div class="col-md-2">
+                            <button type="submit" class="btn btn-primary w-100">
+                                <i class="bi bi-plus-circle"></i> Add
+                            </button>
+                        </div>
+                    </div>
+                </form>
+                
+                <div th:if="${#lists.isEmpty(subjects)}" class="text-center py-3">
+                    <p class="text-muted italic">No subjects created yet.</p>
+                </div>
+                
+                <div th:if="${!#lists.isEmpty(subjects)}" class="row g-2">
+                    <div th:each="subject : ${subjects}" class="col-md-6">
+                        <div class="card border-primary" style="border-left-width: 4px !important;">
+                            <div class="card-body py-2 px-3">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <h6 class="mb-0" th:text="${subject.subjectName}">Subject Name</h6>
+                                        <small class="text-muted" th:text="${subject.description}" 
+                                               th:if="${subject.description != null && !subject.description.isEmpty()}">Description</small>
+                                    </div>
+                                    <form th:action="@{/teacher/delete-subject}" method="post" style="display: inline;">
+                                        <input type="hidden" name="subjectId" th:value="${subject.id}">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                                onclick="return confirm('Delete this subject?')">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card upload-card p-4 shadow-sm border-0 mt-4">
                 <h5 class="text-primary mb-3">Student Enrollment</h5>
                 <p class="small text-muted">Enroll students to distribute processed exams directly to their accounts.</p>
                 

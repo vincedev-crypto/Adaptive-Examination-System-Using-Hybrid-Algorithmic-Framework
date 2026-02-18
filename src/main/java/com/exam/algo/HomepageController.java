@@ -3,9 +3,11 @@ package com.exam.algo;
 import com.exam.entity.EnrolledStudent;
 import com.exam.entity.ExamSubmission;
 import com.exam.entity.User;
+import com.exam.entity.Subject;
 import com.exam.repository.EnrolledStudentRepository;
 import com.exam.repository.ExamSubmissionRepository;
 import com.exam.repository.UserRepository;
+import com.exam.repository.SubjectRepository;
 import com.exam.service.AnswerKeyService;
 import com.exam.service.FisherYatesService;
 import com.lowagie.text.Document;
@@ -54,6 +56,9 @@ public class HomepageController {
     
     @Autowired
     private ExamSubmissionRepository examSubmissionRepository;
+    
+    @Autowired
+    private SubjectRepository subjectRepository;
 
     private static Map<String, List<String>> distributedExams = new HashMap<>();
     
@@ -211,6 +216,11 @@ public class HomepageController {
         model.addAttribute("submissions", submissions);
         model.addAttribute("uploadedExams", new ArrayList<>(uploadedExams.values()));
         model.addAttribute("distributedExamStatus", distributedExamStatus);
+        
+        // Get subjects for this teacher
+        List<Subject> subjects = subjectRepository.findByTeacherEmail(teacherEmail);
+        model.addAttribute("subjects", subjects);
+        
         return "homepage";
     }
 
@@ -242,6 +252,36 @@ public class HomepageController {
     @Transactional
     public String removeStudent(@RequestParam Long enrollmentId) {
         enrolledStudentRepository.deleteById(enrollmentId);
+        return "redirect:/teacher/homepage";
+    }
+    
+    @PostMapping("/create-subject")
+    public String createSubject(@RequestParam String subjectName,
+                               @RequestParam(required = false) String description,
+                               java.security.Principal principal) {
+        String teacherEmail = principal.getName();
+        
+        // Check if subject already exists for this teacher
+        if (!subjectRepository.existsBySubjectNameAndTeacherEmail(subjectName, teacherEmail)) {
+            Subject subject = new Subject(subjectName, description, teacherEmail);
+            subjectRepository.save(subject);
+            System.out.println("✅ Subject created: " + subjectName + " by " + teacherEmail);
+        }
+        
+        return "redirect:/teacher/homepage";
+    }
+    
+    @PostMapping("/delete-subject")
+    public String deleteSubject(@RequestParam Long subjectId, java.security.Principal principal) {
+        String teacherEmail = principal.getName();
+        
+        // Verify the subject belongs to this teacher before deleting
+        Optional<Subject> subjectOpt = subjectRepository.findById(subjectId);
+        if (subjectOpt.isPresent() && subjectOpt.get().getTeacherEmail().equals(teacherEmail)) {
+            subjectRepository.deleteById(subjectId);
+            System.out.println("🗑️ Subject deleted: " + subjectOpt.get().getSubjectName());
+        }
+        
         return "redirect:/teacher/homepage";
     }
 
