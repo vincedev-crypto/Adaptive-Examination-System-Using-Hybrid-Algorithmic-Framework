@@ -8,6 +8,7 @@ import com.exam.repository.ExamSubmissionRepository;
 import com.exam.repository.UserRepository;
 import com.exam.service.AnswerKeyService;
 import com.exam.service.IRT3PLService;
+import com.exam.service.RandomForestAnalyticsService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -23,6 +24,9 @@ public class StudentController {
 
     @Autowired
     private RandomForestService randomForestService;
+    
+    @Autowired
+    private RandomForestAnalyticsService randomForestAnalyticsService;
     
     @Autowired
     private IRT3PLService irt3PLService;
@@ -49,8 +53,13 @@ public class StudentController {
         model.addAttribute("studentEmail", studentId);
         model.addAttribute("hasExam", getDistributedExams().containsKey(studentId));
         
-        // Check if student has submitted exams
+        // Check if student has submitted exams - sorted by latest first
         List<ExamSubmission> submissions = examSubmissionRepository.findByStudentEmail(studentId);
+        
+        // Sort by submitted date - latest first (null-safe)
+        submissions.sort(Comparator.comparing(ExamSubmission::getSubmittedAt, 
+                                             Comparator.nullsLast(Comparator.reverseOrder())));
+        
         model.addAttribute("hasSubmission", !submissions.isEmpty());
         model.addAttribute("submissions", submissions);
         
@@ -367,6 +376,106 @@ public class StudentController {
             // Calculate Random Forest Analytics
             analytics = randomForestService.calculateStudentAnalytics(studentId, answerList, key, null);
             
+            // ===============================================
+            // TRUE RANDOM FOREST ALGORITHM INTEGRATION
+            // ===============================================
+            System.out.println("\n🌲 ========== RANDOM FOREST ANALYSIS ==========");
+            
+            // Get question topics and difficulties from session
+            @SuppressWarnings("unchecked")
+            List<String> questionTopics = (List<String>) session.getAttribute("questionTopics_" + studentId);
+            @SuppressWarnings("unchecked")
+            List<String> questionDifficulties = (List<String>) session.getAttribute("questionDifficulties_" + studentId);
+            
+            // Default values if not found in session
+            if (questionTopics == null) {
+                questionTopics = new ArrayList<>();
+                for (int i = 0; i < key.size(); i++) {
+                    questionTopics.add("General");  // Default topic
+                }
+            }
+            
+            if (questionDifficulties == null) {
+                questionDifficulties = new ArrayList<>();
+                for (int i = 0; i < key.size(); i++) {
+                    // Infer difficulty from question position (first 30% easy, next 50% medium, last 20% hard)
+                    int totalQuestions = key.size();
+                    if (i < totalQuestions * 0.3) {
+                        questionDifficulties.add("Easy");
+                    } else if (i < totalQuestions * 0.8) {
+                        questionDifficulties.add("Medium");
+                    } else {
+                        questionDifficulties.add("Hard");
+                    }
+                }
+            }
+            
+            // Create a temporary submission object for feature extraction
+            ExamSubmission tempSubmission = new ExamSubmission();
+            tempSubmission.setScore(score);
+            tempSubmission.setTotalQuestions(key.size());
+            tempSubmission.setPercentage(percentage);
+            
+            // Set basic analytics from old RandomForestService (for backwards compatibility)
+            if (analytics != null) {
+                tempSubmission.setAccuracy(validateDouble(analytics.getAccuracy()));
+                tempSubmission.setTimeEfficiency(validateDouble(analytics.getTimeEfficiency()));
+                tempSubmission.setConfidence(validateDouble(analytics.getConfidence()));
+            } else {
+                // Calculate basic metrics if analytics is null
+                tempSubmission.setAccuracy(percentage);
+                tempSubmission.setTimeEfficiency(50.0);  // Default
+                tempSubmission.setConfidence(100.0);     // All questions attempted
+            }
+            
+            // Build answer details JSON for feature extraction
+            StringBuilder answerDetailsJson = new StringBuilder();
+            for (int i = 0; i < answerDetails.size(); i++) {
+                Map<String, Object> detail = answerDetails.get(i);
+                answerDetailsJson.append(detail.get("questionNumber")).append("|")
+                                .append(detail.get("studentAnswer")).append("|")
+                                .append(detail.get("correctAnswer")).append("|")
+                                .append(detail.get("isCorrect"));
+                if (i < answerDetails.size() - 1) {
+                    answerDetailsJson.append(";");
+                }
+            }
+            
+            // Extract features using TRUE Random Forest formulas
+            RandomForestAnalyticsService.StudentFeatures features = 
+                randomForestAnalyticsService.extractFeatures(
+                    tempSubmission,
+                    questionTopics,
+                    questionDifficulties,
+                    answerDetailsJson.toString()
+                );
+            
+            // Generate comprehensive Random Forest report
+            Map<String, Object> rfReport = randomForestAnalyticsService.generateStudentReport(features);
+            
+            System.out.println("📊 FEATURE EXTRACTION:");
+            System.out.println("   Topic Mastery (Primary): " + String.format("%.2f%%", rfReport.get("topicMasteryPrimary")));
+            System.out.println("   Topic Mastery (Secondary): " + String.format("%.2f%%", rfReport.get("topicMasterySecondary")));
+            System.out.println("   Topic Mastery (General): " + String.format("%.2f%%", rfReport.get("topicMasteryGeneral")));
+            System.out.println("   Difficulty Resilience: " + String.format("%.2f%%", rfReport.get("difficultyResilience")));
+            System.out.println("   Accuracy: " + String.format("%.2f%%", rfReport.get("accuracy")));
+            System.out.println("   Time Efficiency: " + String.format("%.2f%%", rfReport.get("timeEfficiency")));
+            System.out.println("   Confidence: " + String.format("%.2f%%", rfReport.get("confidence")));
+            System.out.println("\n🎯 RANDOM FOREST PREDICTION:");
+            System.out.println("   Overall Score: " + String.format("%.2f%%", rfReport.get("overallScore")));
+            System.out.println("   Category: " + rfReport.get("predictedCategory"));
+            System.out.println("   Strengths: " + rfReport.get("strengths"));
+            System.out.println("   Weaknesses: " + rfReport.get("weaknesses"));
+            System.out.println("   Recommendations: " + rfReport.get("recommendations"));
+            System.out.println("==============================================\n");
+            
+            // Store Random Forest report in session for display
+            session.setAttribute("randomForestReport", rfReport);
+            
+            // ===============================================
+            // END RANDOM FOREST INTEGRATION
+            // ===============================================
+            
             // Calculate IRT 3PL Ability Estimate
             List<Boolean> responses = new ArrayList<>();
             for (String ans : answerList) {
@@ -407,8 +516,16 @@ public class StudentController {
             submission.setSubmittedAt(LocalDateTime.now());
             submission.setReleasedAt(LocalDateTime.now()); // Released immediately
             
-            // Store analytics (validate to prevent NaN values)
-            if (analytics != null) {
+            // Store TRUE RANDOM FOREST analytics (validate to prevent NaN values)
+            if (rfReport != null) {
+                submission.setTopicMastery(validateDouble((Double) rfReport.get("topicMasteryGeneral")));
+                submission.setDifficultyResilience(validateDouble((Double) rfReport.get("difficultyResilience")));
+                submission.setAccuracy(validateDouble((Double) rfReport.get("accuracy")));
+                submission.setTimeEfficiency(validateDouble((Double) rfReport.get("timeEfficiency")));
+                submission.setConfidence(validateDouble((Double) rfReport.get("confidence")));
+                submission.setPerformanceCategory((String) rfReport.get("predictedCategory"));
+            } else if (analytics != null) {
+                // Fallback to old analytics if Random Forest report failed
                 submission.setTopicMastery(validateDouble(analytics.getTopicMastery()));
                 submission.setDifficultyResilience(validateDouble(analytics.getDifficultyResilience()));
                 submission.setAccuracy(validateDouble(analytics.getAccuracy()));
@@ -609,5 +726,130 @@ public class StudentController {
         }
         
         return response;
+    }
+    
+    /**
+     * Display Random Forest Performance Analytics for a specific submission
+     */
+    @GetMapping("/performance-analytics/{submissionId}")
+    public String viewPerformanceAnalytics(@PathVariable Long submissionId, Model model, java.security.Principal principal) {
+        String studentId = principal.getName();
+        
+        // Fetch the submission
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
+        
+        if (submissionOpt.isEmpty() || !submissionOpt.get().getStudentEmail().equals(studentId)) {
+            model.addAttribute("error", "Submission not found or access denied");
+            return "redirect:/student/dashboard";
+        }
+        
+        ExamSubmission submission = submissionOpt.get();
+        
+        // Add submission to model
+        model.addAttribute("submission", submission);
+        
+        // Calculate strengths and weaknesses
+        List<String> strengths = new ArrayList<>();
+        List<String> weaknesses = new ArrayList<>();
+        
+        if (submission.getTopicMastery() >= 70) strengths.add("Topic Mastery");
+        else weaknesses.add("Topic Mastery");
+        
+        if (submission.getDifficultyResilience() >= 70) strengths.add("Difficulty Resilience");
+        else weaknesses.add("Difficulty Resilience");
+        
+        if (submission.getAccuracy() >= 70) strengths.add("Accuracy");
+        else weaknesses.add("Accuracy");
+        
+        if (submission.getTimeEfficiency() >= 70) strengths.add("Time Efficiency");
+        else weaknesses.add("Time Efficiency");
+        
+        if (submission.getConfidence() >= 70) strengths.add("Confidence");
+        else weaknesses.add("Confidence");
+        
+        model.addAttribute("strengths", strengths);
+        model.addAttribute("weaknesses", weaknesses);
+        
+        // Generate personalized recommendations
+        List<String> recommendations = generateRecommendations(submission);
+        model.addAttribute("recommendations", recommendations);
+        
+        // Calculate overall performance
+        double overallScore = (submission.getTopicMastery() + 
+                               submission.getDifficultyResilience() + 
+                               submission.getAccuracy() + 
+                               submission.getTimeEfficiency() + 
+                               submission.getConfidence()) / 5.0;
+        model.addAttribute("overallScore", String.format("%.2f", overallScore));
+        
+        // Determine performance message
+        String performanceMessage;
+        if (overallScore >= 80) {
+            performanceMessage = "Excellent performance! You're demonstrating strong mastery across all dimensions.";
+        } else if (overallScore >= 60) {
+            performanceMessage = "Good work! Focus on improving weak areas to reach excellent performance.";
+        } else {
+            performanceMessage = "Keep practicing! Review the recommendations below to improve your skills.";
+        }
+        model.addAttribute("performanceMessage", performanceMessage);
+        
+        System.out.println("📊 Displaying performance analytics for submission: " + submissionId);
+        System.out.println("   Overall Score: " + String.format("%.2f", overallScore));
+        System.out.println("   Category: " + submission.getPerformanceCategory());
+        System.out.println("   Strengths: " + strengths);
+        System.out.println("   Weaknesses: " + weaknesses);
+        
+        return "student-performance-analytics";
+    }
+    
+    /**
+     * Generate personalized recommendations based on performance
+     */
+    private List<String> generateRecommendations(ExamSubmission submission) {
+        List<String> recommendations = new ArrayList<>();
+        
+        // Topic Mastery recommendations
+        if (submission.getTopicMastery() < 70) {
+            recommendations.add("Review fundamental concepts in " + submission.getExamName() + " topics");
+            recommendations.add("Create concept maps to visualize relationships between topics");
+        }
+        
+        // Difficulty Resilience recommendations
+        if (submission.getDifficultyResilience() < 70) {
+            recommendations.add("Practice solving harder problems to build resilience");
+            recommendations.add("Don't skip challenging questions - use them as learning opportunities");
+        }
+        
+        // Accuracy recommendations
+        if (submission.getAccuracy() < 70) {
+            recommendations.add("Double-check your answers before submitting");
+            recommendations.add("Focus on understanding concepts rather than memorization");
+        }
+        
+        // Time Efficiency recommendations
+        if (submission.getTimeEfficiency() < 70) {
+            recommendations.add("Practice time management with timed mock exams");
+            recommendations.add("Identify and skip difficult questions initially, return to them later");
+        }
+        
+        // Confidence recommendations
+        if (submission.getConfidence() < 70) {
+            recommendations.add("Build confidence through regular practice and review");
+            recommendations.add("Join study groups to discuss challenging concepts");
+        }
+        
+        // Add positive reinforcement if performance is good
+        if (submission.getTopicMastery() >= 70 && submission.getAccuracy() >= 70) {
+            recommendations.add("Keep up the great work! Your solid foundation will serve you well");
+        }
+        
+        // If no weaknesses found, add general encouragement
+        if (recommendations.isEmpty()) {
+            recommendations.add("Excellent work! Continue challenging yourself with advanced topics");
+            recommendations.add("Consider helping peers to reinforce your understanding");
+            recommendations.add("Explore related topics to broaden your knowledge base");
+        }
+        
+        return recommendations;
     }
 }

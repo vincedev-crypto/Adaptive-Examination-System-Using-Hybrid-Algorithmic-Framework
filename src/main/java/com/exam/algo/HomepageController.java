@@ -27,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpSession;
 import java.io.*;
 import java.security.SecureRandom;
@@ -121,6 +122,32 @@ public class HomepageController {
     // Store for unlocked exams (studentEmail -> examName)
     private static Map<String, Set<String>> unlockedExams = new HashMap<>();
 
+    /**
+     * Initialize null boolean fields in existing ExamSubmission records
+     */
+    @PostConstruct
+    public void initializeNullBooleans() {
+        try {
+            List<ExamSubmission> submissions = examSubmissionRepository.findAll();
+            boolean needsUpdate = false;
+            
+            for (ExamSubmission submission : submissions) {
+                // Check if isGraded is null (it's a Boolean object in the entity)
+                if (submission.isGraded() == null) {
+                    submission.setGraded(false);
+                    needsUpdate = true;
+                }
+            }
+            
+            if (needsUpdate) {
+                examSubmissionRepository.saveAll(submissions);
+                System.out.println("✅ Initialized null boolean fields in " + submissions.size() + " ExamSubmission records");
+            }
+        } catch (Exception e) {
+            System.err.println("⚠️ Warning: Could not initialize null boolean fields: " + e.getMessage());
+        }
+    }
+
     // Public getter for accessing distributed exams from other controllers
     public static Map<String, List<String>> getDistributedExams() {
         return distributedExams;
@@ -152,8 +179,10 @@ public class HomepageController {
         // Fetch enrolled students for this teacher
         List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
         
-        // Fetch exam submissions
+        // Fetch exam submissions and sort by latest first
         List<ExamSubmission> submissions = examSubmissionRepository.findAll();
+        submissions.sort(Comparator.comparing(ExamSubmission::getSubmittedAt, 
+                                             Comparator.nullsLast(Comparator.reverseOrder())));
         
         // Create a map to track distributed exams and their status
         Map<String, Map<String, Object>> distributedExamStatus = new HashMap<>();
@@ -341,6 +370,11 @@ public class HomepageController {
             
             // Store difficulty levels (already extracted from CSV)
             session.setAttribute("questionDifficulties_" + targetStudent, finalDifficulties);
+            
+            // Extract and store question topics for Random Forest analysis
+            List<String> questionTopics = extractTopicsFromQuestions(finalQuestions, selectedExam.getSubject());
+            session.setAttribute("questionTopics_" + targetStudent, questionTopics);
+            System.out.println("📚 Extracted " + questionTopics.size() + " question topics for Random Forest");
             
             // Store exam metadata for student display
             session.setAttribute("examSubject_" + targetStudent, selectedExam.getSubject());
@@ -1448,6 +1482,10 @@ public class HomepageController {
     public ResponseEntity<byte[]> downloadResults() throws IOException {
         List<ExamSubmission> submissions = examSubmissionRepository.findAll();
         
+        // Sort by latest first (null-safe)
+        submissions.sort(Comparator.comparing(ExamSubmission::getSubmittedAt, 
+                                             Comparator.nullsLast(Comparator.reverseOrder())));
+        
         if (submissions.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
@@ -1628,7 +1666,8 @@ public class HomepageController {
         // Get all submissions for these students
         List<ExamSubmission> allSubmissions = examSubmissionRepository.findAll().stream()
                 .filter(s -> studentEmails.contains(s.getStudentEmail()))
-                .sorted((a, b) -> b.getSubmittedAt().compareTo(a.getSubmittedAt()))
+                .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, 
+                                            Comparator.nullsLast(Comparator.reverseOrder())))
                 .collect(Collectors.toList());
         
         // Separate pending and graded
@@ -1864,7 +1903,8 @@ public class HomepageController {
         // Get all submissions for enrolled students
         List<ExamSubmission> allSubmissions = examSubmissionRepository.findAll().stream()
                 .filter(s -> studentEmails.contains(s.getStudentEmail()))
-                .sorted((a, b) -> b.getSubmittedAt().compareTo(a.getSubmittedAt()))
+                .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, 
+                                            Comparator.nullsLast(Comparator.reverseOrder())))
                 .collect(Collectors.toList());
         
         // Apply filters
@@ -2047,4 +2087,168 @@ public class HomepageController {
         }
         return "redirect:/teacher/view-results";
     }
+    
+    /**
+     * Extract topics from questions for Random Forest analysis
+     * This analyzes question text to determine subject areas
+     */
+    private List<String> extractTopicsFromQuestions(List<String> questions, String defaultSubject) {
+        List<String> topics = new ArrayList<>();
+        
+        // Keywords for different topics
+        Map<String, List<String>> topicKeywords = new HashMap<>();
+        topicKeywords.put("Security", Arrays.asList("phishing", "malware", "firewall", "encryption", "authentication", "vulnerability", "attack", "threat", "password", "zero-day"));
+        topicKeywords.put("Networking", Arrays.asList("router", "switch", "ip", "tcp", "udp", "osi", "protocol", "network", "dns", "dhcp", "subnet", "gateway"));
+        topicKeywords.put("Programming", Arrays.asList("python", "java", "code", "function", "variable", "loop", "algorithm", "syntax", "debug", "compile"));
+        topicKeywords.put("Operating Systems", Arrays.asList("windows", "linux", "mac", "os", "kernel", "process", "thread", "memory", "file system"));
+        topicKeywords.put("Database", Arrays.asList("sql", "database", "query", "table", "index", "primary key", "foreign key", "join", "select"));
+        topicKeywords.put("Hardware", Arrays.asList("cpu", "ram", "hard drive", "ssd", "motherboard", "gpu", "memory", "storage", "processor"));
+        topicKeywords.put("Cloud", Arrays.asList("cloud", "aws", "azure", "saas", "paas", "iaas", "virtual", "container", "docker"));
+        topicKeywords.put("Web Development", Arrays.asList("html", "css", "javascript", "http", "url", "browser", "website", "web", "frontend", "backend"));
+        
+        for (String question : questions) {
+            String questionLower = question.toLowerCase();
+            String detectedTopic = defaultSubject != null ? defaultSubject : "General";
+            int maxMatches = 0;
+            
+            // Find topic with most keyword matches
+            for (Map.Entry<String, List<String>> entry : topicKeywords.entrySet()) {
+                int matches = 0;
+                for (String keyword : entry.getValue()) {
+                    if (questionLower.contains(keyword)) {
+                        matches++;
+                    }
+                }
+                if (matches > maxMatches) {
+                    maxMatches = matches;
+                    detectedTopic = entry.getKey();
+                }
+            }
+            
+            topics.add(detectedTopic);
+        }
+        
+        return topics;
+    }
+    
+    /**
+     * Teacher view of student's Random Forest Performance Analytics
+     */
+    @GetMapping("/teacher/performance-analytics/{submissionId}")
+    public String viewTeacherPerformanceAnalytics(@PathVariable Long submissionId, Model model) {
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
+        
+        if (submissionOpt.isEmpty()) {
+            model.addAttribute("error", "Submission not found");
+            return "redirect:/teacher/homepage";
+        }
+        
+        ExamSubmission submission = submissionOpt.get();
+        
+        // Add submission to model
+        model.addAttribute("submission", submission);
+        
+        // Calculate strengths and weaknesses
+        List<String> strengths = new ArrayList<>();
+        List<String> weaknesses = new ArrayList<>();
+        
+        if (submission.getTopicMastery() >= 70) strengths.add("Topic Mastery");
+        else weaknesses.add("Topic Mastery");
+        
+        if (submission.getDifficultyResilience() >= 70) strengths.add("Difficulty Resilience");
+        else weaknesses.add("Difficulty Resilience");
+        
+        if (submission.getAccuracy() >= 70) strengths.add("Accuracy");
+        else weaknesses.add("Accuracy");
+        
+        if (submission.getTimeEfficiency() >= 70) strengths.add("Time Efficiency");
+        else weaknesses.add("Time Efficiency");
+        
+        if (submission.getConfidence() >= 70) strengths.add("Confidence");
+        else weaknesses.add("Confidence");
+        
+        model.addAttribute("strengths", strengths);
+        model.addAttribute("weaknesses", weaknesses);
+        
+        // Generate personalized recommendations
+        List<String> recommendations = generateTeacherRecommendations(submission);
+        model.addAttribute("recommendations", recommendations);
+        
+        // Calculate overall performance
+        double overallScore = (submission.getTopicMastery() + 
+                               submission.getDifficultyResilience() + 
+                               submission.getAccuracy() + 
+                               submission.getTimeEfficiency() + 
+                               submission.getConfidence()) / 5.0;
+        model.addAttribute("overallScore", String.format("%.2f", overallScore));
+        
+        // Determine performance message
+        String performanceMessage;
+        if (overallScore >= 80) {
+            performanceMessage = "Student demonstrates excellent performance across all dimensions.";
+        } else if (overallScore >= 60) {
+            performanceMessage = "Student shows good understanding but needs improvement in weak areas.";
+        } else {
+            performanceMessage = "Student requires additional support and intervention.";
+        }
+        model.addAttribute("performanceMessage", performanceMessage);
+        
+        System.out.println("📊 Teacher viewing analytics for submission: " + submissionId);
+        System.out.println("   Student: " + submission.getStudentEmail());
+        System.out.println("   Overall Score: " + String.format("%.2f", overallScore));
+        System.out.println("   Category: " + submission.getPerformanceCategory());
+        
+        return "student-performance-analytics";
+    }
+    
+    /**
+     * Generate teacher-focused recommendations
+     */
+    private List<String> generateTeacherRecommendations(ExamSubmission submission) {
+        List<String> recommendations = new ArrayList<>();
+        
+        // Topic Mastery recommendations
+        if (submission.getTopicMastery() < 70) {
+            recommendations.add("Provide additional learning materials on " + submission.getExamName() + " topics");
+            recommendations.add("Schedule one-on-one tutoring sessions to address knowledge gaps");
+        }
+        
+        // Difficulty Resilience recommendations
+        if (submission.getDifficultyResilience() < 70) {
+            recommendations.add("Assign more challenging practice problems to build resilience");
+            recommendations.add("Encourage problem-solving strategies and critical thinking exercises");
+        }
+        
+        // Accuracy recommendations
+        if (submission.getAccuracy() < 70) {
+            recommendations.add("Review fundamental concepts with the student");
+            recommendations.add("Provide guided practice with immediate feedback");
+        }
+        
+        // Time Efficiency recommendations
+        if (submission.getTimeEfficiency() < 70) {
+            recommendations.add("Teach time management strategies for exam-taking");
+            recommendations.add("Provide timed practice sessions to improve pacing");
+        }
+        
+        // Confidence recommendations
+        if (submission.getConfidence() < 70) {
+            recommendations.add("Encourage student participation and build confidence through positive reinforcement");
+            recommendations.add("Assign easier questions first to build momentum");
+        }
+        
+        // Add positive reinforcement if performance is good
+        if (submission.getTopicMastery() >= 70 && submission.getAccuracy() >= 70) {
+            recommendations.add("Student shows strong foundational knowledge - consider advanced topics");
+        }
+        
+        // If no weaknesses found
+        if (recommendations.isEmpty()) {
+            recommendations.add("Student demonstrates excellent performance - maintain current approach");
+            recommendations.add("Consider peer tutoring opportunities for this high-performing student");
+        }
+        
+        return recommendations;
+    }
 }
+

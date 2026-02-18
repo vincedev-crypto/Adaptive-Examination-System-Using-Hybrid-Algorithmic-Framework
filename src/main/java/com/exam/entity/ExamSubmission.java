@@ -164,7 +164,7 @@ public class ExamSubmission {
      * Get final score (auto + manual if graded, otherwise just auto score)
      */
     public int getFinalScore() {
-        if (isGraded && manualScore != null) {
+        if (isGraded() && manualScore != null) {
             return score + manualScore;
         }
         return score;
