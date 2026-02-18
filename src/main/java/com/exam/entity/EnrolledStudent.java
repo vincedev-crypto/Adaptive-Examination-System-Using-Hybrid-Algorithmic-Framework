@@ -21,6 +21,12 @@ public class EnrolledStudent {
     private String studentName;
     
     @Column(nullable = false)
+    private Long subjectId;
+    
+    @Column
+    private String subjectName;
+    
+    @Column(nullable = false)
     private LocalDateTime enrolledAt;
     
     // Constructors
@@ -32,6 +38,15 @@ public class EnrolledStudent {
         this.teacherEmail = teacherEmail;
         this.studentEmail = studentEmail;
         this.studentName = studentName;
+        this.enrolledAt = LocalDateTime.now();
+    }
+    
+    public EnrolledStudent(String teacherEmail, String studentEmail, String studentName, Long subjectId, String subjectName) {
+        this.teacherEmail = teacherEmail;
+        this.studentEmail = studentEmail;
+        this.studentName = studentName;
+        this.subjectId = subjectId;
+        this.subjectName = subjectName;
         this.enrolledAt = LocalDateTime.now();
     }
     
@@ -47,6 +62,12 @@ public class EnrolledStudent {
     
     public String getStudentName() { return studentName; }
     public void setStudentName(String studentName) { this.studentName = studentName; }
+    
+    public Long getSubjectId() { return subjectId; }
+    public void setSubjectId(Long subjectId) { this.subjectId = subjectId; }
+    
+    public String getSubjectName() { return subjectName; }
+    public void setSubjectName(String subjectName) { this.subjectName = subjectName; }
     
     public LocalDateTime getEnrolledAt() { return enrolledAt; }
     public void setEnrolledAt(LocalDateTime enrolledAt) { this.enrolledAt = enrolledAt; }

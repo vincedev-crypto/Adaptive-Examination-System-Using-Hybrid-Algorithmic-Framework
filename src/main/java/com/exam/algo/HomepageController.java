@@ -225,12 +225,22 @@ public class HomepageController {
     }
 
     @PostMapping("/enroll-student")
-    public String enrollStudent(@RequestParam String studentEmail, java.security.Principal principal) {
+    public String enrollStudent(@RequestParam String studentEmail,
+                               @RequestParam Long subjectId,
+                               java.security.Principal principal) {
         String teacherEmail = principal.getName();
         
-        // Check if already enrolled
+        // Get subject details
+        Optional<Subject> subjectOpt = subjectRepository.findById(subjectId);
+        if (subjectOpt.isEmpty() || !subjectOpt.get().getTeacherEmail().equals(teacherEmail)) {
+            return "redirect:/teacher/homepage";
+        }
+        
+        Subject subject = subjectOpt.get();
+        
+        // Check if already enrolled in this subject
         Optional<EnrolledStudent> existing = enrolledStudentRepository
-            .findByTeacherEmailAndStudentEmail(teacherEmail, studentEmail);
+            .findByTeacherEmailAndStudentEmailAndSubjectId(teacherEmail, studentEmail, subjectId);
         
         if (existing.isEmpty()) {
             // Get student name
@@ -239,9 +249,12 @@ public class HomepageController {
                 EnrolledStudent enrollment = new EnrolledStudent(
                     teacherEmail,
                     studentEmail,
-                    studentOpt.get().getFullName()
+                    studentOpt.get().getFullName(),
+                    subjectId,
+                    subject.getSubjectName()
                 );
                 enrolledStudentRepository.save(enrollment);
+                System.out.println("✅ Enrolled " + studentEmail + " in " + subject.getSubjectName());
             }
         }
         
