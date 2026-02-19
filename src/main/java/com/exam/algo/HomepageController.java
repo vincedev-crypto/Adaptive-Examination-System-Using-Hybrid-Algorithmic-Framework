@@ -237,6 +237,116 @@ public class HomepageController {
         return "homepage";
     }
 
+    /**
+     * Show the manage questions page for a specific exam
+     */
+    @GetMapping("/manage-questions/{examId}")
+    public String showManageQuestions(@PathVariable String examId, Model model) {
+        UploadedExam exam = uploadedExams.get(examId);
+        
+        if (exam == null) {
+            return "redirect:/teacher/homepage";
+        }
+        
+        model.addAttribute("exam", exam);
+        return "manage-questions";
+    }
+    
+    /**
+     * Add a new question to an existing exam
+     */
+    @PostMapping("/add-question")
+    public String addQuestion(@RequestParam String examId,
+                             @RequestParam String questionText,
+                             @RequestParam String answer,
+                             @RequestParam String difficulty,
+                             Model model,
+                             org.springframework.web.servlet.mvc.support.RedirectAttributes redirectAttributes) {
+        UploadedExam exam = uploadedExams.get(examId);
+        
+        if (exam == null) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Exam not found!");
+            return "redirect:/teacher/homepage";
+        }
+        
+        try {
+            // Add the new question to the existing lists
+            exam.getQuestions().add(questionText);
+            exam.getDifficulties().add(difficulty);
+            
+            // Add answer to the answer key (using the next question number)
+            int questionNumber = exam.getQuestions().size() - 1; // 0-based index
+            exam.getAnswerKey().put(questionNumber, answer);
+            
+            redirectAttributes.addFlashAttribute("successMessage", 
+                "Question added successfully! Total questions: " + exam.getQuestions().size());
+            
+            System.out.println("✅ Added question to exam: " + exam.getExamName() + 
+                             " | Total: " + exam.getQuestions().size() + " questions");
+            
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("errorMessage", 
+                "Error adding question: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return "redirect:/teacher/manage-questions/" + examId;
+    }
+    
+    /**
+     * Delete a question from an existing exam
+     */
+    @PostMapping("/delete-question")
+    public String deleteQuestion(@RequestParam String examId,
+                                @RequestParam int questionIndex,
+                                org.springframework.web.servlet.mvc.support.RedirectAttributes redirectAttributes) {
+        UploadedExam exam = uploadedExams.get(examId);
+        
+        if (exam == null) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Exam not found!");
+            return "redirect:/teacher/homepage";
+        }
+        
+        try {
+            if (questionIndex >= 0 && questionIndex < exam.getQuestions().size()) {
+                // Remove question and difficulty at the specified index
+                exam.getQuestions().remove(questionIndex);
+                exam.getDifficulties().remove(questionIndex);
+                
+                // Rebuild answer key with new indices
+                Map<Integer, String> newAnswerKey = new HashMap<>();
+                for (Map.Entry<Integer, String> entry : exam.getAnswerKey().entrySet()) {
+                    int oldIndex = entry.getKey();
+                    if (oldIndex < questionIndex) {
+                        // Keep indices before deleted question
+                        newAnswerKey.put(oldIndex, entry.getValue());
+                    } else if (oldIndex > questionIndex) {
+                        // Shift down indices after deleted question
+                        newAnswerKey.put(oldIndex - 1, entry.getValue());
+                    }
+                    // Skip the deleted question index
+                }
+                exam.getAnswerKey().clear();
+                exam.getAnswerKey().putAll(newAnswerKey);
+                
+                redirectAttributes.addFlashAttribute("successMessage", 
+                    "Question deleted successfully! Total questions: " + exam.getQuestions().size());
+                
+                System.out.println("✅ Deleted question from exam: " + exam.getExamName() + 
+                                 " | Remaining: " + exam.getQuestions().size() + " questions");
+            } else {
+                redirectAttributes.addFlashAttribute("errorMessage", "Invalid question index!");
+            }
+            
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("errorMessage", 
+                "Error deleting question: " + e.getMessage());
+            e.printStackTrace();
+        }
+        
+        return "redirect:/teacher/manage-questions/" + examId;
+    }
+
     @PostMapping("/enroll-student")
     public String enrollStudent(@RequestParam String studentEmail,
                                @RequestParam Long subjectId,
