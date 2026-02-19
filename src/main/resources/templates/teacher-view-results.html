@@ -6,73 +6,12 @@
     <title>Student Results Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        body {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-        }
-        .container {
-            padding-top: 30px;
-            padding-bottom: 30px;
-        }
-        .results-card {
-            background: white;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            padding: 30px;
-        }
-        .stat-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 10px;
-            padding: 20px;
-            text-align: center;
-            height: 100%;
-        }
-        .stat-card h3 {
-            font-size: 2rem;
-            font-weight: bold;
-            margin: 10px 0;
-        }
-        .stat-card p {
-            margin: 0;
-            opacity: 0.9;
-        }
-        .filter-section {
-            background: #f8f9fa;
-            border-radius: 10px;
-            padding: 20px;
-            margin-bottom: 20px;
-        }
-        .table-wrapper {
-            overflow-x: auto;
-        }
-        .badge-graded {
-            background-color: #28a745;
-        }
-        .badge-pending {
-            background-color: #ffc107;
-            color: #000;
-        }
-        .badge-released {
-            background-color: #17a2b8;
-        }
-        .badge-unreleased {
-            background-color: #6c757d;
-        }
-        .score-badge {
-            font-size: 1.1rem;
-            padding: 8px 15px;
-        }
-        .action-btn {
-            margin: 2px;
-        }
-    </style>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
 </head>
-<body>
+<body class="results-page">
     <div class="container-fluid">
         <!-- Header -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
+        <div class="dashboard-header d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h2 class="text-white">
                     <i class="bi bi-bar-chart-line"></i> 

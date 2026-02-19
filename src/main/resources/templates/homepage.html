@@ -8,11 +8,14 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" th:href="@{/css/style.css}">
 </head>
-<body>
+<body class="homepage-page">
 
-<nav class="navbar navbar-expand-lg navbar-light mb-5">
+<nav class="navbar navbar-expand-lg navbar-dark mb-5">
     <div class="container">
-        <a class="navbar-brand fw-bold text-primary" href="#">ALGO SYSTEM</a>
+        <a class="navbar-brand fw-bold" href="#">
+            <span>ALGO SYSTEM</span>
+            <small>Academic Excellence Portal</small>
+        </a>
         <div class="d-flex align-items-center">
             <span class="navbar-text me-3">Welcome, <strong th:text="${#authentication.name}">Teacher</strong></span>
             <form th:action="@{/logout}" method="post">

@@ -269,7 +269,7 @@ public class HomepageController {
             return "redirect:/teacher/homepage";
         }
         
-        try {
+        try {   
             // Add the new question to the existing lists
             exam.getQuestions().add(questionText);
             exam.getDifficulties().add(difficulty);

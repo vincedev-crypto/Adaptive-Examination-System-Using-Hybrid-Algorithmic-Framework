@@ -1,37 +1,218 @@
+:root {
+    --eac-maroon: #7a1022;
+    --eac-maroon-dark: #5f0d1a;
+    --eac-gold: #d4a32a;
+    --eac-cream: #f7f3ec;
+    --eac-ink: #2a2a2a;
+    --eac-muted: #6f6f6f;
+    --eac-surface: #ffffff;
+    --eac-border: #eadfce;
+}
+
 body {
-    background-color: #f8f9fa;
+    background: linear-gradient(180deg, #f7f3ec 0%, #ffffff 45%, #f9f6f0 100%);
+    color: var(--eac-ink);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-.upload-card {
-    border: none;
-    border-radius: 15px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+.navbar {
+    background: linear-gradient(135deg, var(--eac-maroon) 0%, var(--eac-maroon-dark) 100%);
+    box-shadow: 0 10px 25px rgba(76, 9, 22, 0.25);
+    border-bottom: 3px solid var(--eac-gold);
+}
+
+.navbar .navbar-brand {
+    color: #fff !important;
+    letter-spacing: 0.4px;
+    display: flex;
+    flex-direction: column;
+    line-height: 1.1;
+}
+
+.navbar .navbar-brand small {
+    font-size: 0.7rem;
+    color: #f7df9a;
+    font-weight: 500;
+}
+
+.navbar .navbar-text {
+    color: #f8f1e2 !important;
+}
+
+.upload-card,
+.results-card {
+    border: 1px solid var(--eac-border);
+    border-radius: 16px;
+    box-shadow: 0 12px 28px rgba(60, 36, 13, 0.09);
+    background: var(--eac-surface);
+}
+
+.upload-card h5,
+.upload-card h3,
+.results-card h5 {
+    color: var(--eac-maroon) !important;
+}
+
+.btn {
+    border-radius: 10px;
+    font-weight: 600;
 }
 
 .btn-primary {
-    background-color: #0d6efd;
+    background: linear-gradient(135deg, var(--eac-maroon) 0%, #8f1a2e 100%);
     border: none;
-    padding: 10px 25px;
-    border-radius: 8px;
-    transition: background-color 0.3s ease;
+    padding: 10px 20px;
 }
 
-.btn-primary:hover {
-    background-color: #0b5ed7;
+.btn-primary:hover,
+.btn-primary:focus {
+    background: linear-gradient(135deg, #67101f 0%, var(--eac-maroon-dark) 100%);
 }
 
-.navbar {
-    background-color: #ffffff;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+.btn-outline-danger {
+    color: #fff;
+    border-color: #f1c7cf;
+}
+
+.btn-outline-danger:hover {
+    background: #fff;
+    color: var(--eac-maroon);
+    border-color: #fff;
+}
+
+.form-control,
+.form-select {
+    border-radius: 10px;
+    border: 1px solid #d7d7d7;
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--eac-gold);
+    box-shadow: 0 0 0 0.2rem rgba(212, 163, 42, 0.25);
+}
+
+.form-text {
+    font-size: 0.85rem;
+    color: var(--eac-muted);
+}
+
+.table {
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.table thead th {
+    background: #f2ebe0;
+    color: #4c2a11;
+    border-bottom: 1px solid #decfb6;
+}
+
+.table tbody tr:nth-child(even) {
+    background: #fffdf9;
+}
+
+.table tbody tr:hover {
+    background: #fff6e5;
+}
+
+.badge.bg-primary {
+    background: linear-gradient(135deg, #7a1022, #9f2b3f) !important;
+}
+
+.badge.bg-info {
+    background: #1c84b7 !important;
+}
+
+.badge.bg-success {
+    background: #267a4b !important;
+}
+
+.badge.bg-warning {
+    background: #c28812 !important;
+}
+
+.badge.bg-danger {
+    background: #b02a37 !important;
+}
+
+.btn-outline-secondary {
+    color: #6f5740;
+    border-color: #c9baa3;
+}
+
+.btn-outline-secondary:hover {
+    background: #f5ede0;
+    color: #4c2a11;
+}
+
+.card.border-primary {
+    border-color: #cfbb9c !important;
+    background: #fffdfa;
+}
+
+.results-page {
+    min-height: 100vh;
+    background: linear-gradient(135deg, #f3ede4 0%, #fff 55%, #f6efe5 100%);
+}
+
+.results-page .dashboard-header {
+    background: linear-gradient(120deg, var(--eac-maroon) 0%, #9a2136 100%);
+    border-radius: 16px;
+    padding: 24px;
+    color: #fff;
+    box-shadow: 0 12px 22px rgba(122, 16, 34, 0.28);
+}
+
+.results-page .dashboard-header p {
+    color: #fdeac3 !important;
+}
+
+.results-page .stat-card {
+    border-radius: 14px;
+    box-shadow: 0 10px 20px rgba(42, 42, 42, 0.08);
+}
+
+.results-page .filter-section {
+    border: 1px solid #e6d9c4;
+    background: #fffaf2;
+    border-radius: 12px;
+}
+
+.results-page .table-wrapper {
+    border: 1px solid #eadfce;
+    border-radius: 12px;
+    background: #fff;
+    overflow-x: auto;
+}
+
+.badge-graded {
+    background-color: #267a4b;
+}
+
+.badge-pending {
+    background-color: #c28812;
+    color: #fff;
+}
+
+.badge-released {
+    background-color: #1c84b7;
+}
+
+.badge-unreleased {
+    background-color: #6c757d;
+}
+
+.score-badge {
+    font-size: 1.05rem;
+    padding: 8px 14px;
+}
+
+.action-btn {
+    margin: 2px;
 }
 
 /* Helper class to hide elements */
 .hidden {
     display: none;
-}
-
-.form-text {
-    font-size: 0.85rem;
-    color: #6c757d;
 }
