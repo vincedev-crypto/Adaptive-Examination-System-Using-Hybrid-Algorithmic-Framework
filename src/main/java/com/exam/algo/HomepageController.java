@@ -921,6 +921,17 @@ public class HomepageController {
                                                          randomizedLines, difficultyLevels, finalAnswerKey);
             uploadedExams.put(examId, uploadedExam);
             
+            // Build sorted answer key list so teacher can see it on the results page
+            if (finalAnswerKey != null && !finalAnswerKey.isEmpty()) {
+                List<Map<String, Object>> answerKeyDisplay = new ArrayList<>();
+                for (int i = 1; i <= finalAnswerKey.size(); i++) {
+                    Map<String, Object> entry = new HashMap<>();
+                    entry.put("number", i);
+                    entry.put("answer", finalAnswerKey.getOrDefault(i, "Not Set"));
+                    answerKeyDisplay.add(entry);
+                }
+                model.addAttribute("answerKeyDisplay", answerKeyDisplay);
+            }
             model.addAttribute("type", "exam");
             model.addAttribute("examUploaded", true);
         }
@@ -928,124 +939,173 @@ public class HomepageController {
     }
     
     /**
-     * Parse a separate answer key PDF
-     * Expected format:
-     * 1. Mars
-     * 2. Leonardo da Vinci
-     * 3. Gold
-     * OR
-     * Question 1: Mars
-     * Question 2: Leonardo da Vinci
+     * Parse a separate answer key PDF.
+     *
+     * Handles three common formats automatically:
+     *
+     * Format A – combined Q+A document (most common when teacher exports from an AI/generator):
+     *   Q1 (Easy): Solve the equation for x: 3x^2 - 5x + 2 = 0
+     *   Answer: x = 1 or x = 2/3
+     *
+     * Format B – standalone answer list with Q# prefix:
+     *   Q1: x = 1 or x = 2/3
+     *   Q1 (Easy): x = 1 or x = 2/3
+     *
+     * Format C – numbered list:
+     *   1. x = 1 or x = 2/3
+     *   1) x = 1 or x = 2/3
      */
     private Map<Integer, String> parseAnswerKeyPdf(MultipartFile file) throws IOException {
         Map<Integer, String> answerKey = new HashMap<>();
         List<String> lines = new ArrayList<>();
-        
+
         try (PDDocument document = Loader.loadPDF(file.getBytes())) {
             PDFTextStripper stripper = new PDFTextStripper();
             lines = Arrays.stream(stripper.getText(document).split("\\r?\\n"))
                          .filter(line -> !line.trim().isEmpty())
                          .collect(Collectors.toList());
         }
-        
+
         System.out.println("=== PARSING ANSWER KEY PDF ===");
         System.out.println("Total lines: " + lines.size());
-        
-        // Improved skipPattern: Skip metadata, headers, page numbers, etc.
+
+        // Skip document metadata / headers
         Pattern skipPattern = Pattern.compile(
-            "(?i)(page\\s*\\d+|examination\\s+paper|name:|date:|answer\\s+key|confidential|date\\s+generated|instructions?|total\\s+marks|student\\s+name:|id\\s+number:)", 
+            "(?i)(page\\s*\\d+|examination\\s+paper|name:|date:|answer\\s+key|confidential|" +
+            "date\\s+generated|instructions?|total\\s+marks|student\\s+name:|id\\s+number:)",
             Pattern.CASE_INSENSITIVE
         );
-        
-        // Patterns to detect question number formats
-        Pattern questionPattern1 = Pattern.compile("^\\d+[\\.\\)]\\s+.+"); // "1. Answer" or "1) Answer"
-        Pattern questionPattern2 = Pattern.compile("(?i)^(question|q)\\s*\\d+\\s*:\\s*.+"); // "Q1: Answer" or "Question 1: Answer"
-        
-        int lastQuestionNumber = 0;
-        StringBuilder currentAnswer = new StringBuilder();
-        
-        for (String line : lines) {
-            String trimmed = line.trim();
-            
-            // Skip headers/metadata
-            if (skipPattern.matcher(trimmed).find()) {
-                System.out.println("Skipping header/metadata: " + trimmed);
-                continue;
-            }
-            
-            // Skip very short lines that are likely metadata
-            if (trimmed.length() < 2) continue;
-            
-            // Skip lines that are just numbers
-            if (trimmed.matches("^\\d+$")) continue;
-            
-            String answer = null;
-            int qNum = 0;
-            boolean isNewQuestion = false;
-            
-            // Format 1: "1. Mars" or "1) Mars"
-            if (questionPattern1.matcher(trimmed).matches()) {
-                String[] parts = trimmed.split("[\\.\\)]", 2);
-                if (parts.length == 2) {
-                    qNum = Integer.parseInt(parts[0].trim());
-                    answer = parts[1].trim();
-                    isNewQuestion = true;
+
+        // Q# header: "Q1:", "Q1 (Easy):", "Question 1 (Medium):", etc.
+        Pattern questionHeaderPattern = Pattern.compile(
+            "(?i)^(?:question|q)\\s*(\\d+)\\s*(?:\\([^)]*\\))?\\s*:(.*)");
+
+        // Numbered list: "1. answer" or "1) answer"
+        Pattern numberedPattern = Pattern.compile("^(\\d+)[.)]\\s+(.+)");
+
+        // Explicit answer line: "Answer: ...", "Correct: ...", "Correct Answer: ..."
+        Pattern answerLinePattern = Pattern.compile(
+            "(?i)^(?:correct\\s+)?answer\\s*:\\s*(.+)");
+
+        // ── First pass: decide which format the PDF uses ──────────────────────────
+        boolean hasDedicatedAnswerLines = lines.stream()
+            .anyMatch(l -> answerLinePattern.matcher(l.trim()).find());
+        System.out.println("Format detected – has dedicated Answer: lines: " + hasDedicatedAnswerLines);
+
+        if (hasDedicatedAnswerLines) {
+            // ── Format A: Q#: [question text]  …  Answer: [actual answer] ──────────
+            int currentQNum = 0;
+            for (String line : lines) {
+                String trimmed = line.trim();
+
+                if (skipPattern.matcher(trimmed).find()) {
+                    System.out.println("Skipping header/metadata: " + trimmed);
+                    continue;
                 }
-            }
-            // Format 2: "Question 1: Mars" or "Q1: Mars"
-            else if (questionPattern2.matcher(trimmed).matches()) {
-                String[] parts = trimmed.split(":", 2);
-                if (parts.length == 2) {
-                    String numPart = parts[0].replaceAll("[^0-9]", "");
-                    qNum = Integer.parseInt(numPart);
-                    answer = parts[1].trim();
-                    isNewQuestion = true;
+                if (trimmed.length() < 2 || trimmed.matches("^\\d+$")) continue;
+
+                // "Answer: ..." line → this is the actual answer we want
+                Matcher ansMatcher = answerLinePattern.matcher(trimmed);
+                if (ansMatcher.find() && currentQNum > 0) {
+                    String answer = ansMatcher.group(1).trim()
+                        .replaceFirst("^[A-Da-d][.)\\s]\\s*", "").trim();
+                    if (!answer.isEmpty()) {
+                        answerKey.put(currentQNum, answer);
+                        System.out.println("Q" + currentQNum + " -> " + answer);
+                    }
+                    continue;
                 }
-            }
-            // This might be a continuation of the previous answer
-            else if (lastQuestionNumber > 0) {
-                // Append to the current answer with a space
-                currentAnswer.append(" ").append(trimmed);
-                // Update the existing entry
-                String fullAnswer = currentAnswer.toString().trim();
-                answerKey.put(lastQuestionNumber, fullAnswer);
-                System.out.println("Appending to Q" + lastQuestionNumber + " -> " + fullAnswer);
-                continue;
-            }
-            
-            // If we found a new question
-            if (isNewQuestion && answer != null) {
-                // Save the previous question if exists
-                if (lastQuestionNumber > 0 && currentAnswer.length() > 0) {
-                    String finalAnswer = currentAnswer.toString().trim()
-                        .replaceFirst("^[A-Da-d]\\)\\s*", "").trim();
-                    if (!finalAnswer.isEmpty() && !skipPattern.matcher(finalAnswer).find()) {
-                        answerKey.put(lastQuestionNumber, finalAnswer);
-                        System.out.println("Completed Q" + lastQuestionNumber + " -> " + finalAnswer);
+
+                // Q# header → update tracking number only (don't treat content as answer)
+                Matcher qMatcher = questionHeaderPattern.matcher(trimmed);
+                if (qMatcher.find()) {
+                    try { currentQNum = Integer.parseInt(qMatcher.group(1)); }
+                    catch (NumberFormatException ignored) {}
+                    continue;
+                }
+
+                // Numbered list line inside a combined doc ("1. answer") — still capture it
+                Matcher numMatcher = numberedPattern.matcher(trimmed);
+                if (numMatcher.matches()) {
+                    int qNum = Integer.parseInt(numMatcher.group(1));
+                    String answer = numMatcher.group(2).trim()
+                        .replaceFirst("^[A-Da-d][.)\\s]\\s*", "").trim();
+                    if (!answer.isEmpty()) {
+                        answerKey.put(qNum, answer);
+                        System.out.println("Q" + qNum + " -> " + answer);
                     }
                 }
-                
-                // Start new answer
-                lastQuestionNumber = qNum;
-                currentAnswer = new StringBuilder(answer.replaceFirst("^[A-Da-d]\\)\\s*", "").trim());
+            }
+
+        } else {
+            // ── Format B / C: Q#: [answer]  or  1. [answer] ─────────────────────────
+            int lastQNum = 0;
+            StringBuilder currentAnswer = new StringBuilder();
+
+            for (String line : lines) {
+                String trimmed = line.trim();
+
+                if (skipPattern.matcher(trimmed).find()) {
+                    System.out.println("Skipping header/metadata: " + trimmed);
+                    continue;
+                }
+                if (trimmed.length() < 2 || trimmed.matches("^\\d+$")) continue;
+
+                int qNum = 0;
+                String answer = null;
+                boolean isNewQ = false;
+
+                // Q# (Easy): answer
+                Matcher qMatcher = questionHeaderPattern.matcher(trimmed);
+                if (qMatcher.find()) {
+                    try { qNum = Integer.parseInt(qMatcher.group(1)); } catch (NumberFormatException e) { continue; }
+                    answer = qMatcher.group(2).trim()
+                        .replaceFirst("^[A-Da-d][.)\\s]\\s*", "").trim();
+                    isNewQ = true;
+                } else {
+                    // "1. answer" or "1) answer"
+                    Matcher numMatcher = numberedPattern.matcher(trimmed);
+                    if (numMatcher.matches()) {
+                        qNum = Integer.parseInt(numMatcher.group(1));
+                        answer = numMatcher.group(2).trim()
+                            .replaceFirst("^[A-Da-d][.)\\s]\\s*", "").trim();
+                        isNewQ = true;
+                    }
+                }
+
+                if (isNewQ) {
+                    // Save previously accumulated answer
+                    if (lastQNum > 0 && currentAnswer.length() > 0) {
+                        String finalAnswer = currentAnswer.toString().trim();
+                        if (!finalAnswer.isEmpty()) {
+                            answerKey.put(lastQNum, finalAnswer);
+                            System.out.println("Completed Q" + lastQNum + " -> " + finalAnswer);
+                        }
+                    }
+                    lastQNum = qNum;
+                    currentAnswer = new StringBuilder(answer != null ? answer : "");
+                } else if (lastQNum > 0) {
+                    // Multi-line answer continuation
+                    currentAnswer.append(" ").append(trimmed);
+                    answerKey.put(lastQNum, currentAnswer.toString().trim());
+                    System.out.println("Appending to Q" + lastQNum + " -> " + currentAnswer.toString().trim());
+                }
+            }
+
+            // Flush last entry
+            if (lastQNum > 0 && currentAnswer.length() > 0) {
+                String finalAnswer = currentAnswer.toString().trim();
+                if (!finalAnswer.isEmpty()) {
+                    answerKey.put(lastQNum, finalAnswer);
+                    System.out.println("Completed Q" + lastQNum + " -> " + finalAnswer);
+                }
             }
         }
-        
-        // Don't forget the last question
-        if (lastQuestionNumber > 0 && currentAnswer.length() > 0) {
-            String finalAnswer = currentAnswer.toString().trim()
-                .replaceFirst("^[A-Da-d]\\)\\s*", "").trim();
-            if (!finalAnswer.isEmpty() && !skipPattern.matcher(finalAnswer).find()) {
-                answerKey.put(lastQuestionNumber, finalAnswer);
-                System.out.println("Completed Q" + lastQuestionNumber + " -> " + finalAnswer);
-            }
-        }
-        
+
         System.out.println("=== ANSWER KEY PARSED: " + answerKey.size() + " answers ===");
         if (answerKey.isEmpty()) {
             System.out.println("WARNING: No answers were extracted from the answer key PDF!");
         }
-        
         return answerKey;
     }
     
@@ -1521,8 +1581,10 @@ public class HomepageController {
                 continue;
             }
 
-            // Detect new question: starts with number followed by period (e.g., "1.", "2.", "10.")
-            if (trimmed.matches("^\\d+\\.\\s+.*")) {
+            // Detect new question: "1. text", "Q1: text", "Q1 (Easy): text", "Q1 (Medium): text"
+            boolean isNewQuestion = trimmed.matches("^\\d+\\.\\s+.*")
+                || trimmed.matches("(?i)^q\\s*\\d+\\s*(\\([^)]*\\))?\\s*:.*");
+            if (isNewQuestion) {
                 // Save previous question block if exists
                 if (currentBlock.length() > 0) {
                     System.out.println("Processing block for Q" + (qID + 1) + ": " + currentBlock.toString().substring(0, Math.min(50, currentBlock.length())) + "...");
@@ -1535,8 +1597,11 @@ public class HomepageController {
                         System.out.println("WARNING: Empty result for Q" + (qID + 1));
                     }
                 }
-                // Start new question block (remove the number prefix like "1. ")
-                currentBlock = new StringBuilder(trimmed.replaceFirst("^\\d+\\.\\s+", ""));
+                // Strip numeric/Q-prefix: "1. " or "Q1 (Easy): "
+                String questionContent = trimmed
+                    .replaceFirst("^\\d+\\.\\s+", "")
+                    .replaceFirst("(?i)^q\\s*\\d+\\s*(\\([^)]*\\))?\\s*:\\s*", "");
+                currentBlock = new StringBuilder(questionContent);
             } else {
                 // Add to current question block
                 if (currentBlock.length() > 0) {
