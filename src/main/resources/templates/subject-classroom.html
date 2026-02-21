@@ -74,10 +74,16 @@
                                     Enrolled: <span th:text="${#temporals.format(student.enrolledAt, 'MMM dd, yyyy')}">Date</span>
                                 </small>
                             </div>
-                            <div>
+                            <div class="d-flex gap-2">
+                                <button type="button" class="btn btn-sm btn-success"
+                                        data-bs-toggle="modal"
+                                        th:attr="data-bs-target='#distributeModal' + ${student.id}"
+                                        th:disabled="${#lists.isEmpty(uploadedExams)}">
+                                    <i class="bi bi-send"></i> Distribute
+                                </button>
                                 <form th:action="@{/teacher/remove-student}" method="post" style="display: inline;">
                                     <input type="hidden" name="enrollmentId" th:value="${student.id}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" 
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
                                             onclick="return confirm('Remove this student from the classroom?')">
                                         <i class="bi bi-trash"></i>
                                     </button>
@@ -135,6 +141,159 @@
         </div>
     </div>
 
+    <!-- Distribute Exam Modals — rendered at body level so Bootstrap can display them correctly -->
+    <div th:each="student : ${enrolledStudents}">
+        <div class="modal fade" th:id="'distributeModal' + ${student.id}" tabindex="-1" aria-hidden="true">
+            <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                <div class="modal-content">
+                    <div class="modal-header bg-success text-white">
+                        <h5 class="modal-title">
+                            <i class="bi bi-send-fill me-2"></i>
+                            Distribute Exam to <span th:text="${student.studentName}">Student</span>
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <!-- No exams uploaded yet -->
+                        <div th:if="${#lists.isEmpty(uploadedExams)}" class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                            No exams uploaded yet. Go to the Dashboard and process an exam first.
+                        </div>
+
+                        <!-- Exam list -->
+                        <div th:if="${!#lists.isEmpty(uploadedExams)}">
+                            <div th:each="exam,examStat : ${uploadedExams}" class="mb-4">
+                                <form th:action="@{/teacher/distribute}" method="post">
+                                    <input type="hidden" name="targetStudent" th:value="${student.studentEmail}">
+                                    <input type="hidden" name="examId"        th:value="${exam.examId}">
+
+                                    <div class="card border-0 shadow-sm">
+                                        <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-1 fw-bold" th:text="${exam.examName}">Exam Name</h6>
+                                                <span class="badge bg-primary me-1"   th:text="${exam.subject}">Subject</span>
+                                                <span class="badge bg-info text-dark me-1" th:text="${exam.activityType}">Type</span>
+                                                <span class="badge bg-secondary"      th:text="${#lists.size(exam.questions)} + ' questions'">N qs</span>
+                                            </div>
+                                        </div>
+                                        <div class="card-body">
+
+                                            <!-- Row 1: question count + time limit -->
+                                            <div class="row g-3 mb-3">
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-semibold small">
+                                                        <i class="bi bi-list-ol me-1"></i>Questions to Distribute
+                                                    </label>
+                                                    <input type="number" name="questionCount"
+                                                           class="form-control form-control-sm"
+                                                           th:min="1"
+                                                           th:max="${#lists.size(exam.questions)}"
+                                                           th:value="${#lists.size(exam.questions)}"
+                                                           required>
+                                                    <div class="form-text"
+                                                         th:text="'Max: ' + ${#lists.size(exam.questions)}"></div>
+                                                </div>
+                                                <div class="col-md-6">
+                                                    <label class="form-label fw-semibold small">
+                                                        <i class="bi bi-clock me-1"></i>Time Limit
+                                                    </label>
+                                                    <select name="timeLimit" class="form-select form-select-sm" required>
+                                                        <option value="15">15 minutes</option>
+                                                        <option value="30">30 minutes</option>
+                                                        <option value="45">45 minutes</option>
+                                                        <option value="60" selected>1 hour</option>
+                                                        <option value="90">1.5 hours</option>
+                                                        <option value="120">2 hours</option>
+                                                        <option value="150">2.5 hours</option>
+                                                        <option value="180">3 hours</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+
+                                            <!-- Row 2: difficulty distribution -->
+                                            <div class="mb-3">
+                                                <label class="form-label fw-semibold small">
+                                                    <i class="bi bi-bar-chart me-1"></i>Difficulty Distribution (%)
+                                                </label>
+                                                <div class="row g-2">
+                                                    <div class="col-4">
+                                                        <label class="form-label small text-success mb-1">Easy</label>
+                                                        <input type="number" name="easyPercent"
+                                                               class="form-control form-control-sm"
+                                                               min="0" max="100" value="30" required
+                                                               oninput="validatePct(this)">
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <label class="form-label small text-warning mb-1">Medium</label>
+                                                        <input type="number" name="mediumPercent"
+                                                               class="form-control form-control-sm"
+                                                               min="0" max="100" value="50" required
+                                                               oninput="validatePct(this)">
+                                                    </div>
+                                                    <div class="col-4">
+                                                        <label class="form-label small text-danger mb-1">Hard</label>
+                                                        <input type="number" name="hardPercent"
+                                                               class="form-control form-control-sm"
+                                                               min="0" max="100" value="20" required
+                                                               oninput="validatePct(this)">
+                                                    </div>
+                                                </div>
+                                                <div class="alert alert-danger mt-2 py-1 d-none pct-error small">
+                                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>Total must equal 100%
+                                                </div>
+                                            </div>
+
+                                            <!-- Row 3: deadline -->
+                                            <div class="mb-3">
+                                                <label class="form-label fw-semibold small">
+                                                    <i class="bi bi-calendar-event me-1"></i>Deadline
+                                                </label>
+                                                <div class="row g-2">
+                                                    <div class="col-md-6">
+                                                        <select class="form-select form-select-sm deadline-preset"
+                                                                onchange="applyDeadlinePreset(this)">
+                                                            <option value="1">1 hour from now</option>
+                                                            <option value="3">3 hours from now</option>
+                                                            <option value="6">6 hours from now</option>
+                                                            <option value="12">12 hours from now</option>
+                                                            <option value="24" selected>1 day from now</option>
+                                                            <option value="48">2 days from now</option>
+                                                            <option value="72">3 days from now</option>
+                                                            <option value="168">1 week from now</option>
+                                                            <option value="custom">Custom date/time…</option>
+                                                        </select>
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <input type="datetime-local" name="deadline"
+                                                               class="form-control form-control-sm deadline-input"
+                                                               required>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <!-- Actions -->
+                                            <div class="d-flex gap-2">
+                                                <a th:href="@{/teacher/manage-questions/{examId}(examId=${exam.examId})}"
+                                                   class="btn btn-outline-secondary btn-sm flex-fill">
+                                                    <i class="bi bi-pencil-square me-1"></i>Manage Questions
+                                                </a>
+                                                <button type="submit" class="btn btn-success btn-sm flex-fill distribute-btn">
+                                                    <i class="bi bi-send-fill me-1"></i>Distribute This Exam
+                                                </button>
+                                            </div>
+
+                                        </div><!-- /card-body -->
+                                    </div><!-- /card -->
+                                </form>
+                                <hr th:unless="${examStat.last}">
+                            </div>
+                        </div>
+                    </div><!-- /modal-body -->
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Enrollment Modal -->
     <div class="modal fade" id="enrollModal" tabindex="-1">
         <div class="modal-dialog">
@@ -170,5 +329,42 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script th:src="@{/js/subject-classroom.js}"></script>
+    <script>
+        // Validate Easy+Medium+Hard = 100%
+        function validatePct(input) {
+            const form = input.closest('form');
+            const easy   = parseInt(form.querySelector('[name="easyPercent"]').value)   || 0;
+            const medium = parseInt(form.querySelector('[name="mediumPercent"]').value) || 0;
+            const hard   = parseInt(form.querySelector('[name="hardPercent"]').value)   || 0;
+            const errDiv = form.querySelector('.pct-error');
+            const submitBtn = form.querySelector('.distribute-btn');
+            if (easy + medium + hard !== 100) {
+                errDiv.classList.remove('d-none');
+                submitBtn.disabled = true;
+            } else {
+                errDiv.classList.add('d-none');
+                submitBtn.disabled = false;
+            }
+        }
+
+        // Set deadline input based on preset dropdown
+        function applyDeadlinePreset(select) {
+            const form = select.closest('form');
+            const deadlineInput = form.querySelector('.deadline-input');
+            if (select.value === 'custom') {
+                deadlineInput.value = '';
+            } else {
+                const now = new Date();
+                now.setHours(now.getHours() + parseInt(select.value));
+                const pad = n => String(n).padStart(2, '0');
+                deadlineInput.value = `${now.getFullYear()}-${pad(now.getMonth()+1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+            }
+        }
+
+        // Initialise all deadline inputs to "1 day from now"
+        document.addEventListener('DOMContentLoaded', () => {
+            document.querySelectorAll('.deadline-preset').forEach(sel => applyDeadlinePreset(sel));
+        });
+    </script>
 </body>
 </html>

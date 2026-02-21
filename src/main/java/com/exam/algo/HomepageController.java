@@ -609,6 +609,7 @@ public class HomepageController {
         model.addAttribute("submissions", submissions);
         model.addAttribute("teacherEmail", teacherEmail);
         model.addAttribute("allStudents", allStudents);
+        model.addAttribute("uploadedExams", new ArrayList<>(uploadedExams.values()));
         
         return "subject-classroom";
     }
