@@ -8,11 +8,11 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" th:href="@{/css/style.css}">
     <!-- MathJax for equation rendering -->
-    <script>
+    <script th:inline="none">
         window.MathJax = {
             tex: {
-                inlineMath: [['$', '$'], ['\\(', '\\)']],
-                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                inlineMath: [['$', '$'], ['\(', '\)']],
+                displayMath: [['$$', '$$'], ['\[', '\]']],
                 processEscapes: true
             },
             options: { skipHtmlTags: ['script','noscript','style','textarea','pre'] }
