@@ -22,28 +22,21 @@
 </head>
 <body class="homepage-page">
 
-<!-- Include Navigation Bar -->
-<div th:replace="~{teacher-nav :: teacherNav}"></div>
+<div class="teacher-layout">
+    <div th:replace="teacher-nav :: teacherNav"></div>
 
+    <!-- Main content area -->
+    <div class="teacher-content-wrapper">
 <div class="container">
     <div class="row justify-content-center">
         <div class="col-md-7">
             <div class="card upload-card p-4 mb-4">
                 <div class="card-body text-center">
                     <h3 class="card-title mb-4">Examination Management</h3>
-                    
-                    <div class="mb-4 text-start">
-                        <label class="form-label fw-bold">Select Action:</label>
-                        <select class="form-select" id="uploadType">
-                            <option value="none">Select</option>
-                            <option value="exam">Prepare New Exam (Fisher-Yates)</option>
-                            <option value="results">Analyze Performance (Random Forest)</option>
-                        </select>
-                    </div>
 
-                    <form th:action="@{/teacher/process-exams}" method="post" enctype="multipart/form-data" id="uploadForm" class="hidden">
-                        
-                        <div id="examSection" class="hidden mb-4 text-start">
+                    <form th:action="@{/teacher/process-exams}" method="post" enctype="multipart/form-data" id="uploadForm">
+
+                        <div id="examSection" class="mb-4 text-start">
                             <div class="row mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold text-info">Subject Name *</label>
@@ -108,14 +101,6 @@
                             </div>
                         </div>
 
-                        <div id="resultsSection" class="hidden mb-4 text-start">
-                            <label class="form-label fw-bold text-success">Select Student Results</label>
-                            <input class="form-control" type="file" name="examResults">
-                            <div class="form-text">
-                                Predict performance trends using the Random Forest algorithm.
-                            </div>
-                        </div>
-
                         <div class="d-grid gap-2">
                             <button type="submit" class="btn btn-primary fw-bold">START PROCESSING</button>
                         </div>
@@ -124,6 +109,8 @@
             </div>
 
         </div>
+    </div>
+    </div>
     </div>
 </div>
 

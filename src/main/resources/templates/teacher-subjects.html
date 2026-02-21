@@ -10,17 +10,19 @@
 </head>
 <body class="homepage-page">
 
-<!-- Include Navigation Bar -->
-<div th:replace="~{teacher-nav :: teacherNav}"></div>
+<div class="teacher-layout">
+    <div th:replace="teacher-nav :: teacherNav"></div>
 
+    <!-- Main content area -->
+    <div class="teacher-content-wrapper">
 <div class="container">
     <div class="row">
         <div class="col-md-10 mx-auto">
             <!-- Header -->
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <div>
-                    <h2 class="text-primary mb-0">📚 Subject Management</h2>
-                    <p class="text-muted">Create and manage your subjects and classrooms</p>
+                    <h2 class="text-primary mb-0">Subject Management</h2>
+                    <p class="text-muted mb-0">Manage subjects and enrolled students</p>
                 </div>
                 <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSubjectModal">
                     <i class="bi bi-plus-circle"></i> Create New Subject

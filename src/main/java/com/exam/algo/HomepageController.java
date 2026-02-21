@@ -1,22 +1,25 @@
 package com.exam.algo;
 
-import com.exam.entity.EnrolledStudent;
-import com.exam.entity.ExamSubmission;
-import com.exam.entity.User;
-import com.exam.entity.Subject;
-import com.exam.repository.EnrolledStudentRepository;
-import com.exam.repository.ExamSubmissionRepository;
-import com.exam.repository.UserRepository;
-import com.exam.repository.SubjectRepository;
-import com.exam.service.AnswerKeyService;
-import com.exam.service.FisherYatesService;
-import com.lowagie.text.Chunk;
-import com.lowagie.text.Document;
-import com.lowagie.text.DocumentException;
-import com.lowagie.text.Font;
-import com.lowagie.text.Paragraph;
-import com.lowagie.text.Phrase;
-import com.lowagie.text.pdf.PdfWriter;
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.security.SecureRandom;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -30,17 +33,32 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Controller;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
+
+import com.exam.entity.EnrolledStudent;
+import com.exam.entity.ExamSubmission;
+import com.exam.entity.Subject;
+import com.exam.entity.User;
+import com.exam.repository.EnrolledStudentRepository;
+import com.exam.repository.ExamSubmissionRepository;
+import com.exam.repository.SubjectRepository;
+import com.exam.repository.UserRepository;
+import com.exam.service.AnswerKeyService;
+import com.exam.service.FisherYatesService;
+import com.lowagie.text.Chunk;
+import com.lowagie.text.Document;
+import com.lowagie.text.DocumentException;
+import com.lowagie.text.Font;
+import com.lowagie.text.Paragraph;
+import com.lowagie.text.pdf.PdfWriter;
+
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpSession;
-import java.io.*;
-import java.security.SecureRandom;
-import java.util.*;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
 
 @Controller
 @RequestMapping("/teacher")
@@ -901,9 +919,11 @@ public class HomepageController {
                 difficultyLevels = csvResult.difficulties;
             } else {
                 randomizedLines = processFisherYates(examCreated, session, answerKey);
-                // For PDF files, generate default difficulties (Medium)
-                for (int i = 0; i < randomizedLines.size(); i++) {
-                    difficultyLevels.add("Medium");
+                // For PDF files (exam "paper"), automatically infer difficulty per question
+                for (String block : randomizedLines) {
+                    String typeHint = block.matches("(?s).*[A-Da-d]\\)\\s+.*") ? "MULTIPLE_CHOICE" : "TEXT_INPUT";
+                    String inferred = inferDifficultyFromQuestion(block, typeHint);
+                    difficultyLevels.add(inferred);
                 }
             }
             session.setAttribute("shuffledExam", randomizedLines);
@@ -1337,7 +1357,9 @@ public class HomepageController {
             questionBlock.append("D) ").append(choiceD);
             
             questionBlocks.add(questionBlock.toString());
-            difficultyList.add("Medium"); // Default difficulty for old format
+            // Infer difficulty automatically for this format
+            String inferredDifficulty = inferDifficultyFromQuestion(questionText, "MULTIPLE_CHOICE");
+            difficultyList.add(inferredDifficulty);
             answerKey.put(questionNumber, correctAnswer);
             
             System.out.println("Parsed CSV Q" + questionNumber + " (Format 1) -> " + correctAnswer);
@@ -1367,7 +1389,9 @@ public class HomepageController {
             questionBlock.append("D) ").append(choiceD);
             
             questionBlocks.add(questionBlock.toString());
-            difficultyList.add("Medium"); // Default difficulty for old format
+            // Infer difficulty automatically for this format
+            String inferredDifficulty = inferDifficultyFromQuestion(questionText, "MULTIPLE_CHOICE");
+            difficultyList.add(inferredDifficulty);
             if (correctAnswer != null) {
                 answerKey.put(questionNumber, correctAnswer);
                 System.out.println("Parsed CSV Q" + questionNumber + " (Format 2 with embedded answer) -> " + correctAnswer);
@@ -1394,7 +1418,9 @@ public class HomepageController {
                 questionBlocks.add(fullText);
             }
             
-            difficultyList.add("Medium"); // Default difficulty for old format
+            // Infer difficulty automatically for this format
+            String inferredDifficulty = inferDifficultyFromQuestion(fullText, "TEXT_INPUT");
+            difficultyList.add(inferredDifficulty);
             if (correctAnswer != null) {
                 answerKey.put(questionNumber, correctAnswer);
                 System.out.println("Parsed CSV Q" + questionNumber + " (Format 3 with embedded answer) -> " + correctAnswer);
@@ -1404,6 +1430,77 @@ public class HomepageController {
             
         } else {
             System.out.println("WARNING: Skipping malformed CSV line (" + columns.length + " columns): " + line);
+        }
+    }
+
+    /**
+     * Infer a difficulty label (Easy / Medium / Hard) from question text when
+     * the CSV format does not explicitly provide a difficulty column.
+     *
+     * Heuristic rules used (additive scoring model):
+     * - Base on word count (shorter questions tend to be easier).
+     * - Penalize for tricky keywords such as "NOT", "EXCEPT", "LEAST", etc.
+     * - Increase difficulty when the question appears multi-step or numeric-heavy.
+     * - Open-ended / text-input questions default towards Medium/Hard.
+     */
+    private String inferDifficultyFromQuestion(String rawText, String type) {
+        if (rawText == null) {
+            return "Medium";
+        }
+
+        String text = rawText.trim();
+        if (text.isEmpty()) {
+            return "Medium";
+        }
+
+        String lower = text.toLowerCase();
+
+        int score = 0;
+
+        // 1) Length / word-count based scoring
+        String[] words = lower.split("\\s+");
+        int wordCount = words.length;
+        if (wordCount <= 8) {
+            score += 0; // very short -> likely Easy
+        } else if (wordCount <= 20) {
+            score += 1; // normal length -> baseline Medium
+        } else if (wordCount <= 40) {
+            score += 2; // long questions -> leaning Medium/Hard
+        } else {
+            score += 3; // very long -> more likely Hard
+        }
+
+        // 2) Tricky logic keywords (negations, exceptions, etc.)
+        String trickyPattern = ".*\\b(not|except|least|false|incorrect|never|all of the following|none of the above|all of the above)\\b.*";
+        if (lower.matches(trickyPattern)) {
+            score += 2;
+        }
+
+        // 3) Multi-step / reasoning indicators
+        String reasoningPattern = ".*\\b(first|second|third|then|finally|therefore|consequently|if\\s+.*then)\\b.*";
+        if (lower.matches(reasoningPattern)) {
+            score += 1;
+        }
+
+        // 4) Numeric / formula style questions (common in math/physics)
+        boolean hasNumber = lower.matches(".*\\d+.*");
+        boolean hasOperator = lower.matches(".*(\\+|\\-|\\*|/|=|%|>|<) .*");
+        if (hasNumber && hasOperator) {
+            score += 1;
+        }
+
+        // 5) Question type bias: text input / open-ended tends to be harder
+        if (type != null && type.equalsIgnoreCase("TEXT_INPUT")) {
+            score += 1;
+        }
+
+        // Map score to difficulty band
+        if (score <= 1) {
+            return "Easy";
+        } else if (score <= 3) {
+            return "Medium";
+        } else {
+            return "Hard";
         }
     }
     

@@ -13,9 +13,11 @@
 </head>
 <body class="homepage-page">
 
-<!-- Include Navigation Bar -->
-<div th:replace="~{teacher-nav :: teacherNav}"></div>
+<div class="teacher-layout">
+    <div th:replace="teacher-nav :: teacherNav"></div>
 
+    <!-- Main content area -->
+    <div class="teacher-content-wrapper">
 <div class="container">
     <div class="row">
         <div class="col-md-11 mx-auto">
@@ -214,6 +216,8 @@
                 </div>
             </div>
         </div>
+    </div>
+    </div>
     </div>
 </div>
 

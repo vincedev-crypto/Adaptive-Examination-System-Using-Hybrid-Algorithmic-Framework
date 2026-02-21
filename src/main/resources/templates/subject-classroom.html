@@ -9,6 +9,12 @@
     <link rel="stylesheet" th:href="@{/css/subject-classroom.css}">
 </head>
 <body>
+    <div class="teacher-layout">
+        <!-- Left sidebar -->
+        <div th:replace="teacher-nav :: teacherNav"></div>
+
+        <!-- Main content area -->
+        <div class="teacher-content-wrapper">
     <div class="main-container">
         <!-- Back Button -->
         <div class="mb-3">
@@ -138,6 +144,8 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
         </div>
     </div>
 
