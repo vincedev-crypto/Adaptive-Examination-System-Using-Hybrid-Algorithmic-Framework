@@ -334,12 +334,16 @@ public class HomepageController {
                 .map(EnrolledStudent::getStudentEmail)
                 .collect(Collectors.toList());
         
-        // Get all submissions for enrolled students
-        List<ExamSubmission> allSubmissions = examSubmissionRepository.findAll().stream()
-                .filter(s -> studentEmails.contains(s.getStudentEmail()))
-                .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, 
-                                            Comparator.nullsLast(Comparator.reverseOrder())))
-                .collect(Collectors.toList());
+        // Get submissions only for this teacher's enrolled students
+        List<ExamSubmission> allSubmissions;
+        if (studentEmails.isEmpty()) {
+            allSubmissions = new ArrayList<>();
+        } else {
+            allSubmissions = examSubmissionRepository.findByStudentEmailIn(studentEmails).stream()
+                    .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt,
+                                                Comparator.nullsLast(Comparator.reverseOrder())))
+                    .collect(Collectors.toList());
+        }
         
         // Apply filters
         List<ExamSubmission> filteredSubmissions = allSubmissions;

@@ -2,12 +2,19 @@
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Exam Preview - ALGO</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
     <link th:href="@{/css/results.css}" rel="stylesheet">
 </head>
-<body>
+<body class="homepage-page results-page">
+
+<div class="teacher-layout">
+    <div th:replace="teacher-nav :: teacherNav"></div>
+
+    <div class="teacher-content-wrapper">
 
 <div class="container text-center mb-4">
     <div class="btn-group shadow-sm">
@@ -44,11 +51,13 @@
             </div>
         </div>
     </div>
+       </div>
+    </div>
 </div>
 
 <!-- ===== TEACHER ANSWER KEY PANEL ===== -->
 <div th:if="${answerKeyDisplay != null and !#lists.isEmpty(answerKeyDisplay)}"
-     class="google-doc-page mt-4 border border-danger rounded p-4">
+    class="google-doc-page mt-4 border border-danger rounded p-4">
     <div class="d-flex justify-content-between align-items-center mb-3">
         <h4 class="text-danger mb-0">
             <i class="bi bi-key-fill me-2"></i>Answer Key
@@ -75,6 +84,10 @@
         <i class="bi bi-info-circle me-1"></i>
         These are the shuffled answer positions. Download the full Answer Key PDF using the button above.
     </p>
+    </div>
+
+</div>
+
 </div>
 
 </body>

@@ -1,11 +1,11 @@
 package com.exam.repository;
 
-import com.exam.entity.ExamSubmission;
+import java.util.List;
+
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
-import java.util.List;
-import java.util.Optional;
+import com.exam.entity.ExamSubmission;
 
 @Repository
 public interface ExamSubmissionRepository extends JpaRepository<ExamSubmission, Long> {
@@ -13,5 +13,6 @@ public interface ExamSubmissionRepository extends JpaRepository<ExamSubmission, 
     List<ExamSubmission> findByStudentEmailAndExamName(String studentEmail, String examName);
     List<ExamSubmission> findByResultsReleasedFalse(); // Pending release
     List<ExamSubmission> findByIsGradedFalse(); // Pending teacher grading
+    List<ExamSubmission> findByStudentEmailIn(List<String> studentEmails);
     List<ExamSubmission> findAll();
 }

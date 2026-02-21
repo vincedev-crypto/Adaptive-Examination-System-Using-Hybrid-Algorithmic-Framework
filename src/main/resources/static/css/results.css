@@ -1,6 +1,6 @@
 /* Results/Exam Preview Page Styles */
 
-body { 
+body.results-page { 
     background-color: #f0f2f5; 
     padding-top: 20px; 
 }
