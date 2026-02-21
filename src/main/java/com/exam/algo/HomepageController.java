@@ -1884,7 +1884,7 @@ public class HomepageController {
             document.add(new Paragraph("Question " + (i + 1) + ":"));
             document.add(new Paragraph(exam.getQuestions().get(i)));
             document.add(new Paragraph("Difficulty: " + exam.getDifficulties().get(i)));
-            document.add(new Paragraph("Answer: " + exam.getAnswerKey().getOrDefault(i, "N/A")));
+            document.add(new Paragraph("Answer: " + exam.getAnswerKey().getOrDefault(i + 1, "N/A")));
             document.add(new Paragraph("\n"));
         }
 
@@ -1928,7 +1928,7 @@ public class HomepageController {
             csv.append(i + 1).append(",");
             csv.append(escapeCSV(questionText)).append(",");
             csv.append(escapeCSV(exam.getDifficulties().get(i))).append(",");
-            csv.append(escapeCSV(exam.getAnswerKey().getOrDefault(i, "N/A")));
+            csv.append(escapeCSV(exam.getAnswerKey().getOrDefault(i + 1, "N/A")));
             csv.append("\n");
         }
         
@@ -1997,7 +1997,7 @@ public class HomepageController {
             diffRun.addBreak();
             
             XWPFRun ansRun = qPara.createRun();
-            ansRun.setText("Answer: " + exam.getAnswerKey().getOrDefault(i, "N/A"));
+            ansRun.setText("Answer: " + exam.getAnswerKey().getOrDefault(i + 1, "N/A"));
             ansRun.setColor("008000"); // Green color for answer
             ansRun.setBold(true);
             ansRun.addBreak();
