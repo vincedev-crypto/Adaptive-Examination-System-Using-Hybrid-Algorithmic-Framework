@@ -10,9 +10,12 @@ import com.exam.repository.UserRepository;
 import com.exam.repository.SubjectRepository;
 import com.exam.service.AnswerKeyService;
 import com.exam.service.FisherYatesService;
+import com.lowagie.text.Chunk;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
+import com.lowagie.text.Font;
 import com.lowagie.text.Paragraph;
+import com.lowagie.text.Phrase;
 import com.lowagie.text.pdf.PdfWriter;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -35,6 +38,7 @@ import java.io.*;
 import java.security.SecureRandom;
 import java.util.*;
 import java.util.List;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
@@ -64,6 +68,17 @@ public class HomepageController {
     
     // Store uploaded exams with their metadata
     private static Map<String, UploadedExam> uploadedExams = new HashMap<>();
+
+    /**
+     * Regex: detect LaTeX segments (\command{} or var^{} or var_{}) for auto-wrapping in $...$.
+     * Segment = one or more LaTeX tokens optionally connected by math operators / whitespace.
+     */
+    private static final Pattern LATEX_SEGMENT = Pattern.compile(
+        "(?:\\\\[a-zA-Z]+(?:\\{[^}]*\\})*|[a-zA-Z0-9]*(?:\\^\\{[^}]+\\}|_\\{[^}]+\\}))" +
+        "(?:[0-9a-zA-Z+\\-*/=<>().^_{} ]*" +
+            "(?:\\\\[a-zA-Z]+(?:\\{[^}]*\\})*|[a-zA-Z0-9]*(?:\\^\\{[^}]+\\}|_\\{[^}]+\\}))" +
+        ")*"
+    );
     
     // Helper class to store exam metadata
     public static class UploadedExam {
@@ -1470,7 +1485,9 @@ public class HomepageController {
         try (PDDocument document = Loader.loadPDF(file.getBytes())) {
             PDFTextStripper stripper = new PDFTextStripper();
             rawLines = Arrays.stream(stripper.getText(document).split("\\r?\\n"))
-                             .filter(line -> !line.trim().isEmpty()).collect(Collectors.toList());
+                             .filter(line -> !line.trim().isEmpty())
+                             .map(this::normalizeEquationText)   // convert Unicode math → LaTeX
+                             .collect(Collectors.toList());
         }
 
         System.out.println("=== PROCESSING EXAM PDF ===");
@@ -1726,6 +1743,113 @@ public class HomepageController {
         return result.toString();
     }
 
+    // ─────────────────────────────────────────────────────────────────────
+    // Math / LaTeX normalization helpers (used during PDF exam ingestion)
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Convert Unicode math characters extracted from PDFs into LaTeX notation,
+     * then auto-wrap the detected math segments in $...$ so MathJax can render them.
+     * Lines that already contain LaTeX delimiters ($, \(, \[) are passed through unchanged.
+     */
+    private String normalizeEquationText(String text) {
+        if (text == null || text.isEmpty()) return text;
+
+        // Already wrapped – pass through
+        if (text.contains("$") || text.contains("\\(") || text.contains("\\[")) return text;
+
+        String original = text;
+
+        // ── Superscripts ──────────────────────────────────────────────────
+        text = text.replace("⁰","^{0}").replace("¹","^{1}").replace("²","^{2}")
+                   .replace("³","^{3}").replace("⁴","^{4}").replace("⁵","^{5}")
+                   .replace("⁶","^{6}").replace("⁷","^{7}").replace("⁸","^{8}")
+                   .replace("⁹","^{9}").replace("ⁿ","^{n}").replace("ˣ","^{x}");
+
+        // ── Subscripts ───────────────────────────────────────────────────
+        text = text.replace("₀","_{0}").replace("₁","_{1}").replace("₂","_{2}")
+                   .replace("₃","_{3}").replace("₄","_{4}").replace("₅","_{5}")
+                   .replace("₆","_{6}").replace("₇","_{7}").replace("₈","_{8}")
+                   .replace("₉","_{9}").replace("ₙ","_{n}");
+
+        // ── Unicode fractions ────────────────────────────────────────────
+        text = text.replace("½","\\frac{1}{2}").replace("⅓","\\frac{1}{3}")
+                   .replace("⅔","\\frac{2}{3}").replace("¼","\\frac{1}{4}")
+                   .replace("¾","\\frac{3}{4}").replace("⅛","\\frac{1}{8}")
+                   .replace("⅜","\\frac{3}{8}").replace("⅝","\\frac{5}{8}")
+                   .replace("⅞","\\frac{7}{8}");
+
+        // ── Radical / root ───────────────────────────────────────────────
+        // Match √N, √x, √(expr) before the bare √ fallback
+        text = text.replaceAll("√([0-9]+)",       "\\\\sqrt{$1}");
+        text = text.replaceAll("√([a-zA-Z])",     "\\\\sqrt{$1}");
+        text = text.replaceAll("√\\(([^)]+)\\)",  "\\\\sqrt{$1}");
+        text = text.replace   ("√",                "\\sqrt{}");
+        text = text.replaceAll("∛([0-9]+)",        "\\\\sqrt[3]{$1}");
+        text = text.replaceAll("∛([a-zA-Z])",      "\\\\sqrt[3]{$1}");
+        text = text.replace   ("∛",                "\\sqrt[3]{}");
+
+        // ── Operators ────────────────────────────────────────────────────
+        text = text.replace("×","\\times ").replace("÷","\\div ")
+                   .replace("±","\\pm ").replace("·","\\cdot ");
+
+        // ── Relations ────────────────────────────────────────────────────
+        text = text.replace("≤","\\leq ").replace("≥","\\geq ")
+                   .replace("≠","\\neq ").replace("≈","\\approx ")
+                   .replace("≡","\\equiv ").replace("∝","\\propto ");
+
+        // ── Greek (lower) ─────────────────────────────────────────────────
+        text = text.replace("α","\\alpha").replace("β","\\beta")
+                   .replace("γ","\\gamma").replace("δ","\\delta")
+                   .replace("ε","\\varepsilon").replace("θ","\\theta")
+                   .replace("λ","\\lambda").replace("μ","\\mu")
+                   .replace("π","\\pi").replace("σ","\\sigma")
+                   .replace("τ","\\tau").replace("φ","\\phi")
+                   .replace("χ","\\chi").replace("ψ","\\psi")
+                   .replace("ω","\\omega");
+
+        // ── Greek (upper) ─────────────────────────────────────────────────
+        text = text.replace("Δ","\\Delta").replace("Σ","\\Sigma")
+                   .replace("Γ","\\Gamma").replace("Λ","\\Lambda")
+                   .replace("Ω","\\Omega").replace("Π","\\Pi");
+
+        // ── Calculus & set notation ───────────────────────────────────────
+        text = text.replace("∑","\\sum").replace("∏","\\prod")
+                   .replace("∫","\\int").replace("∂","\\partial")
+                   .replace("∇","\\nabla").replace("∈","\\in")
+                   .replace("∉","\\notin").replace("∪","\\cup")
+                   .replace("∩","\\cap").replace("⊂","\\subset")
+                   .replace("∅","\\emptyset").replace("∞","\\infty");
+
+        // ── Number sets ───────────────────────────────────────────────────
+        text = text.replace("ℝ","\\mathbb{R}").replace("ℤ","\\mathbb{Z}")
+                   .replace("ℕ","\\mathbb{N}").replace("ℚ","\\mathbb{Q}");
+
+        // If nothing changed, no wrapping needed
+        if (text.equals(original)) return text;
+
+        // Wrap detected LaTeX segments in $...$
+        return wrapLatexSegments(text);
+    }
+
+    /**
+     * Scan text for LaTeX command / sub-superscript segments and wrap each in $...$.
+     * Surrounding plain-language words are left unchanged.
+     */
+    private String wrapLatexSegments(String text) {
+        if (text.contains("$") || text.contains("\\(")) return text;
+        Matcher m = LATEX_SEGMENT.matcher(text);
+        StringBuffer sb = new StringBuffer();
+        while (m.find()) {
+            String seg = m.group().trim();
+            if (!seg.isEmpty()) {
+                m.appendReplacement(sb, Matcher.quoteReplacement("$" + seg + "$"));
+            }
+        }
+        m.appendTail(sb);
+        return sb.toString();
+    }
+
     @GetMapping("/export/pdf")
     public ResponseEntity<byte[]> exportPDF(HttpSession session) throws DocumentException, IOException {
         @SuppressWarnings("unchecked")
@@ -1870,23 +1994,67 @@ public class HomepageController {
         PdfWriter.getInstance(document, baos);
         document.open();
 
-        // Add title
-        Paragraph title = new Paragraph(exam.getExamName() + " - WITH ANSWER KEY");
-        title.setAlignment(Paragraph.ALIGN_CENTER);
-        document.add(title);
-        document.add(new Paragraph("Subject: " + exam.getSubject()));
-        document.add(new Paragraph("Activity Type: " + exam.getActivityType()));
-        document.add(new Paragraph("Total Questions: " + exam.getQuestions().size()));
-        document.add(new Paragraph("Generated: " + new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date())));
-        document.add(new Paragraph("\n\n"));
+        // --- Fonts ---
+        Font titleFont    = new Font(Font.HELVETICA, 16, Font.BOLD);
+        Font subFont      = new Font(Font.HELVETICA, 11, Font.NORMAL);
+        Font qLabelFont   = new Font(Font.HELVETICA, 12, Font.BOLD);
+        Font qTextFont    = new Font(Font.HELVETICA, 11, Font.NORMAL);
+        Font ansLabelFont = new Font(Font.HELVETICA, 11, Font.BOLD);
+        Font ansTextFont  = new Font(Font.HELVETICA, 11, Font.NORMAL);
+        Font diffFont     = new Font(Font.HELVETICA, 10, Font.ITALIC);
 
-        // Add questions with answers
+        // --- Title block ---
+        Paragraph title = new Paragraph(exam.getExamName() + " — WITH ANSWER KEY", titleFont);
+        title.setAlignment(Paragraph.ALIGN_CENTER);
+        title.setSpacingAfter(4f);
+        document.add(title);
+
+        Paragraph sub1 = new Paragraph("Subject: " + exam.getSubject(), subFont);
+        sub1.setAlignment(Paragraph.ALIGN_CENTER);
+        document.add(sub1);
+
+        Paragraph sub2 = new Paragraph(
+            "Activity Type: " + exam.getActivityType() +
+            "   |   Total Questions: " + exam.getQuestions().size(), subFont);
+        sub2.setAlignment(Paragraph.ALIGN_CENTER);
+        document.add(sub2);
+
+        Paragraph sub3 = new Paragraph(
+            "Generated: " + new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()), subFont);
+        sub3.setAlignment(Paragraph.ALIGN_CENTER);
+        sub3.setSpacingAfter(14f);
+        document.add(sub3);
+
+        // Divider line (dashes)
+        Paragraph divider = new Paragraph("─".repeat(70), diffFont);
+        divider.setSpacingAfter(10f);
+        document.add(divider);
+
+        // --- Answer key body ---
         for (int i = 0; i < exam.getQuestions().size(); i++) {
-            document.add(new Paragraph("Question " + (i + 1) + ":"));
-            document.add(new Paragraph(exam.getQuestions().get(i)));
-            document.add(new Paragraph("Difficulty: " + exam.getDifficulties().get(i)));
-            document.add(new Paragraph("Answer: " + exam.getAnswerKey().getOrDefault(i + 1, "N/A")));
-            document.add(new Paragraph("\n"));
+            // ── Q-number + difficulty on its own bold line ──
+            Paragraph qHeader = new Paragraph();
+            qHeader.add(new Chunk(
+                "Q" + (i + 1) + "  [" + exam.getDifficulties().get(i) + "]",
+                qLabelFont));
+            qHeader.setSpacingBefore(10f);
+            qHeader.setSpacingAfter(2f);
+            document.add(qHeader);
+
+            // ── Question text ──
+            Paragraph qText = new Paragraph(exam.getQuestions().get(i), qTextFont);
+            qText.setIndentationLeft(16f);
+            qText.setSpacingAfter(4f);
+            document.add(qText);
+
+            // ── Answer: label (bold) + answer value (normal) on the SAME paragraph ──
+            Paragraph answerPara = new Paragraph();
+            answerPara.add(new Chunk("Answer: ", ansLabelFont));
+            answerPara.add(new Chunk(
+                exam.getAnswerKey().getOrDefault(i + 1, "N/A"), ansTextFont));
+            answerPara.setIndentationLeft(16f);
+            answerPara.setSpacingAfter(4f);
+            document.add(answerPara);
         }
 
         document.close();

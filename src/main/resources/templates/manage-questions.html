@@ -8,8 +8,20 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" th:href="@{/css/style.css}">
     <!-- MathJax for equation rendering -->
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true,
+                processEnvironments: true
+            },
+            options: {
+                skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+            }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <style>
         .question-card {
             transition: all 0.3s ease;
@@ -129,15 +141,23 @@
                         
                         <div class="mb-3">
                             <label class="form-label fw-bold">Question Text *</label>
-                            <textarea class="form-control" name="questionText" rows="4" 
-                                      placeholder="Enter the question text..." required></textarea>
+                            <textarea class="form-control" name="questionText" id="questionTextarea" rows="4" 
+                                      placeholder="Enter the question text..." required
+                                      oninput="updateMathPreview()"></textarea>
                             <small class="form-text text-white-50">
                                 For multiple choice questions, include all options (A, B, C, D, etc.) in the question text.<br>
                                 <strong>Supported formats:</strong><br>
                                 • <strong>Images:</strong> Use &lt;img src="URL" alt="description"&gt;<br>
                                 • <strong>Videos:</strong> Use &lt;video src="URL" controls&gt;&lt;/video&gt;<br>
-                                • <strong>Equations:</strong> Use LaTeX notation: \(inline equation\) or \[display equation\]
+                                • <strong>Equations (inline):</strong> <code style="color:#ffd;">$x^2 + y^2 = r^2$</code> or <code style="color:#ffd;">\(x^2\)</code><br>
+                                • <strong>Equations (block):</strong> <code style="color:#ffd;">$$\frac{a}{b}$$</code> or <code style="color:#ffd;">\[\int_0^\infty\]</code>
                             </small>
+                            <!-- Live LaTeX preview -->
+                            <div id="mathPreviewContainer" class="mt-2 p-3 rounded" 
+                                 style="display:none; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.3); color:#fff; min-height:48px;">
+                                <small class="d-block mb-1" style="opacity:.7; font-size:.75rem;">⟨ LaTeX Preview ⟩</small>
+                                <div id="mathPreview"></div>
+                            </div>
                         </div>
                         
                         <div class="row">
@@ -240,6 +260,28 @@
             bsAlert.close();
         });
     }, 5000);
+
+    // Live LaTeX preview
+    let previewDebounce;
+    function updateMathPreview() {
+        clearTimeout(previewDebounce);
+        previewDebounce = setTimeout(function() {
+            const raw = document.getElementById('questionTextarea').value;
+            const hasLatex = /\$|\\\(|\\\[/.test(raw);
+            const container = document.getElementById('mathPreviewContainer');
+            const preview = document.getElementById('mathPreview');
+            if (!hasLatex || !raw.trim()) {
+                container.style.display = 'none';
+                return;
+            }
+            container.style.display = 'block';
+            preview.innerHTML = raw;
+            if (window.MathJax && MathJax.typesetPromise) {
+                MathJax.typesetClear([preview]);
+                MathJax.typesetPromise([preview]).catch(err => console.warn('MathJax preview error:', err));
+            }
+        }, 400);
+    }
 </script>
 
 </body>

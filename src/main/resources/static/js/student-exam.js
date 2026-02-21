@@ -150,6 +150,13 @@ function displayQuestion() {
     
     document.getElementById('questionContainer').innerHTML = html;
     
+    // Re-typeset MathJax equations in the newly rendered question
+    if (window.MathJax && MathJax.typesetPromise) {
+        MathJax.typesetPromise(['#questionContainer']).catch(err =>
+            console.warn('MathJax render error:', err)
+        );
+    }
+    
     // Update UI elements
     updateProgress();
     updateDifficultyBadge();

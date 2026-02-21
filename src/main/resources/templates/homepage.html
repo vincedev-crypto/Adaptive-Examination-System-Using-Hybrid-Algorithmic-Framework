@@ -8,8 +8,17 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" th:href="@{/css/style.css}">
     <!-- MathJax for equation rendering -->
-    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
-    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']],
+                processEscapes: true
+            },
+            options: { skipHtmlTags: ['script','noscript','style','textarea','pre'] }
+        };
+    </script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
 </head>
 <body class="homepage-page">
 
@@ -90,6 +99,12 @@
                                 1. <strong>Single PDF</strong>: Questions with "Answer: ..." lines included<br>
                                 2. <strong>Two PDFs</strong>: Upload questions PDF + separate answer key PDF<br>
                                 3. <strong>CSV Format</strong>: Upload CSV file with columns: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD, Answer
+                                <hr class="my-2">
+                                <strong>📐 Mathematical Equations in PDF:</strong><br>
+                                • <strong>Inline math</strong>: wrap in <code>$...$</code> → e.g. <code>$x^2 + 3x = 0$</code><br>
+                                • <strong>Display math</strong>: wrap in <code>$$...$$</code> → e.g. <code>$$\frac{a}{b}=c$$</code><br>
+                                • <strong>Unicode symbols</strong> (², √, π, ≤, α, ∫, etc.) are <em>automatically converted</em> to LaTeX<br>
+                                • <strong>Tip</strong>: Type equations as plain text in your Word/Docs file using <code>$...$</code> before exporting to PDF
                             </div>
                         </div>
 
