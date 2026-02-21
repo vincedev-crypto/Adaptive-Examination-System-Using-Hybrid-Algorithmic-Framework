@@ -138,3 +138,31 @@
     font-size: 4rem;
     color: #ffc107;
 }
+
+/* Responsive tweaks for exam layout */
+
+@media (max-width: 768px) {
+    .student-header {
+        padding: 1rem;
+        margin-bottom: 1.25rem;
+    }
+
+    .question-card {
+        min-height: auto;
+    }
+
+    .navigation-btns {
+        padding: 0.75rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .choice-btn {
+        padding: 0.75rem;
+        font-size: 0.95rem;
+    }
+
+    .deadline-info {
+        font-size: 0.8rem;
+    }
+}

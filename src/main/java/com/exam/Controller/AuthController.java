@@ -1,11 +1,14 @@
 package com.exam.Controller;
 
-import com.exam.entity.User;
-import com.exam.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+
+import com.exam.entity.User;
+import com.exam.service.UserService;
 
 @Controller
 public class AuthController {
@@ -23,16 +26,20 @@ public class AuthController {
                                @RequestParam(required = false) String logout,
                                @RequestParam(required = false) String registered,
                                Model model) {
-        if (error != null) {
-            model.addAttribute("error", "Invalid email or password");
-        }
-        if (logout != null) {
-            model.addAttribute("message", "You have been logged out successfully");
-        }
-        if (registered != null) {
-            model.addAttribute("success", "Registration successful! Please login.");
-        }
+        addIfNotNull(model, error, "error", "Invalid email or password");
+        addIfNotNull(model, logout, "message", "You have been logged out successfully");
+        addIfNotNull(model, registered, "success", "Registration successful! Please login.");
+
         return "login";
+    }
+
+    private void addIfNotNull(Model model,
+                              String flag,
+                              String attributeName,
+                              String message) {
+        if (flag != null) {
+            model.addAttribute(attributeName, message);
+        }
     }
     
     @GetMapping("/register")

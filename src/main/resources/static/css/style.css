@@ -13,6 +13,8 @@ body {
     background: linear-gradient(180deg, #f7f3ec 0%, #ffffff 45%, #f9f6f0 100%);
     color: var(--eac-ink);
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    min-height: 100vh;
 }
 
 .navbar {
@@ -215,4 +217,50 @@ body {
 /* Helper class to hide elements */
 .hidden {
     display: none;
+}
+
+/* Responsive layout enhancements */
+
+@media (max-width: 992px) {
+    .results-page .dashboard-header {
+        padding: 18px;
+        text-align: center;
+    }
+
+    .results-page .stat-card {
+        margin-bottom: 1rem;
+    }
+
+    .upload-card,
+    .results-card {
+        margin-bottom: 1rem;
+    }
+}
+
+@media (max-width: 576px) {
+    .navbar .navbar-brand {
+        font-size: 1rem;
+    }
+
+    .navbar .navbar-brand small {
+        font-size: 0.65rem;
+    }
+
+    .results-page .dashboard-header {
+        padding: 14px;
+    }
+
+    .results-page .table-wrapper {
+        border-radius: 8px;
+    }
+
+    .btn {
+        width: 100%;
+        margin-bottom: 0.5rem;
+    }
+
+    .score-badge {
+        font-size: 0.95rem;
+        padding: 6px 10px;
+    }
 }
