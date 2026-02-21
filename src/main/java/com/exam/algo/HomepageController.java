@@ -184,6 +184,14 @@ public class HomepageController {
         // Fetch enrolled students for this teacher
         List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
         
+        return showHomepageCommon(model, teacherEmail, allStudents, enrolledStudents);
+    }
+    
+    /**
+     * Common method for homepage rendering
+     */
+    private String showHomepageCommon(Model model, String teacherEmail, List<User> allStudents, List<EnrolledStudent> enrolledStudents) {
+        
         // Fetch exam submissions and sort by latest first
         List<ExamSubmission> submissions = examSubmissionRepository.findAll();
         submissions.sort(Comparator.comparing(ExamSubmission::getSubmittedAt, 
@@ -235,6 +243,149 @@ public class HomepageController {
         model.addAttribute("enrollmentCountBySubject", enrollmentCountBySubject);
         
         return "homepage";
+    }
+    
+    /**
+     * Show subjects management page
+     */
+    @GetMapping("/subjects")
+    public String showSubjects(Model model, java.security.Principal principal) {
+        String teacherEmail = principal.getName();
+        
+        // Fetch all students from database
+        List<User> allStudents = userRepository.findAll().stream()
+            .filter(user -> user.getRole() == User.Role.STUDENT)
+            .collect(Collectors.toList());
+        
+        // Fetch enrolled students for this teacher
+        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
+        
+        // Get subjects for this teacher
+        List<Subject> subjects = subjectRepository.findByTeacherEmail(teacherEmail);
+        model.addAttribute("subjects", subjects);
+        
+        // Group enrolled students by subject ID for easy template access
+        Map<Long, List<EnrolledStudent>> enrollmentsBySubject = new HashMap<>();
+        Map<Long, Integer> enrollmentCountBySubject = new HashMap<>();
+        for (EnrolledStudent enrollment : enrolledStudents) {
+            Long subjectId = enrollment.getSubjectId();
+            if (subjectId != null) {
+                enrollmentsBySubject.computeIfAbsent(subjectId, k -> new ArrayList<>()).add(enrollment);
+                enrollmentCountBySubject.put(subjectId, enrollmentsBySubject.get(subjectId).size());
+            }
+        }
+        
+        model.addAttribute("enrollmentsBySubject", enrollmentsBySubject);
+        model.addAttribute("enrollmentCountBySubject", enrollmentCountBySubject);
+        model.addAttribute("allStudents", allStudents);
+        model.addAttribute("teacherEmail", teacherEmail);
+        
+        return "teacher-subjects";
+    }
+    
+    /**
+     * Show submissions management page
+     */
+    @GetMapping("/submissions")
+    public String showSubmissions(Model model, 
+                                   @RequestParam(required = false) String examFilter,
+                                   @RequestParam(required = false) String subjectFilter,
+                                   @RequestParam(required = false) String statusFilter,
+                                   @RequestParam(required = false) String studentFilter,
+                                   java.security.Principal principal) {
+        String teacherEmail = principal.getName();
+        
+        // Get all enrolled students for this teacher
+        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
+        List<String> studentEmails = enrolledStudents.stream()
+                .map(EnrolledStudent::getStudentEmail)
+                .collect(Collectors.toList());
+        
+        // Get all submissions for enrolled students
+        List<ExamSubmission> allSubmissions = examSubmissionRepository.findAll().stream()
+                .filter(s -> studentEmails.contains(s.getStudentEmail()))
+                .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, 
+                                            Comparator.nullsLast(Comparator.reverseOrder())))
+                .collect(Collectors.toList());
+        
+        // Apply filters
+        List<ExamSubmission> filteredSubmissions = allSubmissions;
+        
+        if (examFilter != null && !examFilter.isEmpty()) {
+            filteredSubmissions = filteredSubmissions.stream()
+                    .filter(s -> s.getExamName().equals(examFilter))
+                    .collect(Collectors.toList());
+        }
+        
+        if (subjectFilter != null && !subjectFilter.isEmpty()) {
+            filteredSubmissions = filteredSubmissions.stream()
+                    .filter(s -> s.getSubject().equals(subjectFilter))
+                    .collect(Collectors.toList());
+        }
+        
+        if (studentFilter != null && !studentFilter.isEmpty()) {
+            filteredSubmissions = filteredSubmissions.stream()
+                    .filter(s -> s.getStudentEmail().equals(studentFilter))
+                    .collect(Collectors.toList());
+        }
+        
+        if (statusFilter != null && !statusFilter.isEmpty()) {
+            switch (statusFilter) {
+                case "graded":
+                    filteredSubmissions = filteredSubmissions.stream()
+                            .filter(ExamSubmission::isGraded)
+                            .collect(Collectors.toList());
+                    break;
+                case "pending":
+                    filteredSubmissions = filteredSubmissions.stream()
+                            .filter(s -> !s.isGraded())
+                            .collect(Collectors.toList());
+                    break;
+                case "released":
+                    filteredSubmissions = filteredSubmissions.stream()
+                            .filter(ExamSubmission::isResultsReleased)
+                            .collect(Collectors.toList());
+                    break;
+            }
+        }
+        
+        // Calculate statistics
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalSubmissions", filteredSubmissions.size());
+        stats.put("gradedCount", filteredSubmissions.stream().filter(ExamSubmission::isGraded).count());
+        stats.put("pendingCount", filteredSubmissions.stream().filter(s -> !s.isGraded()).count());
+        stats.put("releasedCount", filteredSubmissions.stream().filter(ExamSubmission::isResultsReleased).count());
+        
+        // Get unique exams, subjects, and students for filter dropdowns
+        List<String> uniqueExams = allSubmissions.stream()
+                .map(ExamSubmission::getExamName)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+        
+        List<String> uniqueSubjects = allSubmissions.stream()
+                .map(ExamSubmission::getSubject)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+        
+        List<String> uniqueStudents = allSubmissions.stream()
+                .map(ExamSubmission::getStudentEmail)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+        
+        model.addAttribute("submissions", filteredSubmissions);
+        model.addAttribute("stats", stats);
+        model.addAttribute("uniqueExams", uniqueExams);
+        model.addAttribute("uniqueSubjects", uniqueSubjects);
+        model.addAttribute("uniqueStudents", uniqueStudents);
+        model.addAttribute("examFilter", examFilter);
+        model.addAttribute("subjectFilter", subjectFilter);
+        model.addAttribute("statusFilter", statusFilter);
+        model.addAttribute("studentFilter", studentFilter);
+        
+        return "teacher-submissions";
     }
 
     /**
@@ -1701,6 +1852,170 @@ public class HomepageController {
                 .headers(headers)
                 .body(baos.toByteArray());
     }    
+    
+    /**
+     * Export shuffled exam with answers (PDF)
+     */
+    @GetMapping("/export-exam-with-answers/pdf")
+    public ResponseEntity<byte[]> exportExamWithAnswersPdf(@RequestParam String examId) throws DocumentException, IOException {
+        UploadedExam exam = uploadedExams.get(examId);
+        
+        if (exam == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        Document document = new Document();
+        PdfWriter.getInstance(document, baos);
+        document.open();
+
+        // Add title
+        Paragraph title = new Paragraph(exam.getExamName() + " - WITH ANSWER KEY");
+        title.setAlignment(Paragraph.ALIGN_CENTER);
+        document.add(title);
+        document.add(new Paragraph("Subject: " + exam.getSubject()));
+        document.add(new Paragraph("Activity Type: " + exam.getActivityType()));
+        document.add(new Paragraph("Total Questions: " + exam.getQuestions().size()));
+        document.add(new Paragraph("Generated: " + new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date())));
+        document.add(new Paragraph("\n\n"));
+
+        // Add questions with answers
+        for (int i = 0; i < exam.getQuestions().size(); i++) {
+            document.add(new Paragraph("Question " + (i + 1) + ":"));
+            document.add(new Paragraph(exam.getQuestions().get(i)));
+            document.add(new Paragraph("Difficulty: " + exam.getDifficulties().get(i)));
+            document.add(new Paragraph("Answer: " + exam.getAnswerKey().getOrDefault(i, "N/A")));
+            document.add(new Paragraph("\n"));
+        }
+
+        document.close();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_PDF);
+        headers.setContentDispositionFormData("attachment", exam.getExamName().replaceAll("\\s+", "_") + "_with_answers.pdf");
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(baos.toByteArray());
+    }
+    
+    /**
+     * Export shuffled exam with answers (CSV)
+     */
+    @GetMapping("/export-exam-with-answers/csv")
+    public ResponseEntity<byte[]> exportExamWithAnswersCsv(@RequestParam String examId) throws IOException {
+        UploadedExam exam = uploadedExams.get(examId);
+        
+        if (exam == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        StringBuilder csv = new StringBuilder();
+        // CSV Header
+        csv.append("Question Number,Question Text,Difficulty,Correct Answer\n");
+        
+        // Add each question with answer
+        for (int i = 0; i < exam.getQuestions().size(); i++) {
+            // Flatten newlines so multi-choice options stay in one row (no misalignment in spreadsheets)
+            String questionText = exam.getQuestions().get(i)
+                .replace("\r\n", " | ")
+                .replace("\r", " | ")
+                .replace("\n", " | ")
+                .replaceAll("\\s*\\|\\s*$", "") // trim trailing separator
+                .replaceAll("\\s{2,}", " ")      // collapse extra spaces
+                .trim();
+            
+            csv.append(i + 1).append(",");
+            csv.append(escapeCSV(questionText)).append(",");
+            csv.append(escapeCSV(exam.getDifficulties().get(i))).append(",");
+            csv.append(escapeCSV(exam.getAnswerKey().getOrDefault(i, "N/A")));
+            csv.append("\n");
+        }
+        
+        byte[] csvBytes = csv.toString().getBytes("UTF-8");
+        
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("text/csv"));
+        headers.setContentDispositionFormData("attachment", exam.getExamName().replaceAll("\\s+", "_") + "_with_answers.csv");
+        
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(csvBytes);
+    }
+    
+    /**
+     * Export shuffled exam with answers (DOCX)
+     */
+    @GetMapping("/export-exam-with-answers/docx")
+    public ResponseEntity<byte[]> exportExamWithAnswersDocx(@RequestParam String examId) throws IOException {
+        UploadedExam exam = uploadedExams.get(examId);
+        
+        if (exam == null) {
+            return ResponseEntity.notFound().build();
+        }
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        XWPFDocument document = new XWPFDocument();
+
+        // Add title
+        XWPFParagraph titlePara = document.createParagraph();
+        titlePara.setAlignment(org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER);
+        XWPFRun titleRun = titlePara.createRun();
+        titleRun.setText(exam.getExamName() + " - WITH ANSWER KEY");
+        titleRun.setBold(true);
+        titleRun.setFontSize(18);
+
+        // Add metadata
+        document.createParagraph().createRun().addBreak();
+        XWPFParagraph metaPara = document.createParagraph();
+        XWPFRun metaRun = metaPara.createRun();
+        metaRun.setText("Subject: " + exam.getSubject());
+        metaRun.addBreak();
+        metaRun.setText("Activity Type: " + exam.getActivityType());
+        metaRun.addBreak();
+        metaRun.setText("Total Questions: " + exam.getQuestions().size());
+        metaRun.addBreak();
+        metaRun.setText("Generated: " + new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss").format(new Date()));
+        metaRun.addBreak();
+        metaRun.addBreak();
+
+        // Add questions with answers
+        for (int i = 0; i < exam.getQuestions().size(); i++) {
+            XWPFParagraph qPara = document.createParagraph();
+            XWPFRun qRun = qPara.createRun();
+            qRun.setText("Question " + (i + 1) + ":");
+            qRun.setBold(true);
+            qRun.addBreak();
+            
+            qRun = qPara.createRun();
+            qRun.setText(exam.getQuestions().get(i));
+            qRun.addBreak();
+            
+            XWPFRun diffRun = qPara.createRun();
+            diffRun.setText("Difficulty: " + exam.getDifficulties().get(i));
+            diffRun.setItalic(true);
+            diffRun.addBreak();
+            
+            XWPFRun ansRun = qPara.createRun();
+            ansRun.setText("Answer: " + exam.getAnswerKey().getOrDefault(i, "N/A"));
+            ansRun.setColor("008000"); // Green color for answer
+            ansRun.setBold(true);
+            ansRun.addBreak();
+            ansRun.addBreak();
+        }
+
+        document.write(baos);
+        document.close();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"));
+        headers.setContentDispositionFormData("attachment", exam.getExamName().replaceAll("\\s+", "_") + "_with_answers.docx");
+
+        return ResponseEntity.ok()
+                .headers(headers)
+                .body(baos.toByteArray());
+    }
+    
     @GetMapping("/download-results")
     public ResponseEntity<byte[]> downloadResults() throws IOException {
         List<ExamSubmission> submissions = examSubmissionRepository.findAll();

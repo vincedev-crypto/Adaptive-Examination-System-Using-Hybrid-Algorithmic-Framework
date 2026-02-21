@@ -1,0 +1,60 @@
+<!-- Top Navigation Bar - Can be included in all teacher pages -->
+<nav class="navbar navbar-expand-lg navbar-dark mb-4" th:fragment="teacherNav">
+    <div class="container-fluid">
+        <a class="navbar-brand fw-bold" th:href="@{/teacher/homepage}">
+            <span>ALGO SYSTEM</span>
+            <small>Academic Excellence Portal</small>
+        </a>
+        
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/teacher/homepage}">
+                        <i class="bi bi-house-door"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/teacher/subjects}">
+                        <i class="bi bi-book"></i> Subjects
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/teacher/submissions}">
+                        <i class="bi bi-file-earmark-check"></i> Submissions
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/teacher/view-results}">
+                        <i class="bi bi-graph-up"></i> Results
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/teacher/grade-submissions}">
+                        <i class="bi bi-pencil-square"></i> Grade
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" th:href="@{/teacher/view-students-list}">
+                        <i class="bi bi-people"></i> Students
+                    </a>
+                </li>
+            </ul>
+            
+            <div class="d-flex align-items-center">
+                <span class="navbar-text me-3">
+                    <i class="bi bi-person-circle"></i> 
+                    Welcome, <strong th:text="${#authentication.name}">Teacher</strong>
+                </span>
+                <form th:action="@{/logout}" method="post" class="d-inline">
+                    <button class="btn btn-outline-danger btn-sm" type="submit">
+                        <i class="bi bi-box-arrow-right"></i> Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</nav>

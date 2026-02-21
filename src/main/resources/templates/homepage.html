@@ -7,23 +7,14 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <link rel="stylesheet" th:href="@{/css/style.css}">
+    <!-- MathJax for equation rendering -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
 </head>
 <body class="homepage-page">
 
-<nav class="navbar navbar-expand-lg navbar-dark mb-5">
-    <div class="container">
-        <a class="navbar-brand fw-bold" href="#">
-            <span>ALGO SYSTEM</span>
-            <small>Academic Excellence Portal</small>
-        </a>
-        <div class="d-flex align-items-center">
-            <span class="navbar-text me-3">Welcome, <strong th:text="${#authentication.name}">Teacher</strong></span>
-            <form th:action="@{/logout}" method="post">
-                <button class="btn btn-outline-danger btn-sm" type="submit">Logout</button>
-            </form>
-        </div>
-    </div>
-</nav>
+<!-- Include Navigation Bar -->
+<div th:replace="teacher-nav :: teacherNav"></div>
 
 <div class="container">
     <div class="row justify-content-center">

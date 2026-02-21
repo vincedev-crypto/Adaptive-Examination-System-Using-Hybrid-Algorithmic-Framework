@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Submissions - ALGO</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <!-- MathJax for equation rendering -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+</head>
+<body class="homepage-page">
+
+<!-- Include Navigation Bar -->
+<div th:replace="teacher-nav :: teacherNav"></div>
+
+<div class="container">
+    <div class="row">
+        <div class="col-md-11 mx-auto">
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <div>
+                    <h2 class="text-primary mb-0">📝 Student Submissions</h2>
+                    <p class="text-muted">Manage and review all exam submissions</p>
+                </div>
+                <div>
+                    <a th:href="@{/teacher/grade-submissions}" class="btn btn-warning me-2">
+                        <i class="bi bi-pencil-square"></i> Grade Submissions
+                    </a>
+                    <a th:href="@{/teacher/download-results}" class="btn btn-success">
+                        <i class="bi bi-download"></i> Download All
+                    </a>
+                </div>
+            </div>
+
+            <!-- Filter Section -->
+            <div class="card upload-card p-3 mb-4">
+                <form method="get" th:action="@{/teacher/submissions}">
+                    <div class="row g-2">
+                        <div class="col-md-3">
+                            <select name="examFilter" class="form-select form-select-sm">
+                                <option value="">All Exams</option>
+                                <option th:each="exam : ${uniqueExams}" 
+                                        th:value="${exam}" 
+                                        th:text="${exam}"
+                                        th:selected="${exam == examFilter}">
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select name="subjectFilter" class="form-select form-select-sm">
+                                <option value="">All Subjects</option>
+                                <option th:each="subject : ${uniqueSubjects}" 
+                                        th:value="${subject}" 
+                                        th:text="${subject}"
+                                        th:selected="${subject == subjectFilter}">
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <select name="studentFilter" class="form-select form-select-sm">
+                                <option value="">All Students</option>
+                                <option th:each="student : ${uniqueStudents}" 
+                                        th:value="${student}" 
+                                        th:text="${student}"
+                                        th:selected="${student == studentFilter}">
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <select name="statusFilter" class="form-select form-select-sm">
+                                <option value="">All Status</option>
+                                <option value="graded" th:selected="${statusFilter == 'graded'}">Graded</option>
+                                <option value="pending" th:selected="${statusFilter == 'pending'}">Pending</option>
+                                <option value="released" th:selected="${statusFilter == 'released'}">Released</option>
+                            </select>
+                        </div>
+                        <div class="col-md-1">
+                            <button type="submit" class="btn btn-primary btn-sm w-100">
+                                <i class="bi bi-funnel"></i>
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Statistics -->
+            <div class="row mb-4">
+                <div class="col-md-3">
+                    <div class="card upload-card text-center p-3">
+                        <h6 class="text-muted mb-1">Total Submissions</h6>
+                        <h3 class="text-primary mb-0" th:text="${stats.totalSubmissions}">0</h3>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card upload-card text-center p-3">
+                        <h6 class="text-muted mb-1">Graded</h6>
+                        <h3 class="text-success mb-0" th:text="${stats.gradedCount}">0</h3>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card upload-card text-center p-3">
+                        <h6 class="text-muted mb-1">Pending</h6>
+                        <h3 class="text-warning mb-0" th:text="${stats.pendingCount}">0</h3>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card upload-card text-center p-3">
+                        <h6 class="text-muted mb-1">Released</h6>
+                        <h3 class="text-info mb-0" th:text="${stats.releasedCount}">0</h3>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Submissions Table -->
+            <div class="card upload-card p-4">
+                <div th:if="${#lists.isEmpty(submissions)}" class="text-center py-5">
+                    <i class="bi bi-inbox display-1 text-muted"></i>
+                    <h4 class="text-muted mt-3">No Submissions Found</h4>
+                    <p class="text-muted">No submissions match your filter criteria</p>
+                </div>
+
+                <div th:if="${!#lists.isEmpty(submissions)}" class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Student</th>
+                                <th>Exam</th>
+                                <th>Subject</th>
+                                <th>Submitted</th>
+                                <th>Score</th>
+                                <th>Performance</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="submission : ${submissions}">
+                                <td>
+                                    <i class="bi bi-person-circle"></i>
+                                    <strong th:text="${submission.studentEmail}">student@example.com</strong>
+                                </td>
+                                <td>
+                                    <span class="text-primary fw-bold" th:text="${submission.examName}">Exam</span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary" th:text="${submission.subject}">Subject</span>
+                                </td>
+                                <td>
+                                    <small th:text="${#temporals.format(submission.submittedAt, 'MMM dd, yyyy HH:mm')}">
+                                        Date
+                                    </small>
+                                </td>
+                                <td>
+                                    <span class="badge bg-secondary">
+                                        <span th:text="${submission.score + ' / ' + submission.totalQuestions}">0/0</span>
+                                        (<span th:text="${#numbers.formatDecimal(submission.percentage, 1, 2) + '%'}">0%</span>)
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge" 
+                                          th:classappend="${submission.performanceCategory == 'Excellent' ? 'bg-success' : 
+                                                          submission.performanceCategory == 'Good' ? 'bg-info' : 
+                                                          submission.performanceCategory == 'Fair' ? 'bg-warning' : 'bg-danger'}"
+                                          th:text="${submission.performanceCategory}">
+                                        Category
+                                    </span>
+                                </td>
+                                <td>
+                                    <span th:if="${submission.graded}" class="badge bg-success">
+                                        <i class="bi bi-check-circle"></i> Graded
+                                    </span>
+                                    <span th:if="${!submission.graded}" class="badge bg-warning">
+                                        <i class="bi bi-clock"></i> Pending
+                                    </span>
+                                    <br>
+                                    <span th:if="${submission.resultsReleased}" class="badge bg-info mt-1">
+                                        <i class="bi bi-unlock"></i> Released
+                                    </span>
+                                    <span th:if="${!submission.resultsReleased}" class="badge bg-secondary mt-1">
+                                        <i class="bi bi-lock"></i> Locked
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group-vertical btn-group-sm" role="group">
+                                        <a th:href="@{/teacher/view-result/{id}(id=${submission.id})}" 
+                                           class="btn btn-primary btn-sm">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                        <a th:href="@{/teacher/performance-analytics/{id}(id=${submission.id})}" 
+                                           class="btn btn-success btn-sm">
+                                            <i class="bi bi-graph-up"></i> Analytics
+                                        </a>
+                                        <a th:href="@{/teacher/download-result/{id}(id=${submission.id})}" 
+                                           class="btn btn-outline-secondary btn-sm">
+                                            <i class="bi bi-download"></i> CSV
+                                        </a>
+                                        <form th:action="@{/teacher/toggle-result-release/{id}(id=${submission.id})}" 
+                                              method="post" class="d-inline">
+                                            <input type="hidden" name="redirectTo" value="submissions">
+                                            <button type="submit" class="btn btn-sm w-100"
+                                                    th:classappend="${submission.resultsReleased} ? 'btn-secondary' : 'btn-info'">
+                                                <i th:class="${submission.resultsReleased} ? 'bi-lock' : 'bi-unlock'"></i>
+                                                <span th:text="${submission.resultsReleased} ? 'Lock' : 'Release'">Toggle</span>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
