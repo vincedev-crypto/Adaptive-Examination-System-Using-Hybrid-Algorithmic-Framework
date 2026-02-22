@@ -1,41 +1,47 @@
 <!-- Teacher Sidebar - included in teacher layout -->
-<aside class="teacher-sidebar" th:fragment="teacherNav">
-        <!-- Brand / School info -->
-        <div class="teacher-brand" th:href="@{/teacher/homepage}">
-            <a th:href="@{/teacher/homepage}" class="text-decoration-none teacher-brand-link">
-                <div class="teacher-brand-logo">
-                    <img th:src="@{/images/EAC_Emblem.png}" alt="EAC Emblem" />
+<header class="teacher-sidebar" th:fragment="teacherNav">
+    <div class="nav-brand-row">
+        <a th:href="@{/teacher/homepage}" class="text-decoration-none teacher-brand-link">
+            <div class="teacher-brand-logo">
+                <img th:src="@{/images/EAC_Emblem.png}" alt="EAC Emblem" />
+            </div>
+            <div class="teacher-brand-text">
+                <div class="teacher-brand-title">EMILIO AGUINALDO COLLEGE - MANILA</div>
+                <div class="teacher-brand-subtitle">
+                    1113–1117 San Marcelino St., Ermita, Manila, Philippines 1000
                 </div>
-                <div class="teacher-brand-text">
-                    <div class="teacher-brand-title">EMILIO AGUINALDO COLLEGE - MANILA</div>
-                    <div class="teacher-brand-subtitle">
-                        1113–1117 San Marcelino St., Ermita, Manila, Philippines 1000
-                    </div>
-                </div>
-            </a>
-        </div>
+            </div>
+        </a>
+    </div>
 
-        <!-- Main navigation links -->
-        <nav class="teacher-nav-menu">
-            <a class="teacher-nav-item" th:href="@{/teacher/homepage}">
-                <i class="bi bi-speedometer2"></i>
-                <span>Dashboard</span>
+    <div class="nav-bottom-row">
+        <nav class="teacher-nav-menu" id="teacherNavMenu">
+            <a class="teacher-nav-item" th:href="@{/teacher/homepage}" data-path="/teacher/homepage">
+                <i class="bi bi-house-door-fill"></i> Dashboard
             </a>
-            <a class="teacher-nav-item" th:href="@{/teacher/subjects}">
-                <i class="bi bi-journal-bookmark"></i>
-                <span>Subjects</span>
+            <a class="teacher-nav-item" th:href="@{/teacher/subjects}" data-path="/teacher/subjects">
+                <i class="bi bi-collection-fill"></i> Subjects
             </a>
-            <a class="teacher-nav-item" th:href="@{/teacher/submissions}">
-				<i class="bi bi-inboxes"></i>
-                <span>Submissions</span>
+            <a class="teacher-nav-item" th:href="@{/teacher/submissions}" data-path="/teacher/submissions">
+                <i class="bi bi-send-fill"></i> Submissions
             </a>
-            <a class="teacher-nav-item" th:href="@{/teacher/grade-submissions}">
-                <i class="bi bi-clipboard-check"></i>
-                <span>Grade</span>
+            <a class="teacher-nav-item" th:href="@{/teacher/grade-submissions}" data-path="/teacher/grade">
+                <i class="bi bi-clipboard2-check-fill"></i> Grade
             </a>
-            <a class="teacher-nav-item" th:href="@{/teacher/view-students-list}">
-                <i class="bi bi-people-fill"></i>
-                <span>Students</span>
+            <a class="teacher-nav-item" th:href="@{/teacher/view-students-list}" data-path="/teacher/view-students">
+                <i class="bi bi-people-fill"></i> Students
             </a>
         </nav>
-    </aside>
+        <script>
+            (function() {
+                const path = window.location.pathname;
+                document.querySelectorAll('#teacherNavMenu .teacher-nav-item').forEach(function(link) {
+                    const p = link.getAttribute('data-path');
+                    if (p && path.startsWith(p)) {
+                        link.classList.add('active');
+                    }
+                });
+            })();
+        </script>
+    </div>
+</header>

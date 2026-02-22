@@ -148,10 +148,16 @@ body {
     font-size: 1rem;
 }
 
-.teacher-nav-item:hover,
-.teacher-nav-item.active {
+.teacher-nav-item:hover {
     background-color: rgba(255, 255, 255, 0.13);
     color: #ffffff;
+}
+
+.teacher-nav-item.active {
+    background-color: rgba(255, 255, 255, 0.18);
+    color: #ffffff;
+    border-bottom: 2.5px solid #FFD700;
+    font-weight: 600;
 }
 
 .teacher-sidebar-footer {
