@@ -1,142 +1,141 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Student Dashboard - ALGO</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
-    <link th:href="@{/css/student-dashboard.css}" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        .subject-card {
+            border: 1px solid var(--eac-border);
+            border-radius: 14px;
+            overflow: hidden;
+            transition: box-shadow 0.2s;
+        }
+        .subject-card:hover { box-shadow: 0 8px 24px rgba(122,16,34,0.13); }
+        .subject-header {
+            background: linear-gradient(135deg, var(--eac-maroon) 0%, #8f1a2e 100%) !important;
+        }
+        .activity-item { transition: background 0.15s; }
+        .activity-item:hover { background: #fdf6f0; }
+        .activity-icon {
+            width: 38px; height: 38px; border-radius: 10px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.1rem; flex-shrink: 0;
+        }
+        .activity-pending { border-left: 3px solid var(--eac-gold) !important; }
+        .section-title {
+            color: var(--eac-maroon); font-weight: 700;
+            border-bottom: 2px solid var(--eac-gold);
+            padding-bottom: 0.4rem; margin-bottom: 1.25rem;
+        }
+    </style>
 </head>
-<body>
-    <nav class="navbar navbar-dark bg-primary mb-4">
-        <div class="container-fluid">
-            <span class="navbar-brand">
-                <i class="bi bi-person-circle me-2"></i>
-                <strong th:text="${#authentication.name}"></strong>
-            </span>
-            <form th:action="@{/logout}" method="post">
-                <button class="btn btn-light btn-sm" type="submit">
-                    <i class="bi bi-box-arrow-right"></i> Logout
-                </button>
-            </form>
-        </div>
-    </nav>
+<body class="homepage-page">
 
-    <div class="container-fluid px-4">
-        <!-- Header -->
+<div class="teacher-layout">
+    <div th:replace="~{student-nav :: studentNav}"></div>
+
+    <div class="teacher-content-wrapper">
+        <div class="container" style="max-width:1200px;">
+
         <div class="mb-4">
-            <h2><i class="bi bi-grid-3x3-gap-fill me-2"></i>My Subjects</h2>
-            <p class="text-muted">View your enrolled subjects and their activities</p>
+            <h3 class="section-title"><i class="bi bi-grid-3x3-gap-fill me-2"></i>My Subjects</h3>
+            <p class="text-muted small">Welcome back,
+                <strong th:text="${studentEmail}">student</strong> —
+                view your enrolled subjects and available exams.
+            </p>
         </div>
 
-        <!-- No Subjects Message -->
+        <!-- No Subjects -->
         <div th:if="${!hasSubjects}" class="text-center py-5">
-            <div class="card shadow-sm p-5">
+            <div class="card upload-card p-5">
                 <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
-                <h4 class="mt-3 text-muted">No Subjects Yet</h4>
-                <p class="text-muted">You haven't been enrolled in any subjects yet.<br>Contact your teacher to get started.</p>
+                <h5 class="mt-3 text-muted">No Subjects Yet</h5>
+                <p class="text-muted mb-0">You haven't been enrolled in any subjects yet.<br>Contact your teacher to get started.</p>
             </div>
         </div>
 
         <!-- Subject Cards Grid -->
         <div th:if="${hasSubjects}" class="row g-4">
             <div th:each="subject : ${subjectCards}" class="col-12 col-md-6 col-lg-4">
-                <!-- Subject Card -->
                 <div class="card subject-card shadow-sm h-100">
                     <!-- Subject Header -->
-                    <div class="card-header subject-header bg-gradient text-white p-4" 
-                         th:style="'background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);'">
-                        <h5 class="card-title mb-1" th:text="${subject.name}">Subject Name</h5>
-                        <small th:if="${subject.description != null && !subject.description.isEmpty()}" 
-                               th:text="${subject.description}">Description</small>
-                        <small th:unless="${subject.description != null && !subject.description.isEmpty()}">
-                            <i class="bi bi-person"></i> <span th:text="${subject.teacherEmail}">Teacher</span>
-                        </small>
-                    </div>
-
+                    <div class="card-header subject-header text-white p-4">
+                        <h5 class="card-title mb-1 fw-bold" th:text="${subject.name}">Subject Name</h5>
+                        <small th:if="${subject.description != null && !subject.description.isEmpty()}"
+                               th:text="${subject.description}" class="opacity-75">Description</small>
+                        <small th:unless="${subject.description != null && !subject.description.isEmpty()}" class="opacity-75">
+                            <i class="bi bi-person me-1"></i><span th:text="${subject.teacherEmail}">Teacher</span>
                     <!-- Activities Section -->
                     <div class="card-body p-0">
-                        <!-- No Activities -->
                         <div th:if="${subject.activityCount == 0}" class="p-4 text-center text-muted">
                             <i class="bi bi-calendar-x" style="font-size: 2rem;"></i>
-                            <p class="mb-0 mt-2">No activities yet</p>
+                            <p class="mb-0 mt-2 small">No activities yet</p>
                         </div>
 
-                        <!-- Activities List -->
                         <div th:if="${subject.activityCount > 0}" class="activity-list">
-                            <div th:each="activity : ${subject.activities}" 
+                            <div th:each="activity : ${subject.activities}"
                                  class="activity-item border-bottom p-3"
                                  th:classappend="${activity.status == 'pending' ? 'activity-pending' : ''}">
-                                
-                                <!-- Activity Header -->
+
                                 <div class="d-flex align-items-start">
-                                    <div class="activity-icon me-3" 
+                                    <div class="activity-icon me-3"
                                          th:classappend="'bg-' + ${activity.color} + '-subtle'">
                                         <i th:class="'bi ' + ${activity.icon} + ' text-' + ${activity.color}"></i>
                                     </div>
                                     <div class="flex-grow-1">
                                         <div class="d-flex justify-content-between align-items-start">
                                             <div>
-                                                <h6 class="mb-1" th:text="${activity.name}">Activity Name</h6>
-                                                <span class="badge" 
+                                                <h6 class="mb-1 fw-semibold" th:text="${activity.name}">Activity Name</h6>
+                                                <span class="badge"
                                                       th:classappend="'bg-' + ${activity.color}"
                                                       th:text="${activity.type}">Type</span>
                                             </div>
-                                            <!-- Pending Status -->
-                                            <span th:if="${activity.status == 'pending'}" 
-                                                  class="badge bg-warning text-dark">
+                                            <span th:if="${activity.status == 'pending'}" class="badge bg-warning text-dark">
                                                 <i class="bi bi-clock"></i> Pending
                                             </span>
-                                            <!-- Completed Status -->
-                                            <span th:if="${activity.status == 'completed'}" 
-                                                  class="badge"
+                                            <span th:if="${activity.status == 'completed'}" class="badge"
                                                   th:classappend="${activity.percentage >= 75 ? 'bg-success' : (activity.percentage >= 50 ? 'bg-warning text-dark' : 'bg-danger')}">
-                                                <span th:text="${activity.score}">Score</span>
+                                                <span th:text="${activity.score}">0</span>
                                                 (<span th:text="${#numbers.formatDecimal(activity.percentage, 1, 1)}">0</span>%)
                                             </span>
                                         </div>
 
-                                        <!-- Activity Details -->
-                                        <div class="mt-2">
-                                            <!-- Pending Exam Details -->
-                                            <div th:if="${activity.status == 'pending'}">
-                                                <small class="text-muted d-block">
-                                                    <i class="bi bi-question-circle"></i> 
-                                                    <span th:text="${activity.questionCount}">0</span> questions
-                                                    <span class="mx-2">•</span>
-                                                    <i class="bi bi-clock"></i> 
-                                                    <span th:text="${activity.timeLimit}">0</span> min
-                                                </small>
-                                                <small th:if="${activity.deadline != null && !activity.deadline.isEmpty()}" 
-                                                       class="text-danger d-block mt-1">
-                                                    <i class="bi bi-calendar-event"></i> 
-                                                    Due: <span th:text="${activity.deadline}">Deadline</span>
-                                                </small>
-                                            </div>
-
-                                            <!-- Completed Exam Details -->
-                                            <div th:if="${activity.status == 'completed'}">
-                                                <small class="text-muted">
-                                                    <i class="bi bi-calendar-check"></i>
-                                                    Submitted: <span th:text="${#temporals.format(activity.submittedAt, 'MMM dd, yyyy')}">Date</span>
-                                                </small>
-                                            </div>
+                                        <div th:if="${activity.status == 'pending'}" class="mt-2">
+                                            <small class="text-muted d-block">
+                                                <i class="bi bi-question-circle"></i>
+                                                <span th:text="${activity.questionCount}">0</span> questions
+                                                <span class="mx-1">·</span>
+                                                <i class="bi bi-clock"></i>
+                                                <span th:text="${activity.timeLimit}">0</span> min
+                                            </small>
+                                            <small th:if="${activity.deadline != null && !activity.deadline.isEmpty()}"
+                                                   class="text-danger d-block mt-1">
+                                                <i class="bi bi-calendar-event"></i>
+                                                Due: <span th:text="${activity.deadline}">Deadline</span>
+                                            </small>
                                         </div>
 
-                                        <!-- Action Buttons -->
-                                        <div class="mt-3">
-                                            <!-- Start Exam Button -->
-                                            <a th:if="${activity.status == 'pending'}" 
-                                               th:href="@{/student/take-exam}" 
-                                               class="btn btn-sm btn-success w-100">
-                                                <i class="bi bi-play-circle"></i> Start Exam
-                                            </a>
+                                        <div th:if="${activity.status == 'completed'}" class="mt-2">
+                                            <small class="text-muted">
+                                                <i class="bi bi-calendar-check me-1"></i>
+                                                Submitted: <span th:text="${#temporals.format(activity.submittedAt, 'MMM dd, yyyy')}">Date</span>
+                                            </small>
+                                        </div>
 
-                                            <!-- View Results Button -->
-                                            <a th:if="${activity.status == 'completed'}" 
-                                               th:href="@{/student/results/{id}(id=${activity.submissionId})}" 
+                                        <div class="mt-3">
+                                            <a th:if="${activity.status == 'pending'}"
+                                               th:href="@{/student/take-exam}"
                                                class="btn btn-sm btn-primary w-100">
-                                                <i class="bi bi-eye"></i> View Results
+                                                <i class="bi bi-play-circle me-1"></i>Start Exam
+                                            </a>
+                                            <a th:if="${activity.status == 'completed'}"
+                                               th:href="@{/student/results/{id}(id=${activity.submissionId})}"
+                                               class="btn btn-sm btn-outline-secondary w-100">
+                                                <i class="bi bi-eye me-1"></i>View Results
                                             </a>
                                         </div>
                                     </div>
@@ -145,13 +144,10 @@
                         </div>
                     </div>
 
-                    <!-- Card Footer with Activity Count -->
                     <div class="card-footer bg-light text-center" th:if="${subject.activityCount > 0}">
                         <small class="text-muted">
-                            <i class="bi bi-list-task"></i>
-                            <span th:text="${subject.activityCount}">0</span> 
-                            <span th:text="${subject.activityCount == 1 ? 'activity' : 'activities'}">activities</span>
-                        </small>
+                            <i class="bi bi-list-task me-1"></i>
+                            <span th:text="${subject.activityCount}">0</span>
                     </div>
                 </div>
             </div>
@@ -159,17 +155,14 @@
 
         <!-- All Exam Attempts Section -->
         <div th:if="${hasSubmissions}" class="mt-5">
-            <div class="card shadow-sm">
-                <div class="card-header bg-white">
-                    <h4 class="mb-0">
-                        <i class="bi bi-clock-history me-2"></i>All Exam Attempts
-                    </h4>
-                    <p class="text-muted mb-0 small">Complete history of your exam submissions</p>
-                </div>
+            <h4 class="section-title">
+                <i class="bi bi-clock-history me-2"></i>All Exam Attempts
+            </h4>
+            <div class="card upload-card shadow-sm">
                 <div class="card-body p-0">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0">
-                            <thead class="table-light">
+                            <thead style="background: var(--eac-maroon); color: #fff;">
                                 <tr>
                                     <th>Exam Name</th>
                                     <th>Subject</th>
@@ -189,12 +182,9 @@
                                         <span class="badge bg-secondary" th:text="${submission.subject}">Subject</span>
                                     </td>
                                     <td>
-                                        <span class="badge" 
-                                              th:classappend="${submission.activityType == 'Assignment' ? 'bg-success' : 
-                                                              (submission.activityType == 'Practical Exam' ? 'bg-warning text-dark' : 'bg-primary')}"
-                                              th:text="${submission.activityType != null ? submission.activityType : 'Exam'}">
-                                            Exam
-                                        </span>
+                                        <span class="badge"
+                                              th:classappend="${submission.activityType == 'Assignment' ? 'bg-success' : (submission.activityType == 'Practical Exam' ? 'bg-warning text-dark' : 'bg-primary')}"
+                                              th:text="${submission.activityType != null ? submission.activityType : 'Exam'}">Exam</span>
                                     </td>
                                     <td>
                                         <small class="text-muted">
@@ -203,23 +193,20 @@
                                         </small>
                                     </td>
                                     <td>
-                                        <span class="badge" 
-                                              th:classappend="${submission.percentage >= 75 ? 'bg-success' : 
-                                                              (submission.percentage >= 50 ? 'bg-warning text-dark' : 'bg-danger')}">
+                                        <span class="badge"
+                                              th:classappend="${submission.percentage >= 75 ? 'bg-success' : (submission.percentage >= 50 ? 'bg-warning text-dark' : 'bg-danger')}">
                                             <span th:text="${submission.score}">0</span>/<span th:text="${submission.totalQuestions}">0</span>
                                             (<span th:text="${#numbers.formatDecimal(submission.percentage, 1, 1)}">0</span>%)
                                         </span>
                                     </td>
                                     <td>
                                         <div class="btn-group btn-group-sm" role="group">
-                                            <a th:href="@{/student/results/{id}(id=${submission.id})}" 
-                                               class="btn btn-outline-primary"
-                                               title="View Results">
+                                            <a th:href="@{/student/results/{id}(id=${submission.id})}"
+                                               class="btn btn-outline-primary" title="View Results">
                                                 <i class="bi bi-eye"></i> View
                                             </a>
-                                            <a th:href="@{/student/download-result/{id}(id=${submission.id})}" 
-                                               class="btn btn-outline-success"
-                                               title="Download Results">
+                                            <a th:href="@{/student/download-result/{id}(id=${submission.id})}"
+                                               class="btn btn-outline-success" title="Download Results">
                                                 <i class="bi bi-download"></i> Download
                                             </a>
                                         </div>
@@ -237,9 +224,9 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script th:src="@{/js/student-dashboard.js}"></script>
-</body>
-</html>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
