@@ -3028,6 +3028,18 @@ public class HomepageController {
                     .average()
                     .orElse(0.0);
 
+            // Analytics averages (graded submissions only)
+            List<ExamSubmission> gradedSubs = subs.stream()
+                    .filter(ExamSubmission::isGraded).collect(Collectors.toList());
+            double avgTopicMastery       = gradedSubs.stream().mapToDouble(ExamSubmission::getTopicMastery).average().orElse(0.0);
+            double avgAccuracy           = gradedSubs.stream().mapToDouble(ExamSubmission::getAccuracy).average().orElse(0.0);
+            double avgConfidence         = gradedSubs.stream().mapToDouble(ExamSubmission::getConfidence).average().orElse(0.0);
+            double avgTimeEfficiency     = gradedSubs.stream().mapToDouble(ExamSubmission::getTimeEfficiency).average().orElse(0.0);
+            double avgDifficultyRes      = gradedSubs.stream().mapToDouble(ExamSubmission::getDifficultyResilience).average().orElse(0.0);
+            String latestCategory        = gradedSubs.isEmpty() ? "N/A" :
+                    gradedSubs.get(gradedSubs.size() - 1).getPerformanceCategory() != null ?
+                    gradedSubs.get(gradedSubs.size() - 1).getPerformanceCategory() : "N/A";
+
             Map<String, Object> entry = new HashMap<>();
             entry.put("studentEmail", sEmail);
             entry.put("studentName",  enrolled.getStudentName());
@@ -3037,7 +3049,15 @@ public class HomepageController {
             entry.put("pendingCount",  pendingCnt);
             entry.put("releasedCount", releasedCnt);
             entry.put("averageScore",  String.format("%.1f", avgPct));
-            entry.put("submissions",   subs);   // full list for accordion
+            entry.put("submissions",   subs);
+            // Analytics
+            entry.put("hasAnalytics",             !gradedSubs.isEmpty());
+            entry.put("avgTopicMastery",           String.format("%.1f", avgTopicMastery));
+            entry.put("avgAccuracy",               String.format("%.1f", avgAccuracy));
+            entry.put("avgConfidence",             String.format("%.1f", avgConfidence));
+            entry.put("avgTimeEfficiency",         String.format("%.1f", avgTimeEfficiency));
+            entry.put("avgDifficultyResilience",   String.format("%.1f", avgDifficultyRes));
+            entry.put("latestCategory",            latestCategory);
             studentSummaryList.add(entry);
         }
 
@@ -3046,7 +3066,18 @@ public class HomepageController {
                 Integer.compare((Integer) b.get("totalSubmissions"), (Integer) a.get("totalSubmissions")));
 
         model.addAttribute("studentSummaryList", studentSummaryList);
-        
+
+        // Grade tab data — pending vs graded (same data source, already filtered to enrolled students)
+        List<ExamSubmission> pendingGrading = allSubmissions.stream()
+                .filter(s -> !s.isGraded())
+                .collect(Collectors.toList());
+        List<ExamSubmission> gradedSubmissions = allSubmissions.stream()
+                .filter(ExamSubmission::isGraded)
+                .collect(Collectors.toList());
+        model.addAttribute("pendingGrading", pendingGrading);
+        model.addAttribute("gradedSubmissions", gradedSubmissions);
+        model.addAttribute("totalPending", pendingGrading.size());
+
         return "teacher-view-results";
     }
     
