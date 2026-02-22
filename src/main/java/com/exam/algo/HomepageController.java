@@ -215,6 +215,11 @@ public class HomepageController {
         }
     }
 
+    // Remove student from distributed exams after they have submitted
+    public static void removeDistributedExam(String studentEmail) {
+        distributedExams.remove(studentEmail);
+    }
+
     @GetMapping("/homepage")
     public String showHomepage(Model model, java.security.Principal principal) {
         String teacherEmail = principal != null ? principal.getName() : "Teacher";
@@ -651,18 +656,24 @@ public class HomepageController {
             .filter(user -> user.getRole() == User.Role.STUDENT)
             .collect(Collectors.toList());
         
+        // Only show exams uploaded for this specific subject
+        String subjectName = subject.getSubjectName();
+        List<UploadedExam> subjectExams = uploadedExams.values().stream()
+            .filter(exam -> subjectName.equals(exam.getSubject()))
+            .collect(Collectors.toList());
+
         model.addAttribute("subject", subject);
         model.addAttribute("enrolledStudents", enrolledStudents);
         model.addAttribute("submissions", submissions);
         model.addAttribute("teacherEmail", teacherEmail);
         model.addAttribute("allStudents", allStudents);
-        model.addAttribute("uploadedExams", new ArrayList<>(uploadedExams.values()));
+        model.addAttribute("uploadedExams", subjectExams);
         
         return "subject-classroom";
     }
 
     @PostMapping("/distribute")
-    public String distributeExam(@RequestParam String targetStudent, 
+    public String distributeExam(@RequestParam String targetStudent,
                                  @RequestParam String examId,
                                  @RequestParam Integer timeLimit,
                                  @RequestParam String deadline,
@@ -671,19 +682,45 @@ public class HomepageController {
                                  @RequestParam(defaultValue = "20") Integer hardPercent,
                                  @RequestParam(required = false) Integer questionCount,
                                  HttpSession session) {
+        doDistributeForStudent(targetStudent, examId, timeLimit, deadline, easyPercent, mediumPercent, hardPercent, questionCount, session);
+        return "redirect:/teacher/homepage";
+    }
+
+    @PostMapping("/distribute-all")
+    public String distributeToAll(@RequestParam Long subjectId,
+                                  @RequestParam String examId,
+                                  @RequestParam Integer timeLimit,
+                                  @RequestParam String deadline,
+                                  @RequestParam(defaultValue = "30") Integer easyPercent,
+                                  @RequestParam(defaultValue = "50") Integer mediumPercent,
+                                  @RequestParam(defaultValue = "20") Integer hardPercent,
+                                  @RequestParam(required = false) Integer questionCount,
+                                  HttpSession session) {
+        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findBySubjectId(subjectId);
+        for (EnrolledStudent student : enrolledStudents) {
+            doDistributeForStudent(student.getStudentEmail(), examId, timeLimit, deadline,
+                                   easyPercent, mediumPercent, hardPercent, questionCount, session);
+        }
+        System.out.println("Distributed to all " + enrolledStudents.size() + " students in subject " + subjectId);
+        return "redirect:/teacher/subject-classroom/" + subjectId;
+    }
+
+    private void doDistributeForStudent(String targetStudent, String examId, Integer timeLimit, String deadline,
+                                        Integer easyPercent, Integer mediumPercent, Integer hardPercent,
+                                        Integer questionCount, HttpSession session) {
         UploadedExam selectedExam = uploadedExams.get(examId);
-        
+
         if (selectedExam != null) {
             // Create a fresh copy of questions and difficulties for this student
             List<String> allQuestions = new ArrayList<>(selectedExam.getQuestions());
             List<String> allDifficulties = new ArrayList<>(selectedExam.getDifficulties());
             Map<Integer, String> originalAnswerKey = selectedExam.getAnswerKey();
-            
+
             // Categorize questions by difficulty using stored difficulty levels
             List<Integer> easyIndices = new ArrayList<>();
             List<Integer> mediumIndices = new ArrayList<>();
             List<Integer> hardIndices = new ArrayList<>();
-            
+
             for (int i = 0; i < allQuestions.size(); i++) {
                 String difficulty = allDifficulties.get(i);
                 if (difficulty.equalsIgnoreCase("Easy")) {
@@ -691,132 +728,108 @@ public class HomepageController {
                 } else if (difficulty.equalsIgnoreCase("Hard")) {
                     hardIndices.add(i);
                 } else {
-                    mediumIndices.add(i); // Medium or default
+                    mediumIndices.add(i);
                 }
             }
-            
+
             // Calculate number of questions for each difficulty
-            // Use questionCount parameter if provided, otherwise use all questions
-            int totalQuestions = (questionCount != null && questionCount > 0 && questionCount <= allQuestions.size()) 
-                ? questionCount 
+            int totalQuestions = (questionCount != null && questionCount > 0 && questionCount <= allQuestions.size())
+                ? questionCount
                 : allQuestions.size();
-            
+
             System.out.println("Distributing " + totalQuestions + " questions out of " + allQuestions.size() + " available");
-            
+
             int easyCount = (int) Math.round(totalQuestions * easyPercent / 100.0);
             int mediumCount = (int) Math.round(totalQuestions * mediumPercent / 100.0);
             int hardCount = (int) Math.round(totalQuestions * hardPercent / 100.0);
-            
-            // Adjust if totals don't match due to rounding
+
             int calculatedTotal = easyCount + mediumCount + hardCount;
             if (calculatedTotal < totalQuestions) {
                 mediumCount += (totalQuestions - calculatedTotal);
             } else if (calculatedTotal > totalQuestions) {
                 mediumCount -= (calculatedTotal - totalQuestions);
             }
-            
-            // Shuffle and select questions by indices
+
             SecureRandom rand = new SecureRandom();
             Collections.shuffle(easyIndices, rand);
             Collections.shuffle(mediumIndices, rand);
             Collections.shuffle(hardIndices, rand);
-            
-            // Select questions and their difficulties WITH their original indices
+
             List<String> selectedQuestions = new ArrayList<>();
             List<String> selectedDifficulties = new ArrayList<>();
-            List<Integer> selectedOriginalIndices = new ArrayList<>(); // Track which question from original exam
-            
-            // Add Easy questions
+            List<Integer> selectedOriginalIndices = new ArrayList<>();
+
             for (int i = 0; i < Math.min(easyCount, easyIndices.size()); i++) {
                 int idx = easyIndices.get(i);
                 selectedQuestions.add(allQuestions.get(idx));
                 selectedDifficulties.add(allDifficulties.get(idx));
-                selectedOriginalIndices.add(idx + 1); // Store 1-based index
+                selectedOriginalIndices.add(idx + 1);
             }
-            // Add Medium questions
             for (int i = 0; i < Math.min(mediumCount, mediumIndices.size()); i++) {
                 int idx = mediumIndices.get(i);
                 selectedQuestions.add(allQuestions.get(idx));
                 selectedDifficulties.add(allDifficulties.get(idx));
-                selectedOriginalIndices.add(idx + 1); // Store 1-based index
+                selectedOriginalIndices.add(idx + 1);
             }
-            // Add Hard questions
             for (int i = 0; i < Math.min(hardCount, hardIndices.size()); i++) {
                 int idx = hardIndices.get(i);
                 selectedQuestions.add(allQuestions.get(idx));
                 selectedDifficulties.add(allDifficulties.get(idx));
-                selectedOriginalIndices.add(idx + 1); // Store 1-based index
+                selectedOriginalIndices.add(idx + 1);
             }
-            
-            // Shuffle the final selection together - need to track original indices for answer key
+
             List<Integer> shuffleIndices = new ArrayList<>();
             for (int i = 0; i < selectedQuestions.size(); i++) shuffleIndices.add(i);
             Collections.shuffle(shuffleIndices, rand);
-            
+
             List<String> finalQuestions = new ArrayList<>();
             List<String> finalDifficulties = new ArrayList<>();
             Map<Integer, String> studentAnswerKey = new HashMap<>();
-            
-            // Rebuild questions, difficulties, and answer key in new shuffled order
+
             for (int newPos = 0; newPos < shuffleIndices.size(); newPos++) {
                 int oldPos = shuffleIndices.get(newPos);
                 finalQuestions.add(selectedQuestions.get(oldPos));
                 finalDifficulties.add(selectedDifficulties.get(oldPos));
-                
-                // Get the original question index from the full exam
+
                 int originalQuestionIndex = selectedOriginalIndices.get(oldPos);
-                
-                // Map the answer from original exam to new position
                 String answer = originalAnswerKey.get(originalQuestionIndex);
                 if (answer != null) {
-                    studentAnswerKey.put(newPos + 1, answer); // Store with new 1-based position
+                    studentAnswerKey.put(newPos + 1, answer);
                     System.out.println("Q" + (newPos + 1) + " (originally Q" + originalQuestionIndex + ") -> Answer: " + answer);
                 }
             }
-            
-            // Re-shuffle answer choices for each question block to make it unique per student
-            // This only shuffles the CHOICE ORDER, not the correct answer
+
             List<String> uniqueExam = new ArrayList<>();
             for (String questionBlock : finalQuestions) {
                 uniqueExam.add(reshuffleQuestionChoices(questionBlock, rand));
             }
-            
-            // Store the uniquely shuffled exam for this student
+
             distributedExams.put(targetStudent, uniqueExam);
-            
-            // Store difficulty levels (already extracted from CSV)
             session.setAttribute("questionDifficulties_" + targetStudent, finalDifficulties);
-            
-            // Extract and store question topics for Random Forest analysis
+
             List<String> questionTopics = extractTopicsFromQuestions(finalQuestions, selectedExam.getSubject());
             session.setAttribute("questionTopics_" + targetStudent, questionTopics);
             System.out.println("📚 Extracted " + questionTopics.size() + " question topics for Random Forest");
-            
-            // Store exam metadata for student display
+
             session.setAttribute("examSubject_" + targetStudent, selectedExam.getSubject());
             session.setAttribute("examActivityType_" + targetStudent, selectedExam.getActivityType());
             session.setAttribute("examName_" + targetStudent, selectedExam.getExamName());
-            
-            // Store time limit and deadline (startTime will be set when student actually takes exam)
             session.setAttribute("examTimeLimit_" + targetStudent, timeLimit);
             session.setAttribute("examDeadline_" + targetStudent, deadline);
-            
-            // Store the CORRECT answer key for this student (mapped to new question order)
+
             if (studentAnswerKey != null && !studentAnswerKey.isEmpty()) {
                 answerKeyService.storeStudentAnswerKey(targetStudent, studentAnswerKey);
                 System.out.println("Stored answer key for " + targetStudent + " with " + studentAnswerKey.size() + " answers");
             }
-            
-            // Count actual distribution
-            long actualEasy = finalDifficulties.stream().filter(d -> d.equalsIgnoreCase("Easy")).count();
+
+            long actualEasy   = finalDifficulties.stream().filter(d -> d.equalsIgnoreCase("Easy")).count();
             long actualMedium = finalDifficulties.stream().filter(d -> d.equalsIgnoreCase("Medium")).count();
-            long actualHard = finalDifficulties.stream().filter(d -> d.equalsIgnoreCase("Hard")).count();
-            
+            long actualHard   = finalDifficulties.stream().filter(d -> d.equalsIgnoreCase("Hard")).count();
+
             System.out.println("Distributed exam to: " + targetStudent);
             System.out.println("Distribution: " + actualEasy + " Easy, " + actualMedium + " Medium, " + actualHard + " Hard");
             System.out.println("Time limit: " + timeLimit + " minutes, Deadline: " + deadline);
         }
-        return "redirect:/teacher/homepage";
     }
     
     @PostMapping("/unlock-exam")
@@ -1864,6 +1877,7 @@ public class HomepageController {
         String correctAnswer = null;
         boolean isOpenEnded = false;
         boolean isEssay = false;
+        boolean foundEmbeddedChoices = false;
 
         // Check if this is marked as open-ended or essay question
         if (questionText.toLowerCase().contains("[open-ended]") || 
@@ -1901,6 +1915,7 @@ public class HomepageController {
             if (embeddedChoices.size() >= 2) {
                 questionText = pureQuestion;
                 choices.addAll(embeddedChoices);
+                foundEmbeddedChoices = true;
                 System.out.println("Detected embedded choices in Q" + (id + 1) + ": " + embeddedChoices.size() + " choices found");
             }
         }
@@ -1935,7 +1950,7 @@ public class HomepageController {
             }
             
             // Check if it's an answer choice (A), B), C), D) - only if we haven't found embedded choices
-            if (choices.isEmpty() && !line.isEmpty() && !line.equalsIgnoreCase("choices:") && !line.equalsIgnoreCase("options:")) {
+            if (!foundEmbeddedChoices && !line.isEmpty() && !line.equalsIgnoreCase("choices:") && !line.equalsIgnoreCase("options:")) {
                 // Remove choice labels like "A)", "B)", etc. for storage
                 String cleanedChoice = line.replaceFirst("^[A-Za-z]\\)\\s*", "").trim();
                 if (!cleanedChoice.isEmpty()) {

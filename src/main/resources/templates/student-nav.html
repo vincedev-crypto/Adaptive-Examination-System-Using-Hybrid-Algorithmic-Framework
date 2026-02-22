@@ -1,38 +1,36 @@
 <!-- Student Nav - included in student layout -->
-<aside class="teacher-sidebar" th:fragment="studentNav">
-    <!-- Brand / School info -->
-    <div class="teacher-brand" th:href="@{/student/dashboard}">
+<header class="teacher-sidebar" th:fragment="studentNav">
+    <!-- Top row: centered brand -->
+    <div class="nav-brand-row">
         <a th:href="@{/student/dashboard}" class="text-decoration-none teacher-brand-link">
             <div class="teacher-brand-logo">
                 <img th:src="@{/images/EAC_Emblem.png}" alt="EAC Emblem" />
             </div>
             <div class="teacher-brand-text">
                 <div class="teacher-brand-title">EMILIO AGUINALDO COLLEGE - MANILA</div>
-                <div class="teacher-brand-subtitle">
-                    1113–1117 San Marcelino St., Ermita, Manila, Philippines 1000
-                </div>
+                <div class="teacher-brand-subtitle">1113–1117 San Marcelino St., Ermita, Manila, Philippines 1000</div>
             </div>
         </a>
     </div>
 
-    <!-- Main navigation links -->
-    <nav class="teacher-nav-menu">
-        <a class="teacher-nav-item" th:href="@{/student/dashboard}">
-            <i class="bi bi-speedometer2"></i>
-            <span>Dashboard</span>
-        </a>
-        <a class="teacher-nav-item" th:href="@{/student/take-exam}">
-            <i class="bi bi-pencil-square"></i>
-            <span>Take Exam</span>
-        </a>
-    </nav>
-
-    <!-- Logout button on the right -->
-    <div class="teacher-sidebar-footer ms-auto">
-        <form th:action="@{/logout}" method="post" class="d-inline">
-            <button type="submit" class="btn btn-sm btn-outline-danger">
-                <i class="bi bi-box-arrow-right me-1"></i>Logout
-            </button>
-        </form>
+    <!-- Bottom row: nav links centered, logout right -->
+    <div class="nav-bottom-row">
+        <nav class="teacher-nav-menu">
+            <a class="teacher-nav-item" th:href="@{/student/dashboard}">
+                <i class="bi bi-speedometer2"></i>
+                <span>Dashboard</span>
+            </a>
+            <a class="teacher-nav-item" th:href="@{/student/all-attempts}">
+                <i class="bi bi-clock-history"></i>
+                <span>All Exam Attempted</span>
+            </a>
+        </nav>
+        <div class="teacher-sidebar-footer">
+            <form th:action="@{/logout}" method="post" class="d-inline">
+                <button type="submit" class="btn btn-sm btn-outline-danger">
+                    <i class="bi bi-box-arrow-right me-1"></i>Logout
+                </button>
+            </form>
+        </div>
     </div>
-</aside>
+</header>

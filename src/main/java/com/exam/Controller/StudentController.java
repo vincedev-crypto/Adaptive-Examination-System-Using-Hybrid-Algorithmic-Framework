@@ -93,30 +93,41 @@ public class StudentController {
                     if (hasExam) {
                         String examSubject = (String) session.getAttribute("examSubject_" + studentEmail);
                         
-                        if (subjectName.equals(examSubject)) {
+                        if (subjectName != null && subjectName.equals(examSubject)) {
                             String examName = (String) session.getAttribute("examName_" + studentEmail);
-                            String examActivityType = (String) session.getAttribute("examActivityType_" + studentEmail);
-                            Integer examTimeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentEmail);
-                            String examDeadline = (String) session.getAttribute("examDeadline_" + studentEmail);
-                            List<String> examQuestions = getDistributedExams().get(studentEmail);
                             
-                            Map<String, Object> activity = new HashMap<>();
-                            activity.put("name", examName != null ? examName : "Untitled Exam");
-                            activity.put("type", examActivityType != null ? examActivityType : "Exam");
-                            activity.put("timeLimit", examTimeLimit != null ? examTimeLimit : 60);
-                            activity.put("questionCount", examQuestions != null ? examQuestions.size() : 0);
-                            activity.put("deadline", formatDeadline(examDeadline));
-                            activity.put("status", "pending");
-                            activity.put("icon", getActivityIcon(examActivityType));
-                            activity.put("color", getActivityColor(examActivityType));
-                            activities.add(activity);
+                            // Safety check: only show as pending if student has NOT already submitted this exam+subject combo
+                            boolean alreadySubmitted = examName != null &&
+                                !examSubmissionRepository.findByStudentEmailAndExamNameAndSubject(studentEmail, examName, examSubject).isEmpty();
+                            
+                            if (!alreadySubmitted) {
+                                String examActivityType = (String) session.getAttribute("examActivityType_" + studentEmail);
+                                Integer examTimeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentEmail);
+                                String examDeadline = (String) session.getAttribute("examDeadline_" + studentEmail);
+                                List<String> examQuestions = getDistributedExams().get(studentEmail);
+                                
+                                Map<String, Object> activity = new HashMap<>();
+                                activity.put("name", examName != null ? examName : "Untitled Exam");
+                                activity.put("type", examActivityType != null ? examActivityType : "Exam");
+                                activity.put("timeLimit", examTimeLimit != null ? examTimeLimit : 60);
+                                activity.put("questionCount", examQuestions != null ? examQuestions.size() : 0);
+                                activity.put("deadline", formatDeadline(examDeadline));
+                                activity.put("status", "pending");
+                                activity.put("icon", getActivityIcon(examActivityType));
+                                activity.put("color", getActivityColor(examActivityType));
+                                activities.add(activity);
+                            } else {
+                                // Student already submitted — clean up the stale distributed exam entry
+                                HomepageController.removeDistributedExam(studentEmail);
+                                System.out.println("🧹 Cleaned up stale distributed exam for student: " + studentEmail);
+                            }
                         }
                     }
                     
                     // Get recent submissions for this subject
                     List<ExamSubmission> subjectSubmissions = examSubmissionRepository.findByStudentEmail(studentEmail)
                         .stream()
-                        .filter(sub -> subjectName.equals(sub.getSubject()))
+                        .filter(sub -> subjectName != null && subjectName.equals(sub.getSubject()))
                         .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, 
                                                    Comparator.nullsLast(Comparator.reverseOrder())))
                         .limit(3)
@@ -155,7 +166,18 @@ public class StudentController {
         
         return "student-dashboard";
     }
-    
+
+    @GetMapping("/all-attempts")
+    public String allAttempts(Model model, java.security.Principal principal) {
+        String studentEmail = principal.getName();
+        List<ExamSubmission> allSubmissions = examSubmissionRepository.findByStudentEmail(studentEmail);
+        allSubmissions.sort(Comparator.comparing(ExamSubmission::getSubmittedAt,
+                                                 Comparator.nullsLast(Comparator.reverseOrder())));
+        model.addAttribute("allSubmissions", allSubmissions);
+        model.addAttribute("hasSubmissions", !allSubmissions.isEmpty());
+        return "student-all-attempts";
+    }
+
     private String formatDeadline(String examDeadline) {
         if (examDeadline != null && !examDeadline.isEmpty()) {
             try {
@@ -685,6 +707,10 @@ public class StudentController {
                 HomepageController.removeUnlock(studentId, submittedExamName);
                 System.out.println("🔒 EXAM RE-LOCKED after submission: " + submittedExamName + " for " + studentId);
             }
+
+            // Remove student from distributed exams so the exam no longer appears as pending
+            HomepageController.removeDistributedExam(studentId);
+            System.out.println("🗑️ EXAM REMOVED from distributed list for student: " + studentId);
             
             // Store results in session for display after redirect
             session.setAttribute("lastSubmissionId", savedSubmission.getId());
