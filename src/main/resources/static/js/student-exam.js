@@ -105,13 +105,34 @@ function displayQuestion() {
     
     // Remove difficulty markers like [Easy], [Medium], [Hard], [Essay], [Open-Ended]
     question = question.replace(/\[(Easy|Medium|Hard|Essay|Open-Ended|Open Ended|TEXT_INPUT)\]/gi, '').trim();
+
+    // ── Extract [IMG:url] markers from question text ──────────────────────
+    const imgPattern = /\[IMG:([^\]]+)\]/g;
+    const imageUrls = [];
+    let imgMatch;
+    while ((imgMatch = imgPattern.exec(question)) !== null) {
+        imageUrls.push(imgMatch[1]);
+    }
+    // Remove the [IMG:...] markers from the text shown to students
+    question = question.replace(/\[IMG:[^\]]+\]/g, '').trim();
+
+    // Build HTML for any extracted images
+    let imagesHtml = '';
+    if (imageUrls.length > 0) {
+        imagesHtml = '<div class="question-media my-3">';
+        imageUrls.forEach(url => {
+            imagesHtml += `<img src="${url}" alt="Question image" class="img-fluid rounded shadow-sm border" style="max-height:400px; display:block; margin:8px auto;">`;
+        });
+        imagesHtml += '</div>';
+    }
     
     let html = `<h5 class="mb-4">Question ${questionNumber}</h5>`;
     
     if (isTextInput) {
         // Text-input question (prefix hidden from student)
         html += `
-            <p class="lead mb-4">${question}</p>
+            <p class="lead mb-2">${question}</p>
+            ${imagesHtml}
             <div class="form-group">
                 <label class="form-label fw-bold">Your Answer:</label>
                 <textarea class="form-control" rows="4" 
@@ -128,7 +149,8 @@ function displayQuestion() {
         const choices = lines.slice(1).filter(line => line.trim());
         
         html += `
-            <p class="lead mb-4">${questionText}</p>
+            <p class="lead mb-2">${questionText}</p>
+            ${imagesHtml}
             <div class="choices">
         `;
         

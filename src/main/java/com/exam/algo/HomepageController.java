@@ -4,6 +4,9 @@ import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -16,12 +19,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import javax.imageio.ImageIO;
+
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.cos.COSName;
 import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDResources;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
@@ -1642,25 +1652,69 @@ public class HomepageController {
 
     private List<String> processFisherYates(MultipartFile file, HttpSession session, 
                                            Map<Integer, String> externalAnswerKey) throws IOException {
+        // Create a unique uploads folder for images in this exam
+        String examId = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        Path uploadsDir = Paths.get("uploads", "exam-images", examId);
+        Files.createDirectories(uploadsDir);
+
         List<String> rawLines = new ArrayList<>();
+
         try (PDDocument document = Loader.loadPDF(file.getBytes())) {
-            PDFTextStripper stripper = new PDFTextStripper();
-            rawLines = Arrays.stream(stripper.getText(document).split("\\r?\\n"))
-                             .filter(line -> !line.trim().isEmpty())
-                             .map(this::normalizeEquationText)   // convert Unicode math → LaTeX
-                             .collect(Collectors.toList());
+            int totalPages = document.getNumberOfPages();
+
+            for (int pageIdx = 0; pageIdx < totalPages; pageIdx++) {
+                // ── 1. Extract images from this page ──────────────────────
+                List<String> pageImageUrls = new ArrayList<>();
+                PDPage page = document.getPage(pageIdx);
+                PDResources resources = page.getResources();
+                if (resources != null) {
+                    for (COSName xName : resources.getXObjectNames()) {
+                        try {
+                            var xObject = resources.getXObject(xName);
+                            if (xObject instanceof PDImageXObject img) {
+                                // Skip tiny images (logos, watermarks, decorative icons)
+                                if (img.getWidth() > 60 && img.getHeight() > 60) {
+                                    String imgFile = "p" + pageIdx + "_" + xName.getName() + ".png";
+                                    Path imgPath = uploadsDir.resolve(imgFile);
+                                    ImageIO.write(img.getImage(), "PNG", imgPath.toFile());
+                                    pageImageUrls.add("/uploads/exam-images/" + examId + "/" + imgFile);
+                                    System.out.println("Extracted image: " + imgFile + " (" + img.getWidth() + "x" + img.getHeight() + ")");
+                                }
+                            }
+                        } catch (IOException e) {
+                            System.out.println("Warning: Could not extract image " + xName.getName() + ": " + e.getMessage());
+                        }
+                    }
+                }
+
+                // ── 2. Emit a page-image marker (before the page's text lines) ──
+                if (!pageImageUrls.isEmpty()) {
+                    rawLines.add("__PAGE_IMAGES__:" + String.join("|", pageImageUrls));
+                }
+
+                // ── 3. Extract text for this page ─────────────────────────
+                PDFTextStripper pageStripper = new PDFTextStripper();
+                pageStripper.setStartPage(pageIdx + 1);
+                pageStripper.setEndPage(pageIdx + 1);
+                String pageText = pageStripper.getText(document);
+
+                Arrays.stream(pageText.split("\\r?\\n"))
+                      .filter(line -> !line.trim().isEmpty())
+                      .map(this::normalizeEquationText)
+                      .forEach(rawLines::add);
+            }
         }
 
         System.out.println("=== PROCESSING EXAM PDF ===");
-        System.out.println("Total lines: " + rawLines.size());
-        
+        System.out.println("Total lines (incl. markers): " + rawLines.size());
+
         // Debug: Print first 60 lines to understand the structure
         System.out.println("=== FIRST 60 LINES OF PDF ===");
         for (int i = 0; i < Math.min(60, rawLines.size()); i++) {
             System.out.println("Line " + i + ": " + rawLines.get(i));
         }
         System.out.println("=== END OF SAMPLE ===");
-        
+
         // Improved skipPattern: Skip metadata, headers, page numbers, etc.
         Pattern skipPattern = Pattern.compile(
             "(?i)(page\\s*\\d+|examination\\s+paper|name:|date:|confidential|date\\s+generated|instructions?|total\\s+marks)", 
@@ -1673,8 +1727,20 @@ public class HomepageController {
         SecureRandom rand = new SecureRandom();
         int qID = 0;
 
+        // Images waiting to be attached to the next question encountered
+        List<String> pendingImages = new ArrayList<>();
+
         for (String line : rawLines) {
             String trimmed = line.trim();
+
+            // ── Handle page-image markers ──────────────────────────────────
+            if (trimmed.startsWith("__PAGE_IMAGES__:")) {
+                String imgList = trimmed.substring("__PAGE_IMAGES__:".length());
+                for (String imgUrl : imgList.split("\\|")) {
+                    if (!imgUrl.isBlank()) pendingImages.add(imgUrl.trim());
+                }
+                continue;
+            }
 
             // Skip headers, page numbers, and metadata using improved pattern
             if (skipPattern.matcher(trimmed).find() || trimmed.isEmpty()) {
@@ -1702,7 +1768,15 @@ public class HomepageController {
                 String questionContent = trimmed
                     .replaceFirst("^\\d+\\.\\s+", "")
                     .replaceFirst("(?i)^q\\s*\\d+\\s*(\\([^)]*\\))?\\s*:\\s*", "");
-                currentBlock = new StringBuilder(questionContent);
+
+                // ── Attach any pending images to this question ─────────────
+                StringBuilder block = new StringBuilder(questionContent);
+                for (String imgUrl : pendingImages) {
+                    block.append("\n[IMG:").append(imgUrl).append("]");
+                }
+                pendingImages.clear();
+
+                currentBlock = block;
             } else {
                 // Add to current question block
                 if (currentBlock.length() > 0) {
@@ -1835,6 +1909,12 @@ public class HomepageController {
         for (int i = 1; i < lines.length; i++) {
             String line = lines[i].trim();
             
+            // ── Pass-through image markers — embed directly in question text ──
+            if (line.startsWith("[IMG:") && line.endsWith("]")) {
+                questionText = questionText + "\n" + line;
+                continue;
+            }
+
             // Check for question type markers in subsequent lines
             if (line.equalsIgnoreCase("Type: Open-Ended") || 
                 line.equalsIgnoreCase("Type: Essay") ||
@@ -1878,8 +1958,7 @@ public class HomepageController {
             }
             System.out.println("Q" + (id + 1) + " treated as TEXT_INPUT (isOpenEnded=" + isOpenEnded + ", isEssay=" + isEssay + ", choices.size=" + choices.size() + ")");
             return "[TEXT_INPUT]" + questionText;
-        }
-        
+        }        
         // Convert answer letter to actual choice text BEFORE shuffling
         if (correctAnswer != null) {
             // Check if answer is just a single letter (A, B, C, D)
