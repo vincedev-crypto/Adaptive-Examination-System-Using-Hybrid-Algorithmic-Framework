@@ -7,6 +7,71 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" th:href="@{/css/style.css}">
+    <style>
+        /* ── Student card in the Students tab ── */
+        .student-panel {
+            border: 1px solid #dee2e6;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 1rem;
+            box-shadow: 0 2px 6px rgba(0,0,0,.06);
+            transition: box-shadow .2s;
+        }
+        .student-panel:hover { box-shadow: 0 4px 14px rgba(0,0,0,.12); }
+
+        .student-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: .9rem 1.2rem;
+            background: #f8f9fa;
+            cursor: pointer;
+            user-select: none;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .student-panel-header:hover { background: #e9f0fb; }
+
+        .student-avatar {
+            width: 40px; height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-weight: 700; font-size: .95rem;
+            flex-shrink: 0;
+        }
+
+        .grade-pill {
+            display: inline-block;
+            min-width: 54px;
+            text-align: center;
+            border-radius: 20px;
+            padding: 2px 10px;
+            font-size: .78rem;
+            font-weight: 600;
+        }
+        .grade-pill.excellent { background:#d4edda; color:#155724; }
+        .grade-pill.good      { background:#d1ecf1; color:#0c5460; }
+        .grade-pill.fair      { background:#fff3cd; color:#856404; }
+        .grade-pill.poor      { background:#f8d7da; color:#721c24; }
+
+        /* compact inner submission table */
+        .sub-inner-table th,
+        .sub-inner-table td { font-size: .82rem; vertical-align: middle; }
+        .sub-inner-table { margin-bottom: 0; }
+
+        /* Tab pill overrides */
+        .nav-tabs .nav-link { font-size: .93rem; }
+        .tab-count-badge {
+            background: #6c757d; color:#fff;
+            border-radius: 20px;
+            padding: 1px 8px;
+            font-size: .72rem;
+            margin-left: 5px;
+            vertical-align: middle;
+        }
+        /* search box */
+        #studentSearch { max-width: 280px; }
+    </style>
 </head>
 <body class="results-page">
 <div class="teacher-layout">
@@ -66,176 +131,406 @@
             </div>
         </div>
 
-        <!-- Filters -->
+        <!-- ═══════════════════════════════ TABS ═══════════════════════════════ -->
         <div class="results-card">
-            <div class="filter-section">
-                <h5 class="mb-3"><i class="bi bi-funnel"></i> Filter Results</h5>
-                <form th:action="@{/teacher/view-results}" method="get" class="row g-3">
-                    <div class="col-md-3">
-                        <label class="form-label">Exam Name</label>
-                        <select name="examFilter" class="form-select">
-                            <option value="">All Exams</option>
-                            <option th:each="exam : ${uniqueExams}" 
-                                    th:value="${exam}" 
-                                    th:text="${exam}"
-                                    th:selected="${exam == examFilter}">
-                            </option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Subject</label>
-                        <select name="subjectFilter" class="form-select">
-                            <option value="">All Subjects</option>
-                            <option th:each="subject : ${uniqueSubjects}" 
-                                    th:value="${subject}" 
-                                    th:text="${subject}"
-                                    th:selected="${subject == subjectFilter}">
-                            </option>
-                        </select>
-                    </div>
-                    <div class="col-md-3">
-                        <label class="form-label">Student</label>
-                        <select name="studentFilter" class="form-select">
-                            <option value="">All Students</option>
-                            <option th:each="student : ${uniqueStudents}" 
-                                    th:value="${student}" 
-                                    th:text="${student}"
-                                    th:selected="${student == studentFilter}">
-                            </option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label class="form-label">Status</label>
-                        <select name="statusFilter" class="form-select">
-                            <option value="">All Status</option>
-                            <option value="graded" th:selected="${statusFilter == 'graded'}">Graded</option>
-                            <option value="pending" th:selected="${statusFilter == 'pending'}">Pending Grading</option>
-                            <option value="released" th:selected="${statusFilter == 'released'}">Released to Students</option>
-                            <option value="unreleased" th:selected="${statusFilter == 'unreleased'}">Not Released</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="bi bi-search"></i> Apply Filters
-                        </button>
-                    </div>
-                </form>
-                <div class="mt-2">
-                    <a th:href="@{/teacher/view-results}" class="btn btn-sm btn-outline-secondary">
-                        <i class="bi bi-x-circle"></i> Clear Filters
-                    </a>
-                </div>
-            </div>
+            <ul class="nav nav-tabs mb-3" id="resultsTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="submissions-tab"
+                            data-bs-toggle="tab" data-bs-target="#tab-submissions"
+                            type="button" role="tab">
+                        <i class="bi bi-file-earmark-text me-1"></i> Submissions
+                        <span class="tab-count-badge" th:text="${submissions.size()}">0</span>
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="students-tab"
+                            data-bs-toggle="tab" data-bs-target="#tab-students"
+                            type="button" role="tab">
+                        <i class="bi bi-people-fill me-1"></i> Students &amp; Grades
+                        <span class="tab-count-badge" th:text="${studentSummaryList.size()}">0</span>
+                    </button>
+                </li>
+            </ul>
 
-            <!-- Results Table -->
-            <div class="table-wrapper">
-                <table class="table table-hover">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Student</th>
-                            <th>Exam Name</th>
-                            <th>Subject</th>
-                            <th>Activity Type</th>
-                            <th>Score</th>
-                            <th>Percentage</th>
-                            <th>Grading Status</th>
-                            <th>Release Status</th>
-                            <th>Submitted</th>
-                            <th>Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr th:if="${submissions.isEmpty()}">
-                            <td colspan="10" class="text-center text-muted py-4">
-                                <i class="bi bi-inbox" style="font-size: 3rem;"></i>
-                                <p class="mt-2">No submissions found matching the filters.</p>
-                            </td>
-                        </tr>
-                        <tr th:each="submission : ${submissions}">
-                            <td>
-                                <strong th:text="${submission.studentEmail}">student@example.com</strong>
-                            </td>
-                            <td th:text="${submission.examName}">Exam Name</td>
-                            <td>
-                                <span class="badge bg-info" th:text="${submission.subject}">Subject</span>
-                            </td>
-                            <td>
-                                <span class="badge" 
-                                      th:classappend="${submission.activityType == 'Exam' ? 'bg-danger' : 'bg-primary'}"
-                                      th:text="${submission.activityType}">Type</span>
-                            </td>
-                            <td>
-                                <span class="score-badge badge bg-secondary">
-                                    <span th:text="${submission.score}">0</span> / 
-                                    <span th:text="${submission.totalQuestions}">0</span>
-                                </span>
-                            </td>
-                            <td>
-                                <strong th:text="${#numbers.formatDecimal(submission.percentage, 1, 1) + '%'}">0%</strong>
-                            </td>
-                            <td>
-                                <span th:if="${submission.graded}" class="badge badge-graded">
-                                    <i class="bi bi-check-circle"></i> Graded
-                                </span>
-                                <span th:unless="${submission.graded}" class="badge badge-pending">
-                                    <i class="bi bi-clock"></i> Pending
-                                </span>
-                            </td>
-                            <td>
-                                <span th:if="${submission.resultsReleased}" class="badge badge-released">
-                                    <i class="bi bi-eye"></i> Released
-                                </span>
-                                <span th:unless="${submission.resultsReleased}" class="badge badge-unreleased">
-                                    <i class="bi bi-eye-slash"></i> Unreleased
-                                </span>
-                            </td>
-                            <td>
-                                <small th:text="${#temporals.format(submission.submittedAt, 'MMM dd, yyyy HH:mm')}">Date</small>
-                            </td>
-                            <td>
-                                <a th:href="@{/teacher/view-result/{id}(id=${submission.id})}" 
-                                   class="btn btn-sm btn-primary action-btn" 
-                                   title="View Details">
-                                    <i class="bi bi-eye"></i> View
-                                </a>
-                                <a th:unless="${submission.isGraded()}"
-                                   th:href="@{/teacher/grade/{id}(id=${submission.id})}" 
-                                   class="btn btn-sm btn-warning action-btn" 
-                                   title="Grade Submission">
-                                    <i class="bi bi-pencil"></i> Grade
-                                </a>
-                                <form th:action="@{/teacher/toggle-result-release/{id}(id=${submission.id})}" 
-                                      method="post" style="display: inline;">
-                                    <button type="submit" 
-                                            th:classappend="${submission.resultsReleased ? 'btn-secondary' : 'btn-success'}"
-                                            class="btn btn-sm action-btn"
-                                            th:title="${submission.resultsReleased ? 'Hide from student' : 'Release to student'}">
-                                        <i th:class="${submission.resultsReleased ? 'bi bi-eye-slash' : 'bi bi-eye'}"></i>
-                                        <span th:text="${submission.resultsReleased ? 'Hide' : 'Release'}"></span>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <div class="tab-content" id="resultsTabContent">
 
-            <!-- Summary Info -->
-            <div class="mt-3 p-3 bg-light rounded">
-                <div class="row">
-                    <div class="col-md-6">
-                        <p class="mb-1"><strong>Showing:</strong> <span th:text="${submissions.size()}">0</span> submissions</p>
+                <!-- ─────────────── TAB 1 : SUBMISSIONS ─────────────── -->
+                <div class="tab-pane fade show active" id="tab-submissions" role="tabpanel">
+
+                    <!-- Filters -->
+                    <div class="filter-section mb-3">
+                        <h6 class="mb-2 text-muted"><i class="bi bi-funnel"></i> Filter Results</h6>
+                        <form th:action="@{/teacher/view-results}" method="get" class="row g-2">
+                            <div class="col-md-3">
+                                <select name="examFilter" class="form-select form-select-sm">
+                                    <option value="">All Exams</option>
+                                    <option th:each="exam : ${uniqueExams}"
+                                            th:value="${exam}" th:text="${exam}"
+                                            th:selected="${exam == examFilter}"></option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select name="subjectFilter" class="form-select form-select-sm">
+                                    <option value="">All Subjects</option>
+                                    <option th:each="subject : ${uniqueSubjects}"
+                                            th:value="${subject}" th:text="${subject}"
+                                            th:selected="${subject == subjectFilter}"></option>
+                                </select>
+                            </div>
+                            <div class="col-md-3">
+                                <select name="studentFilter" class="form-select form-select-sm">
+                                    <option value="">All Students</option>
+                                    <option th:each="student : ${uniqueStudents}"
+                                            th:value="${student}" th:text="${student}"
+                                            th:selected="${student == studentFilter}"></option>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <select name="statusFilter" class="form-select form-select-sm">
+                                    <option value="">All Status</option>
+                                    <option value="graded"    th:selected="${statusFilter == 'graded'}">Graded</option>
+                                    <option value="pending"   th:selected="${statusFilter == 'pending'}">Pending</option>
+                                    <option value="released"  th:selected="${statusFilter == 'released'}">Released</option>
+                                    <option value="unreleased" th:selected="${statusFilter == 'unreleased'}">Not Released</option>
+                                </select>
+                            </div>
+                            <div class="col-md-1">
+                                <button type="submit" class="btn btn-primary btn-sm w-100">
+                                    <i class="bi bi-search"></i>
+                                </button>
+                            </div>
+                            <div class="col-md-1">
+                                <a th:href="@{/teacher/view-results}" class="btn btn-outline-secondary btn-sm w-100"
+                                   title="Clear Filters"><i class="bi bi-x-circle"></i></a>
+                            </div>
+                        </form>
                     </div>
-                    <div class="col-md-6 text-end">
-                        <p class="mb-1"><strong>Average Score:</strong> <span th:text="${stats.averageScore + ' / ' + stats.totalSubmissions}">0</span></p>
+
+                    <!-- Submissions Table -->
+                    <div class="table-wrapper">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Student</th>
+                                    <th>Exam Name</th>
+                                    <th>Subject</th>
+                                    <th>Type</th>
+                                    <th>Score</th>
+                                    <th>%</th>
+                                    <th>Grade</th>
+                                    <th>Release</th>
+                                    <th>Submitted</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr th:if="${submissions.isEmpty()}">
+                                    <td colspan="10" class="text-center text-muted py-4">
+                                        <i class="bi bi-inbox" style="font-size: 3rem;"></i>
+                                        <p class="mt-2">No submissions found matching the filters.</p>
+                                    </td>
+                                </tr>
+                                <tr th:each="submission : ${submissions}">
+                                    <td>
+                                        <strong th:text="${submission.studentEmail}">student@example.com</strong>
+                                    </td>
+                                    <td th:text="${submission.examName}">Exam Name</td>
+                                    <td><span class="badge bg-info" th:text="${submission.subject}">Subject</span></td>
+                                    <td>
+                                        <span class="badge"
+                                              th:classappend="${submission.activityType == 'Exam' ? 'bg-danger' : 'bg-primary'}"
+                                              th:text="${submission.activityType}">Type</span>
+                                    </td>
+                                    <td>
+                                        <span class="score-badge badge bg-secondary">
+                                            <span th:text="${submission.score}">0</span> /
+                                            <span th:text="${submission.totalQuestions}">0</span>
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <strong th:text="${#numbers.formatDecimal(submission.percentage, 1, 1) + '%'}">0%</strong>
+                                    </td>
+                                    <td>
+                                        <span th:if="${submission.graded}" class="badge badge-graded">
+                                            <i class="bi bi-check-circle"></i> Graded
+                                        </span>
+                                        <span th:unless="${submission.graded}" class="badge badge-pending">
+                                            <i class="bi bi-clock"></i> Pending
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span th:if="${submission.resultsReleased}" class="badge badge-released">
+                                            <i class="bi bi-eye"></i> Released
+                                        </span>
+                                        <span th:unless="${submission.resultsReleased}" class="badge badge-unreleased">
+                                            <i class="bi bi-eye-slash"></i> Unreleased
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small th:text="${#temporals.format(submission.submittedAt, 'MMM dd, yyyy HH:mm')}">Date</small>
+                                    </td>
+                                    <td>
+                                        <a th:href="@{/teacher/view-result/{id}(id=${submission.id})}"
+                                           class="btn btn-sm btn-primary action-btn" title="View Details">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                        <a th:unless="${submission.isGraded()}"
+                                           th:href="@{/teacher/grade/{id}(id=${submission.id})}"
+                                           class="btn btn-sm btn-warning action-btn" title="Grade Submission">
+                                            <i class="bi bi-pencil"></i> Grade
+                                        </a>
+                                        <form th:action="@{/teacher/toggle-result-release/{id}(id=${submission.id})}"
+                                              method="post" style="display: inline;">
+                                            <button type="submit"
+                                                    th:classappend="${submission.resultsReleased ? 'btn-secondary' : 'btn-success'}"
+                                                    class="btn btn-sm action-btn"
+                                                    th:title="${submission.resultsReleased ? 'Hide from student' : 'Release to student'}">
+                                                <i th:class="${submission.resultsReleased ? 'bi bi-eye-slash' : 'bi bi-eye'}"></i>
+                                                <span th:text="${submission.resultsReleased ? 'Hide' : 'Release'}"></span>
+                                            </button>
+                                        </form>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
-                </div>
-            </div>
-        </div>
+
+                    <!-- Summary Footer -->
+                    <div class="mt-3 p-3 bg-light rounded">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p class="mb-1"><strong>Showing:</strong>
+                                    <span th:text="${submissions.size()}">0</span> submissions
+                                </p>
+                            </div>
+                            <div class="col-md-6 text-end">
+                                <p class="mb-1"><strong>Avg Score:</strong>
+                                    <span th:text="${stats.averagePercentage + '%'}">0%</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div><!-- /tab-submissions -->
+
+                <!-- ─────────────── TAB 2 : STUDENTS & GRADES ─────────────── -->
+                <div class="tab-pane fade" id="tab-students" role="tabpanel">
+
+                    <!-- Search & legend row -->
+                    <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+                        <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="badge bg-success">Graded</span>
+                            <span class="badge bg-warning text-dark">Pending</span>
+                            <span class="badge bg-info text-dark">Released</span>
+                            <span class="badge bg-secondary">Locked</span>
+                        </div>
+                        <input type="text" id="studentSearch" class="form-control form-control-sm"
+                               placeholder="&#x1F50D;  Search student name or email…">
+                    </div>
+
+                    <!-- Empty state -->
+                    <div th:if="${studentSummaryList.isEmpty()}" class="text-center py-5 text-muted">
+                        <i class="bi bi-people display-4"></i>
+                        <p class="mt-2">No enrolled students found.</p>
+                    </div>
+
+                    <!-- Student panels -->
+                    <div id="studentPanelList">
+                        <div th:each="student, si : ${studentSummaryList}"
+                             class="student-panel"
+                             th:attr="data-search-key=${#strings.toLowerCase(student.studentName) + ' ' + #strings.toLowerCase(student.studentEmail)}">
+
+                            <!-- Collapsed header -->
+                            <div class="student-panel-header"
+                                 th:attr="data-bs-toggle='collapse',
+                                          data-bs-target='#studentCollapse' + ${si.index},
+                                          aria-expanded='false',
+                                          aria-controls='studentCollapse' + ${si.index}">
+
+                                <div class="d-flex align-items-center gap-3">
+                                    <!-- Avatar: first letter of student name -->
+                                    <div class="student-avatar"
+                                         th:text="${#strings.substring(student.studentName, 0, 1)}">S</div>
+
+                                    <div>
+                                        <div class="fw-semibold"
+                                             th:text="${student.studentName}">Student Name</div>
+                                        <div class="text-muted small">
+                                            <i class="bi bi-envelope me-1"></i>
+                                            <span th:text="${student.studentEmail}">email@example.com</span>
+                                            <span th:if="${student.subjectName != null}"
+                                                  class="ms-2 badge bg-light text-dark border">
+                                                <i class="bi bi-journal-bookmark me-1"></i>
+                                                <span th:text="${student.subjectName}">Subject</span>
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Stats badges -->
+                                <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
+                                    <span class="badge bg-primary rounded-pill"
+                                          th:text="${student.totalSubmissions} + ' submission' + (${student.totalSubmissions != 1} ? 's' : '')">0 submissions</span>
+                                    <span class="badge bg-success"
+                                          th:if="${student.gradedCount > 0}"
+                                          th:text="${student.gradedCount} + ' graded'">0 graded</span>
+                                    <span class="badge bg-warning text-dark"
+                                          th:if="${student.pendingCount > 0}"
+                                          th:text="${student.pendingCount} + ' pending'">0 pending</span>
+                                    <span class="badge bg-info text-dark"
+                                          th:if="${student.releasedCount > 0}"
+                                          th:text="${student.releasedCount} + ' released'">0 released</span>
+                                    <span class="fw-semibold text-secondary ms-1"
+                                          th:if="${student.gradedCount > 0}"
+                                          th:text="'Avg: ' + ${student.averageScore} + '%'">Avg: 0%</span>
+                                    <i class="bi bi-chevron-down ms-2 text-muted"></i>
+                                </div>
+                            </div><!-- /header -->
+
+                            <!-- Collapsible body: submission list -->
+                            <div th:id="'studentCollapse' + ${si.index}" class="collapse">
+                                <div class="p-3">
+
+                                    <!-- No submissions yet -->
+                                    <div th:if="${student.submissions.isEmpty()}" class="text-muted text-center py-3">
+                                        <i class="bi bi-inbox me-1"></i> No submissions yet.
+                                        <a th:href="@{/teacher/view-students-list}" class="ms-2 btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-send"></i> Distribute Exam
+                                        </a>
+                                    </div>
+
+                                    <!-- Submissions table -->
+                                    <div th:if="${!student.submissions.isEmpty()}" class="table-responsive">
+                                        <table class="table sub-inner-table table-hover align-middle mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>#</th>
+                                                    <th>Exam</th>
+                                                    <th>Subject</th>
+                                                    <th>Type</th>
+                                                    <th>Score</th>
+                                                    <th>Grade %</th>
+                                                    <th>Status</th>
+                                                    <th>Release</th>
+                                                    <th>Submitted</th>
+                                                    <th>Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr th:each="sub, subIdx : ${student.submissions}">
+                                                    <td class="text-muted" th:text="${subIdx.count}">1</td>
+                                                    <td>
+                                                        <span class="fw-semibold" th:text="${sub.examName}">Exam</span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-info text-dark" th:text="${sub.subject}">Subject</span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge"
+                                                              th:classappend="${sub.activityType == 'Exam' ? 'bg-danger' : 'bg-primary'}"
+                                                              th:text="${sub.activityType}">Type</span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="badge bg-secondary">
+                                                            <span th:text="${sub.score}">0</span>/<span th:text="${sub.totalQuestions}">0</span>
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <!-- colour-coded grade pill -->
+                                                        <span th:with="pct=${sub.percentage}"
+                                                              th:class="${'grade-pill ' + (pct >= 90 ? 'excellent' : (pct >= 75 ? 'good' : (pct >= 50 ? 'fair' : 'poor')))}"
+                                                              th:text="${#numbers.formatDecimal(pct, 1, 1) + '%'}">0%</span>
+                                                    </td>
+                                                    <td>
+                                                        <span th:if="${sub.graded}" class="badge bg-success">
+                                                            <i class="bi bi-check-circle"></i> Graded
+                                                        </span>
+                                                        <span th:unless="${sub.graded}" class="badge bg-warning text-dark">
+                                                            <i class="bi bi-clock"></i> Pending
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <span th:if="${sub.resultsReleased}" class="badge bg-info text-dark">
+                                                            <i class="bi bi-eye"></i> Released
+                                                        </span>
+                                                        <span th:unless="${sub.resultsReleased}" class="badge bg-secondary">
+                                                            <i class="bi bi-eye-slash"></i> Locked
+                                                        </span>
+                                                    </td>
+                                                    <td>
+                                                        <small class="text-nowrap"
+                                                               th:text="${#temporals.format(sub.submittedAt, 'MMM dd, yyyy HH:mm')}">Date</small>
+                                                    </td>
+                                                    <td>
+                                                        <div class="d-flex gap-1 flex-wrap">
+                                                            <a th:href="@{/teacher/view-result/{id}(id=${sub.id})}"
+                                                               class="btn btn-xs btn-primary" title="View">
+                                                                <i class="bi bi-eye"></i>
+                                                            </a>
+                                                            <a th:unless="${sub.isGraded()}"
+                                                               th:href="@{/teacher/grade/{id}(id=${sub.id})}"
+                                                               class="btn btn-xs btn-warning" title="Grade">
+                                                                <i class="bi bi-pencil"></i>
+                                                            </a>
+                                                            <a th:href="@{/teacher/performance-analytics/{id}(id=${sub.id})}"
+                                                               class="btn btn-xs btn-success" title="Analytics">
+                                                                <i class="bi bi-graph-up"></i>
+                                                            </a>
+                                                            <form th:action="@{/teacher/toggle-result-release/{id}(id=${sub.id})}"
+                                                                  method="post" style="display:inline">
+                                                                <button type="submit"
+                                                                        th:class="${'btn btn-xs ' + (sub.resultsReleased ? 'btn-secondary' : 'btn-outline-success')}"
+                                                                        th:title="${sub.resultsReleased ? 'Lock result' : 'Release result'}">
+                                                                    <i th:class="${sub.resultsReleased ? 'bi bi-eye-slash' : 'bi bi-eye'}"></i>
+                                                                </button>
+                                                            </form>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div><!-- /table-responsive -->
+
+                                    <!-- Quick-link to full student profile -->
+                                    <div class="mt-2 text-end">
+                                        <a th:href="@{/teacher/view-student-results/{email}(email=${student.studentEmail})}"
+                                           class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-person-lines-fill me-1"></i> Full Profile
+                                        </a>
+                                    </div>
+                                </div>
+                            </div><!-- /collapse -->
+                        </div><!-- /student-panel -->
+                    </div><!-- /studentPanelList -->
+                </div><!-- /tab-students -->
+
+            </div><!-- /tab-content -->
+        </div><!-- /results-card -->
     </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    /* Live search in Students tab */
+    document.getElementById('studentSearch').addEventListener('input', function () {
+        const q = this.value.toLowerCase().trim();
+        document.querySelectorAll('#studentPanelList .student-panel').forEach(panel => {
+            const key = panel.dataset.searchKey || '';
+            panel.style.display = (!q || key.includes(q)) ? '' : 'none';
+        });
+    });
+
+    /* Rotate chevron icon on collapse toggle */
+    document.querySelectorAll('.student-panel-header').forEach(header => {
+        const target = document.querySelector(header.dataset.bsTarget);
+        if (!target) return;
+        target.addEventListener('show.bs.collapse', () => {
+            header.querySelector('.bi-chevron-down').classList.replace('bi-chevron-down','bi-chevron-up');
+        });
+        target.addEventListener('hide.bs.collapse', () => {
+            header.querySelector('.bi-chevron-up').classList.replace('bi-chevron-up','bi-chevron-down');
+        });
+    });
+</script>
 </body>
 </html>
