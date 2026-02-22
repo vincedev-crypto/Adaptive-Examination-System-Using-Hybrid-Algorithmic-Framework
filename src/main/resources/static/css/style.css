@@ -374,6 +374,14 @@ body {
     margin: 2px;
 }
 
+/* Extra-small button utility (used in the Students & Grades tab) */
+.btn-xs {
+    padding: 2px 7px;
+    font-size: .75rem;
+    line-height: 1.4;
+    border-radius: 4px;
+}
+
 /* Helper class to hide elements */
 .hidden {
     display: none;

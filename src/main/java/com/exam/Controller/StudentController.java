@@ -1,7 +1,5 @@
 package com.exam.Controller;
 
-import Service.RandomForestService;
-import com.exam.algo.HomepageController;
 import com.exam.entity.ExamSubmission;
 import com.exam.entity.User;
 import com.exam.entity.EnrolledStudent;
@@ -13,6 +11,8 @@ import com.exam.repository.SubjectRepository;
 import com.exam.service.AnswerKeyService;
 import com.exam.service.IRT3PLService;
 import com.exam.service.RandomForestAnalyticsService;
+import com.exam.service.RandomForestService;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -55,7 +55,7 @@ public class StudentController {
     // In production, this should be stored in database
     private static Map<String, List<String>> getDistributedExams() {
         // This is a workaround - in production use a service/repository
-        return com.exam.algo.HomepageController.getDistributedExams();
+        return com.exam.Controller.HomepageController.getDistributedExams();
     }
 
     @GetMapping("/dashboard")
@@ -441,6 +441,7 @@ public class StudentController {
                 System.out.println("⚠️ Error parsing deadline during submission: " + e.getMessage());
             }
         }
+        model.addAttribute("lateSubmission", deadlineExceeded);
         
         // Prevent immediate auto-submit: Check if exam just started (< 10 seconds ago)
         Object startTimeObj = session.getAttribute("examStartTime_" + studentId);
@@ -605,23 +606,27 @@ public class StudentController {
                 );
             
             // Generate comprehensive Random Forest report
-            Map<String, Object> rfReport = randomForestAnalyticsService.generateStudentReport(features);
-            
-            System.out.println("📊 FEATURE EXTRACTION:");
-            System.out.println("   Topic Mastery (Primary): " + String.format("%.2f%%", rfReport.get("topicMasteryPrimary")));
-            System.out.println("   Topic Mastery (Secondary): " + String.format("%.2f%%", rfReport.get("topicMasterySecondary")));
-            System.out.println("   Topic Mastery (General): " + String.format("%.2f%%", rfReport.get("topicMasteryGeneral")));
-            System.out.println("   Difficulty Resilience: " + String.format("%.2f%%", rfReport.get("difficultyResilience")));
-            System.out.println("   Accuracy: " + String.format("%.2f%%", rfReport.get("accuracy")));
-            System.out.println("   Time Efficiency: " + String.format("%.2f%%", rfReport.get("timeEfficiency")));
-            System.out.println("   Confidence: " + String.format("%.2f%%", rfReport.get("confidence")));
-            System.out.println("\n🎯 RANDOM FOREST PREDICTION:");
-            System.out.println("   Overall Score: " + String.format("%.2f%%", rfReport.get("overallScore")));
-            System.out.println("   Category: " + rfReport.get("predictedCategory"));
-            System.out.println("   Strengths: " + rfReport.get("strengths"));
-            System.out.println("   Weaknesses: " + rfReport.get("weaknesses"));
-            System.out.println("   Recommendations: " + rfReport.get("recommendations"));
-            System.out.println("==============================================\n");
+            Map<String, Object> rfReport = null;
+            try {
+                rfReport = randomForestAnalyticsService.generateStudentReport(features);
+                System.out.println("📊 FEATURE EXTRACTION:");
+                System.out.println("   Topic Mastery (Primary): " + String.format("%.2f%%", rfReport.get("topicMasteryPrimary")));
+                System.out.println("   Topic Mastery (Secondary): " + String.format("%.2f%%", rfReport.get("topicMasterySecondary")));
+                System.out.println("   Topic Mastery (General): " + String.format("%.2f%%", rfReport.get("topicMasteryGeneral")));
+                System.out.println("   Difficulty Resilience: " + String.format("%.2f%%", rfReport.get("difficultyResilience")));
+                System.out.println("   Accuracy: " + String.format("%.2f%%", rfReport.get("accuracy")));
+                System.out.println("   Time Efficiency: " + String.format("%.2f%%", rfReport.get("timeEfficiency")));
+                System.out.println("   Confidence: " + String.format("%.2f%%", rfReport.get("confidence")));
+                System.out.println("\n🎯 RANDOM FOREST PREDICTION:");
+                System.out.println("   Overall Score: " + String.format("%.2f%%", rfReport.get("overallScore")));
+                System.out.println("   Category: " + rfReport.get("predictedCategory"));
+                System.out.println("   Strengths: " + rfReport.get("strengths"));
+                System.out.println("   Weaknesses: " + rfReport.get("weaknesses"));
+                System.out.println("   Recommendations: " + rfReport.get("recommendations"));
+                System.out.println("==============================================\n");
+            } catch (Exception e) {
+                System.out.println("⚠️ Random Forest report generation failed, falling back to legacy analytics: " + e.getMessage());
+            }
             
             // Store Random Forest report in session for display
             session.setAttribute("randomForestReport", rfReport);
