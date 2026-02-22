@@ -7,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" th:href="@{/css/style.css}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
     <style>
         /* ── Student card in the Students tab ── */
         .student-panel {
@@ -674,7 +675,18 @@
                                                           th:text="${student.latestCategory}">N/A</span>
                                                 </div>
 
-                                                <!-- Metric cards grid -->
+                                                <!-- Radar chart -->
+                                                <div class="d-flex justify-content-center mb-3">
+                                                    <div style="width:320px;height:320px;position:relative;">
+                                                        <canvas th:id="|radarChart-${si.index}|"
+                                                                th:data-mastery="${student.avgTopicMastery}"
+                                                                th:data-accuracy="${student.avgAccuracy}"
+                                                                th:data-resilience="${student.avgDifficultyResilience}"
+                                                                th:data-time="${student.avgTimeEfficiency}"
+                                                                th:data-confidence="${student.avgConfidence}">
+                                                        </canvas>
+                                                    </div>
+                                                </div>
                                                 <div class="row g-2 mb-3">
                                                     <!-- Topic Mastery -->
                                                     <div class="col-6 col-md-4">
@@ -818,6 +830,72 @@
         });
         target.addEventListener('hide.bs.collapse', () => {
             header.querySelector('.bi-chevron-up').classList.replace('bi-chevron-up','bi-chevron-down');
+        });
+    });
+
+    /* ── Radar Charts ── */
+    const radarInstances = {};
+
+    function renderRadarChart(index) {
+        const canvasId = 'radarChart-' + index;
+        if (radarInstances[canvasId]) return; // already rendered
+
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        const mastery    = parseFloat(canvas.dataset.mastery)    || 0;
+        const accuracy   = parseFloat(canvas.dataset.accuracy)   || 0;
+        const resilience = parseFloat(canvas.dataset.resilience) || 0;
+        const time       = parseFloat(canvas.dataset.time)       || 0;
+        const confidence = parseFloat(canvas.dataset.confidence) || 0;
+
+        radarInstances[canvasId] = new Chart(canvas, {
+            type: 'radar',
+            data: {
+                labels: ['Topic Mastery', 'Accuracy', 'Difficulty Resilience', 'Time Efficiency', 'Confidence'],
+                datasets: [{
+                    label: 'Avg Performance',
+                    data: [mastery, accuracy, resilience, time, confidence],
+                    backgroundColor: 'rgba(102,126,234,0.25)',
+                    borderColor: 'rgba(102,126,234,1)',
+                    borderWidth: 2,
+                    pointBackgroundColor: 'rgba(102,126,234,1)',
+                    pointBorderColor: '#fff',
+                    pointRadius: 5,
+                    pointHoverRadius: 7
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: '5-Dimension Performance',
+                        font: { size: 13, weight: 'bold' },
+                        color: '#1a3c6e'
+                    }
+                },
+                scales: {
+                    r: {
+                        min: 0, max: 100,
+                        ticks: { stepSize: 25, font: { size: 10 }, backdropColor: 'transparent' },
+                        pointLabels: { font: { size: 11, weight: '600' }, color: '#444' },
+                        grid: { color: 'rgba(0,0,0,0.08)' },
+                        angleLines: { color: 'rgba(0,0,0,0.1)' }
+                    }
+                }
+            }
+        });
+    }
+
+    /* Render radar when Analytics sub-tab becomes visible */
+    document.querySelectorAll('[data-bs-target^="#sAnaPane-"]').forEach(btn => {
+        btn.addEventListener('shown.bs.tab', function () {
+            const target = this.getAttribute('data-bs-target'); // e.g. "#sAnaPane-0"
+            const index  = target.replace('#sAnaPane-', '');
+            renderRadarChart(index);
         });
     });
 </script>
