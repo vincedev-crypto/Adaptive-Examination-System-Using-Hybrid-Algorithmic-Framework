@@ -76,7 +76,7 @@
 <body class="results-page">
 <div class="teacher-layout">
     <!-- Left sidebar -->
-    <div th:replace="teacher-nav :: teacherNav"></div>
+    <div th:replace="~{teacher-nav :: teacherNav}"></div>
 
     <!-- Main content area -->
     <div class="teacher-content-wrapper">
@@ -147,7 +147,7 @@
                             data-bs-toggle="tab" data-bs-target="#tab-students"
                             type="button" role="tab">
                         <i class="bi bi-people-fill me-1"></i> Students &amp; Grades
-                        <span class="tab-count-badge" th:text="${studentSummaryList.size()}">0</span>
+                        <span class="tab-count-badge" th:text="${studentSummaryList != null ? studentSummaryList.size() : 0}">0</span>
                     </button>
                 </li>
             </ul>
@@ -328,14 +328,14 @@
                     </div>
 
                     <!-- Empty state -->
-                    <div th:if="${studentSummaryList.isEmpty()}" class="text-center py-5 text-muted">
+                    <div th:if="${studentSummaryList == null or studentSummaryList.isEmpty()}" class="text-center py-5 text-muted">
                         <i class="bi bi-people display-4"></i>
                         <p class="mt-2">No enrolled students found.</p>
                     </div>
 
                     <!-- Student panels -->
                     <div id="studentPanelList">
-                        <div th:each="student, si : ${studentSummaryList}"
+                        <div th:each="student, si : ${studentSummaryList != null ? studentSummaryList : #lists.emptyList()}"
                              class="student-panel"
                              th:attr="data-search-key=${#strings.toLowerCase(student.studentName) + ' ' + #strings.toLowerCase(student.studentEmail)}">
 

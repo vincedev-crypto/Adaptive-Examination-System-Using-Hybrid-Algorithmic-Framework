@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
 <head>
     <meta charset="UTF-8">
@@ -7,121 +7,353 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
     <link rel="stylesheet" th:href="@{/css/style.css}">
-    <style>
-        .card-main {
-            background: #ffffff;
-            border-radius: 20px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
-            margin-top: 20px;
-            margin-bottom: 20px;
-        }
-        .student-row:hover {
-            background-color: rgba(240, 248, 255, 0.8);
-            cursor: pointer;
-        }
-        .stats-badge {
-            margin-right: 6px;
-            margin-bottom: 4px;
-        }
-    </style>
+    <link rel="stylesheet" th:href="@{/css/teacher-view-students-list.css}">
 </head>
 <body class="homepage-page">
 
 <div class="teacher-layout">
-    <div th:replace="teacher-nav :: teacherNav"></div>
+    <div th:replace="~{teacher-nav :: teacherNav}"></div>
 
     <div class="teacher-content-wrapper">
         <div class="container my-4">
-            <!-- Header -->
-            <div class="d-flex justify-content-between align-items-center mb-3">
+
+            <!-- Page Header -->
+            <div class="svl-header">
                 <div>
-                    <h2 class="text-primary mb-1">
-                        <i class="bi bi-people-fill me-2"></i> Student Results Overview
-                    </h2>
-                    <p class="text-muted mb-0">View overall performance and drill down into detailed results for each student.</p>
+                    <h2><i class="bi bi-people-fill me-2"></i>Student Results Overview</h2>
+                    <p>Expand a student to view their submissions, grades and analytics inline.</p>
                 </div>
-                <div>
-                    <a th:href="@{/teacher/results}" class="btn btn-outline-secondary">
-                        <i class="bi bi-arrow-left me-1"></i> Back to Results
-                    </a>
-                </div>
+                <a th:href="@{/teacher/results}" class="btn btn-outline-secondary btn-sm align-self-start">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Results
+                </a>
             </div>
 
-            <!-- Summary -->
-            <div class="card upload-card p-3 mb-4" th:if="${totalStudents != null}">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div class="text-muted">
-                        <i class="bi bi-info-circle"></i>
-                        <strong>Total Enrolled Students:</strong>
-                        <span th:text="${totalStudents}">0</span>
+            <!-- Stats Bar -->
+            <div class="svl-stats-bar">
+                <i class="bi bi-info-circle me-1"></i>
+                <strong>Total Enrolled Students:</strong>
+                <span th:text="${totalStudents}">0</span>
+            </div>
+
+            <!-- Search -->
+            <div class="svl-search-wrap">
+                <i class="bi bi-search"></i>
+                <input id="svlSearch" type="text" placeholder="Search by name or email...">
+            </div>
+
+            <!-- No Students -->
+            <div class="svl-no-students" th:if="${#lists.isEmpty(studentList)}">
+                <i class="bi bi-exclamation-triangle fs-2 d-block mb-2"></i>
+                No enrolled students found.
+            </div>
+
+            <!-- Student Cards -->
+            <div th:if="${!#lists.isEmpty(studentList)}">
+                <div th:each="student, iStat : ${studentList}"
+                     class="svl-card"
+                     th:data-name="${student.studentName}"
+                     th:data-email="${student.studentEmail}">
+
+                    <!-- Card header -->
+                    <div class="svl-card-header">
+                        <div class="svl-avatar"
+                             th:text="${#strings.substring(student.studentName, 0, 1).toUpperCase()}">A</div>
+                        <div class="svl-name-wrap">
+                            <h6 th:text="${student.studentName}">Student Name</h6>
+                            <small><i class="bi bi-envelope me-1"></i>
+                                <span th:text="${student.studentEmail}">email@example.com</span>
+                            </small>
+                        </div>
+                        <div class="svl-badges">
+                            <span class="svl-badge svl-badge-total">
+                                <i class="bi bi-file-earmark-text me-1"></i>
+                                <span th:text="${student.totalSubmissions}">0</span> Total
+                            </span>
+                            <span class="svl-badge svl-badge-graded">
+                                <i class="bi bi-check-circle me-1"></i>
+                                <span th:text="${student.gradedCount}">0</span> Graded
+                            </span>
+                            <span class="svl-badge svl-badge-pending">
+                                <i class="bi bi-clock me-1"></i>
+                                <span th:text="${student.pendingCount}">0</span> Pending
+                            </span>
+                            <span class="svl-badge svl-badge-released">
+                                <i class="bi bi-unlock me-1"></i>
+                                <span th:text="${student.releasedCount}">0</span> Released
+                            </span>
+                            <span class="svl-badge svl-badge-avg">
+                                <i class="bi bi-graph-up me-1"></i>
+                                Avg: <span th:text="${student.averageScore}">0.0</span>%
+                            </span>
+                        </div>
+                        <i class="bi bi-chevron-down svl-chevron"></i>
                     </div>
-                </div>
-            </div>
 
-            <!-- Students List -->
-            <div class="card card-main p-4">
-                <div th:if="${#lists.isEmpty(studentList)}" class="alert alert-warning mb-0">
-                    <i class="bi bi-exclamation-triangle"></i> No enrolled students found.
-                </div>
+                    <!-- Expandable panel with tabs -->
+                    <div class="svl-panel">
 
-                <div th:if="${!#lists.isEmpty(studentList)}">
-                    <h5 class="mb-3 text-primary"><i class="bi bi-list-check"></i> Enrolled Students</h5>
+                        <!-- Inner tab navigation -->
+                        <ul class="nav nav-tabs svl-inner-tabs" th:id="|tabs-${iStat.index}|" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" th:id="|sub-tab-${iStat.index}|"
+                                        data-bs-toggle="tab"
+                                        th:data-bs-target="|#sub-pane-${iStat.index}|"
+                                        type="button" role="tab">
+                                    <i class="bi bi-table me-1"></i> Submissions &amp; Grades
+                                    <span class="svl-tab-count" th:text="${student.totalSubmissions}">0</span>
+                                </button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" th:id="|ana-tab-${iStat.index}|"
+                                        data-bs-toggle="tab"
+                                        th:data-bs-target="|#ana-pane-${iStat.index}|"
+                                        type="button" role="tab">
+                                    <i class="bi bi-bar-chart-line me-1"></i> Analytics
+                                </button>
+                            </li>
+                        </ul>
 
-                    <div th:each="student : ${studentList}" class="student-row border-bottom py-3">
-                        <div class="row align-items-center">
-                            <div class="col-md-5">
-                                <h6 class="mb-1 text-primary">
-                                    <i class="bi bi-person-circle"></i>
-                                    <span th:text="${student.studentName}">Student Name</span>
-                                </h6>
-                                <p class="text-muted small mb-0">
-                                    <i class="bi bi-envelope"></i>
-                                    <span th:text="${student.studentEmail}">email@example.com</span>
-                                </p>
-                            </div>
+                        <div class="tab-content svl-tab-content">
 
-                            <div class="col-md-5">
-                                <div class="d-flex flex-wrap align-items-center">
-                                    <span class="badge bg-primary text-light stats-badge">
-                                        <i class="bi bi-file-earmark-text"></i>
-                                        <span th:text="${student.totalSubmissions}">0</span> Total
-                                    </span>
-                                    <span class="badge bg-success stats-badge">
-                                        <i class="bi bi-check-circle"></i>
-                                        <span th:text="${student.gradedCount}">0</span> Graded
-                                    </span>
-                                    <span class="badge bg-warning text-dark stats-badge">
-                                        <i class="bi bi-clock"></i>
-                                        <span th:text="${student.pendingCount}">0</span> Pending
-                                    </span>
-                                    <span class="badge bg-info text-dark stats-badge">
-                                        <i class="bi bi-graph-up"></i>
-                                        Avg: <span th:text="${student.averageScore}">0.0</span>%
-                                    </span>
+                            <!--  TAB 1: Submissions & Grades  -->
+                            <div class="tab-pane fade show active"
+                                 th:id="|sub-pane-${iStat.index}|" role="tabpanel">
+
+                                <div class="svl-empty" th:if="${#lists.isEmpty(student.submissions)}">
+                                    <i class="bi bi-inbox me-1"></i> No submissions yet.
+                                </div>
+
+                                <div class="table-responsive" th:if="${!#lists.isEmpty(student.submissions)}">
+                                    <table class="svl-table">
+                                        <thead>
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Exam / Activity</th>
+                                                <th>Subject</th>
+                                                <th>Submitted</th>
+                                                <th>Score</th>
+                                                <th>Grade</th>
+                                                <th>Status</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr th:each="sub, sIdx : ${student.submissions}">
+                                                <td th:text="${sIdx.index + 1}" class="text-muted">1</td>
+                                                <td>
+                                                    <strong th:text="${sub.examName}">Exam Name</strong><br>
+                                                    <small class="text-muted" th:text="${sub.activityType}">Exam</small>
+                                                </td>
+                                                <td>
+                                                    <span class="badge bg-light text-dark border"
+                                                          th:text="${sub.subject}">Subject</span>
+                                                </td>
+                                                <td>
+                                                    <span th:if="${sub.submittedAt != null}"
+                                                          th:text="${#temporals.format(sub.submittedAt,'MMM dd, yyyy HH:mm')}">Jan 01</span>
+                                                    <span th:if="${sub.submittedAt == null}" class="text-muted">-</span>
+                                                </td>
+                                                <td>
+                                                    <span th:if="${sub.graded}">
+                                                        <strong th:text="${sub.finalScore}">0</strong>
+                                                        / <span th:text="${sub.totalQuestions}">0</span>
+                                                    </span>
+                                                    <span th:if="${!sub.graded}" class="text-muted">-</span>
+                                                </td>
+                                                <td>
+                                                    <span th:if="${sub.graded}">
+                                                        <span th:if="${sub.finalPercentage >= 90}" class="svl-grade svl-grade-excellent"
+                                                              th:text="${#numbers.formatDecimal(sub.finalPercentage,1,1)} + '%'">90%</span>
+                                                        <span th:if="${sub.finalPercentage >= 75 and sub.finalPercentage < 90}" class="svl-grade svl-grade-good"
+                                                              th:text="${#numbers.formatDecimal(sub.finalPercentage,1,1)} + '%'">75%</span>
+                                                        <span th:if="${sub.finalPercentage >= 50 and sub.finalPercentage < 75}" class="svl-grade svl-grade-fair"
+                                                              th:text="${#numbers.formatDecimal(sub.finalPercentage,1,1)} + '%'">50%</span>
+                                                        <span th:if="${sub.finalPercentage < 50}" class="svl-grade svl-grade-poor"
+                                                              th:text="${#numbers.formatDecimal(sub.finalPercentage,1,1)} + '%'">49%</span>
+                                                    </span>
+                                                    <span th:if="${!sub.graded}" class="svl-grade svl-grade-na">N/A</span>
+                                                </td>
+                                                <td>
+                                                    <span th:if="${sub.graded and sub.resultsReleased}" class="svl-status svl-status-released">
+                                                        <i class="bi bi-unlock me-1"></i>Released
+                                                    </span>
+                                                    <span th:if="${sub.graded and !sub.resultsReleased}" class="svl-status svl-status-graded">
+                                                        <i class="bi bi-check-circle me-1"></i>Graded
+                                                    </span>
+                                                    <span th:if="${!sub.graded}" class="svl-status svl-status-pending">
+                                                        <i class="bi bi-clock me-1"></i>Pending
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <a th:href="@{/teacher/view-submission/{id}(id=${sub.id})}" class="svl-btn svl-btn-view">
+                                                        <i class="bi bi-eye"></i> View
+                                                    </a>
+                                                    <a th:if="${!sub.graded}"
+                                                       th:href="@{/teacher/grade-submission/{id}(id=${sub.id})}" class="svl-btn svl-btn-grade">
+                                                        <i class="bi bi-pencil-square"></i> Grade
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
 
-                            <div class="col-md-2 text-end mt-2 mt-md-0">
-                                <a th:href="@{/teacher/view-student-results/{email}(email=${student.studentEmail})}"
-                                   class="btn btn-primary btn-sm">
-                                    <i class="bi bi-eye"></i> View Results
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+                            <!--  TAB 2: Analytics  -->
+                            <div class="tab-pane fade"
+                                 th:id="|ana-pane-${iStat.index}|" role="tabpanel">
 
-            <!-- Back Button -->
+                                <!-- No analytics yet -->
+                                <div class="svl-empty" th:if="${!student.hasAnalytics}">
+                                    <i class="bi bi-bar-chart me-1"></i>
+                                    No analytics available yet. Analytics are generated after graded submissions.
+                                </div>
+
+                                <!-- Analytics content -->
+                                <div th:if="${student.hasAnalytics}">
+
+                                    <!-- Performance category banner -->
+                                    <div class="svl-category-banner mb-3">
+                                        <span class="svl-category-label">Latest Performance Category:</span>
+                                        <span class="svl-category-value" th:text="${student.latestCategory}">N/A</span>
+                                    </div>
+
+                                    <!-- Metric cards -->
+                                    <div class="svl-analytics-grid">
+
+                                        <div class="svl-metric-card">
+                                            <div class="svl-metric-icon" style="background:#e8f4fd;">
+                                                <i class="bi bi-bullseye" style="color:#1a3c6e;"></i>
+                                            </div>
+                                            <div class="svl-metric-body">
+                                                <div class="svl-metric-label">Topic Mastery</div>
+                                                <div class="svl-metric-value" th:text="${student.avgTopicMastery} + '%'">0%</div>
+                                                <div class="svl-metric-bar">
+                                                    <div class="svl-metric-fill"
+                                                         th:style="|width:${student.avgTopicMastery}%; background:#1a3c6e;|"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="svl-metric-card">
+                                            <div class="svl-metric-icon" style="background:#eafaf1;">
+                                                <i class="bi bi-check2-circle" style="color:#1a6e3c;"></i>
+                                            </div>
+                                            <div class="svl-metric-body">
+                                                <div class="svl-metric-label">Accuracy</div>
+                                                <div class="svl-metric-value" th:text="${student.avgAccuracy} + '%'">0%</div>
+                                                <div class="svl-metric-bar">
+                                                    <div class="svl-metric-fill"
+                                                         th:style="|width:${student.avgAccuracy}%; background:#1a6e3c;|"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="svl-metric-card">
+                                            <div class="svl-metric-icon" style="background:#fdf5e6;">
+                                                <i class="bi bi-shield-check" style="color:#b8860b;"></i>
+                                            </div>
+                                            <div class="svl-metric-body">
+                                                <div class="svl-metric-label">Difficulty Resilience</div>
+                                                <div class="svl-metric-value" th:text="${student.avgDifficultyResilience} + '%'">0%</div>
+                                                <div class="svl-metric-bar">
+                                                    <div class="svl-metric-fill"
+                                                         th:style="|width:${student.avgDifficultyResilience}%; background:#b8860b;|"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="svl-metric-card">
+                                            <div class="svl-metric-icon" style="background:#fef9e7;">
+                                                <i class="bi bi-stopwatch" style="color:#7b1113;"></i>
+                                            </div>
+                                            <div class="svl-metric-body">
+                                                <div class="svl-metric-label">Time Efficiency</div>
+                                                <div class="svl-metric-value" th:text="${student.avgTimeEfficiency} + '%'">0%</div>
+                                                <div class="svl-metric-bar">
+                                                    <div class="svl-metric-fill"
+                                                         th:style="|width:${student.avgTimeEfficiency}%; background:#7b1113;|"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="svl-metric-card">
+                                            <div class="svl-metric-icon" style="background:#f3e8fd;">
+                                                <i class="bi bi-lightning-charge" style="color:#6f42c1;"></i>
+                                            </div>
+                                            <div class="svl-metric-body">
+                                                <div class="svl-metric-label">Confidence</div>
+                                                <div class="svl-metric-value" th:text="${student.avgConfidence} + '%'">0%</div>
+                                                <div class="svl-metric-bar">
+                                                    <div class="svl-metric-fill"
+                                                         th:style="|width:${student.avgConfidence}%; background:#6f42c1;|"></div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                    </div><!-- /svl-analytics-grid -->
+
+                                    <!-- Per-submission analytics breakdown -->
+                                    <div class="svl-panel-title mt-3">
+                                        <i class="bi bi-list-columns"></i> Per-Submission Analytics
+                                    </div>
+                                    <div class="table-responsive">
+                                        <table class="svl-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Exam</th>
+                                                    <th>Date</th>
+                                                    <th>Category</th>
+                                                    <th>Topic Mastery</th>
+                                                    <th>Accuracy</th>
+                                                    <th>Resilience</th>
+                                                    <th>Time Eff.</th>
+                                                    <th>Confidence</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr th:each="sub : ${student.submissions}" th:if="${sub.graded}">
+                                                    <td th:text="${sub.examName}">Exam</td>
+                                                    <td>
+                                                        <span th:if="${sub.submittedAt != null}"
+                                                              th:text="${#temporals.format(sub.submittedAt,'MMM dd, yyyy')}">-</span>
+                                                    </td>
+                                                    <td>
+                                                        <span class="svl-status svl-status-released"
+                                                              th:if="${sub.performanceCategory != null}"
+                                                              th:text="${sub.performanceCategory}">-</span>
+                                                        <span th:if="${sub.performanceCategory == null}" class="text-muted">-</span>
+                                                    </td>
+                                                    <td th:text="${#numbers.formatDecimal(sub.topicMastery,1,1)} + '%'">0%</td>
+                                                    <td th:text="${#numbers.formatDecimal(sub.accuracy,1,1)} + '%'">0%</td>
+                                                    <td th:text="${#numbers.formatDecimal(sub.difficultyResilience,1,1)} + '%'">0%</td>
+                                                    <td th:text="${#numbers.formatDecimal(sub.timeEfficiency,1,1)} + '%'">0%</td>
+                                                    <td th:text="${#numbers.formatDecimal(sub.confidence,1,1)} + '%'">0%</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+
+                                </div><!-- /hasAnalytics -->
+                            </div><!-- /ana-pane -->
+
+                        </div><!-- /tab-content -->
+                    </div><!-- /svl-panel -->
+                </div><!-- /svl-card -->
+            </div><!-- /student list -->
+
+            <!-- Back button -->
             <div class="mt-4">
-                <a th:href="@{/teacher/homepage}" class="btn btn-secondary">
-                    <i class="bi bi-arrow-left"></i> Back to Dashboard
+                <a th:href="@{/teacher/homepage}" class="btn btn-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i> Back to Dashboard
                 </a>
             </div>
+
         </div>
     </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script th:src="@{/js/teacher-view-students-list.js}"></script>
 </body>
 </html>

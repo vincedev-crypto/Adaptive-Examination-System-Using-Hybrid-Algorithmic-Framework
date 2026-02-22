@@ -1,4 +1,4 @@
-package com.exam.algo;
+package com.exam.Controller;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -2743,47 +2743,82 @@ public class HomepageController {
     @GetMapping("/view-students-list")
     public String viewStudentsList(Model model, java.security.Principal principal) {
         String teacherEmail = principal.getName();
-        
+
         // Get all enrolled students for this teacher
         List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
-        
-        // Create student list with statistics
+
+        // Create student list with statistics + full submission list + aggregated analytics
         List<Map<String, Object>> studentList = new ArrayList<>();
-        
+
         for (EnrolledStudent enrolled : enrolledStudents) {
             String studentEmail = enrolled.getStudentEmail();
-            
-            // Get all submissions for this student
-            List<ExamSubmission> submissions = examSubmissionRepository.findByStudentEmail(studentEmail);
-            
-            // Calculate statistics
+
+            // Get all submissions for this student, newest first
+            List<ExamSubmission> submissions = examSubmissionRepository.findByStudentEmail(studentEmail)
+                    .stream()
+                    .sorted((a, b) -> {
+                        if (a.getSubmittedAt() == null && b.getSubmittedAt() == null) return 0;
+                        if (a.getSubmittedAt() == null) return 1;
+                        if (b.getSubmittedAt() == null) return -1;
+                        return b.getSubmittedAt().compareTo(a.getSubmittedAt());
+                    })
+                    .collect(Collectors.toList());
+
+            // Calculate grade statistics
             int totalSubmissions = submissions.size();
-            long gradedCount = submissions.stream().filter(ExamSubmission::isGraded).count();
-            long pendingCount = submissions.stream().filter(s -> !s.isGraded()).count();
-            
+            long gradedCount   = submissions.stream().filter(ExamSubmission::isGraded).count();
+            long pendingCount  = submissions.stream().filter(s -> !s.isGraded()).count();
+            long releasedCount = submissions.stream().filter(ExamSubmission::isResultsReleased).count();
+
             double averageScore = 0.0;
             if (gradedCount > 0) {
                 averageScore = submissions.stream()
-                    .filter(ExamSubmission::isGraded)
-                    .mapToDouble(ExamSubmission::getFinalPercentage)
-                    .average()
-                    .orElse(0.0);
+                        .filter(ExamSubmission::isGraded)
+                        .mapToDouble(ExamSubmission::getFinalPercentage)
+                        .average()
+                        .orElse(0.0);
             }
-            
+
+            // Aggregate Random Forest analytics from graded submissions
+            List<ExamSubmission> gradedSubs = submissions.stream()
+                    .filter(ExamSubmission::isGraded)
+                    .collect(Collectors.toList());
+
+            double avgTopicMastery        = gradedSubs.stream().mapToDouble(ExamSubmission::getTopicMastery).average().orElse(0.0);
+            double avgDifficultyResilience = gradedSubs.stream().mapToDouble(ExamSubmission::getDifficultyResilience).average().orElse(0.0);
+            double avgAccuracy            = gradedSubs.stream().mapToDouble(ExamSubmission::getAccuracy).average().orElse(0.0);
+            double avgTimeEfficiency      = gradedSubs.stream().mapToDouble(ExamSubmission::getTimeEfficiency).average().orElse(0.0);
+            double avgConfidence          = gradedSubs.stream().mapToDouble(ExamSubmission::getConfidence).average().orElse(0.0);
+
+            // Most recent performance category (from latest graded submission)
+            String latestCategory = gradedSubs.isEmpty() ? "N/A"
+                    : (gradedSubs.get(0).getPerformanceCategory() != null
+                       ? gradedSubs.get(0).getPerformanceCategory() : "N/A");
+
             Map<String, Object> studentData = new HashMap<>();
             studentData.put("studentEmail", studentEmail);
             studentData.put("studentName", enrolled.getStudentName());
             studentData.put("totalSubmissions", totalSubmissions);
             studentData.put("gradedCount", gradedCount);
             studentData.put("pendingCount", pendingCount);
+            studentData.put("releasedCount", releasedCount);
             studentData.put("averageScore", String.format("%.1f", averageScore));
-            
+            studentData.put("submissions", submissions);
+            // Analytics
+            studentData.put("avgTopicMastery",         String.format("%.1f", avgTopicMastery));
+            studentData.put("avgDifficultyResilience",  String.format("%.1f", avgDifficultyResilience));
+            studentData.put("avgAccuracy",              String.format("%.1f", avgAccuracy));
+            studentData.put("avgTimeEfficiency",        String.format("%.1f", avgTimeEfficiency));
+            studentData.put("avgConfidence",            String.format("%.1f", avgConfidence));
+            studentData.put("latestCategory",           latestCategory);
+            studentData.put("hasAnalytics",             !gradedSubs.isEmpty());
+
             studentList.add(studentData);
         }
-        
+
         model.addAttribute("studentList", studentList);
         model.addAttribute("totalStudents", studentList.size());
-        
+
         return "teacher-view-students-list";
     }
     
@@ -2845,6 +2880,7 @@ public class HomepageController {
         model.addAttribute("studentName", studentName);
         model.addAttribute("submissions", submissions);
         model.addAttribute("stats", stats);
+        model.addAttribute("studentSummaryList", new ArrayList<>());
         
         return "teacher-view-results";
     }
@@ -2973,6 +3009,43 @@ public class HomepageController {
         model.addAttribute("subjectFilter", subjectFilter);
         model.addAttribute("statusFilter", statusFilter);
         model.addAttribute("studentFilter", studentFilter);
+
+        // Build per-student summary for the Students tab
+        List<Map<String, Object>> studentSummaryList = new ArrayList<>();
+        Map<String, List<ExamSubmission>> submissionsByStudent = allSubmissions.stream()
+                .collect(Collectors.groupingBy(ExamSubmission::getStudentEmail));
+
+        for (EnrolledStudent enrolled : enrolledStudents) {
+            String sEmail = enrolled.getStudentEmail();
+            List<ExamSubmission> subs = submissionsByStudent.getOrDefault(sEmail, new ArrayList<>());
+
+            long gradedCnt   = subs.stream().filter(ExamSubmission::isGraded).count();
+            long pendingCnt  = subs.stream().filter(s -> !s.isGraded()).count();
+            long releasedCnt = subs.stream().filter(ExamSubmission::isResultsReleased).count();
+            double avgPct    = subs.stream()
+                    .filter(ExamSubmission::isGraded)
+                    .mapToDouble(ExamSubmission::getFinalPercentage)
+                    .average()
+                    .orElse(0.0);
+
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("studentEmail", sEmail);
+            entry.put("studentName",  enrolled.getStudentName());
+            entry.put("subjectName",  enrolled.getSubjectName());
+            entry.put("totalSubmissions", subs.size());
+            entry.put("gradedCount",   gradedCnt);
+            entry.put("pendingCount",  pendingCnt);
+            entry.put("releasedCount", releasedCnt);
+            entry.put("averageScore",  String.format("%.1f", avgPct));
+            entry.put("submissions",   subs);   // full list for accordion
+            studentSummaryList.add(entry);
+        }
+
+        // Sort: students with most submissions first
+        studentSummaryList.sort((a, b) ->
+                Integer.compare((Integer) b.get("totalSubmissions"), (Integer) a.get("totalSubmissions")));
+
+        model.addAttribute("studentSummaryList", studentSummaryList);
         
         return "teacher-view-results";
     }

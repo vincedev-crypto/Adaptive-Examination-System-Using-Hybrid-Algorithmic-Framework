@@ -1,0 +1,389 @@
+/* ============================================================
+   teacher-view-students-list.css
+   Styles for the Teacher → Students tab (submissions + grades)
+   ============================================================ */
+
+/* ── Page wrapper ── */
+.svl-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+.svl-header h2 {
+    color: #1a3c6e;
+    font-size: 1.65rem;
+    margin: 0;
+}
+.svl-header p {
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin: 4px 0 0;
+}
+
+/* ── Stats bar ── */
+.svl-stats-bar {
+    background: #fff;
+    border-radius: 10px;
+    padding: 12px 22px;
+    margin-bottom: 18px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    font-size: 0.88rem;
+    color: #495057;
+}
+
+/* ── Search ── */
+.svl-search-wrap {
+    position: relative;
+    margin-bottom: 18px;
+}
+.svl-search-wrap i {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #adb5bd;
+    font-size: 0.95rem;
+}
+.svl-search-wrap input {
+    width: 100%;
+    padding: 10px 16px 10px 38px;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    font-size: 0.93rem;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+.svl-search-wrap input:focus {
+    border-color: #1a3c6e;
+    box-shadow: 0 0 0 3px rgba(26,60,110,0.1);
+}
+
+/* ── Student accordion card ── */
+.svl-card {
+    background: #fff;
+    border-radius: 12px;
+    margin-bottom: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+}
+.svl-card:hover {
+    box-shadow: 0 4px 18px rgba(0,0,0,0.12);
+}
+
+/* ── Card header (clickable row) ── */
+.svl-card-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 22px;
+    cursor: pointer;
+    user-select: none;
+    flex-wrap: wrap;
+}
+
+.svl-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7b1113, #1a3c6e);
+    color: #fff;
+    font-size: 1.15rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.svl-name-wrap {
+    flex: 1;
+    min-width: 160px;
+}
+.svl-name-wrap h6 {
+    margin: 0;
+    color: #1a3c6e;
+    font-weight: 600;
+    font-size: 1rem;
+}
+.svl-name-wrap small {
+    color: #6c757d;
+    font-size: 0.82rem;
+}
+
+/* ── Badge pills on header ── */
+.svl-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    align-items: center;
+}
+.svl-badge {
+    padding: 4px 11px;
+    border-radius: 20px;
+    font-size: 0.77rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.svl-badge-total    { background: #7b1113; color: #fff; }
+.svl-badge-graded   { background: #1a6e3c; color: #fff; }
+.svl-badge-pending  { background: #b8860b; color: #fff; }
+.svl-badge-released { background: #1a3c6e; color: #fff; }
+.svl-badge-avg      { background: #155a5a; color: #fff; }
+
+/* ── Chevron ── */
+.svl-chevron {
+    color: #6c757d;
+    font-size: 0.88rem;
+    margin-left: auto;
+    flex-shrink: 0;
+    transition: transform 0.25s ease;
+}
+.svl-chevron.open {
+    transform: rotate(180deg);
+}
+
+/* ── Expandable panel ── */
+.svl-panel {
+    display: none;
+    border-top: 1px solid #f0f0f0;
+    padding: 0 22px 20px;
+}
+.svl-panel.open {
+    display: block;
+}
+
+.svl-panel-title {
+    font-size: 0.88rem;
+    font-weight: 600;
+    color: #495057;
+    margin: 16px 0 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ── Submissions table ── */
+.svl-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+.svl-table thead th {
+    background: #f8f9fa;
+    padding: 9px 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #495057;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+}
+.svl-table tbody td {
+    padding: 9px 12px;
+    border-bottom: 1px solid #f3f3f3;
+    vertical-align: middle;
+}
+.svl-table tbody tr:last-child td {
+    border-bottom: none;
+}
+.svl-table tbody tr:hover {
+    background: #f8f9fa;
+}
+
+/* ── Status pills ── */
+.svl-status {
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+.svl-status-pending  { background: #fff3cd; color: #856404; border: 1px solid #ffc107; }
+.svl-status-graded   { background: #d1e7dd; color: #0f5132; border: 1px solid #badbcc; }
+.svl-status-released { background: #cfe2ff; color: #084298; border: 1px solid #b6d4fe; }
+
+/* ── Grade colour pills ── */
+.svl-grade {
+    padding: 3px 9px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    font-weight: 700;
+    white-space: nowrap;
+}
+.svl-grade-excellent { background: #d1e7dd; color: #0f5132; }
+.svl-grade-good      { background: #cfe2ff; color: #084298; }
+.svl-grade-fair      { background: #fff3cd; color: #856404; }
+.svl-grade-poor      { background: #f8d7da; color: #842029; }
+.svl-grade-na        { background: #e9ecef; color: #6c757d; }
+
+/* ── Action buttons ── */
+.svl-btn {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.77rem;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    border: none;
+    cursor: pointer;
+    margin: 1px;
+    line-height: 1.5;
+}
+.svl-btn-view     { background: #1a3c6e; color: #fff; }
+.svl-btn-view:hover { background: #153060; color: #fff; }
+.svl-btn-grade    { background: #7b1113; color: #fff; }
+.svl-btn-grade:hover { background: #5c0d0f; color: #fff; }
+.svl-btn-release  { background: #1a6e3c; color: #fff; }
+.svl-btn-release:hover { background: #155530; color: #fff; }
+.svl-btn-profile  { background: #f0f0f0; color: #495057; border: 1px solid #dee2e6; }
+.svl-btn-profile:hover { background: #e2e6ea; color: #495057; }
+
+/* ── Empty state ── */
+.svl-empty {
+    text-align: center;
+    padding: 20px;
+    color: #6c757d;
+    font-size: 0.88rem;
+}
+
+/* ── No students card ── */
+.svl-no-students {
+    background: #fff;
+    border-radius: 12px;
+    padding: 40px;
+    text-align: center;
+    color: #6c757d;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+}
+
+/* ── Inner Tabs ── */
+.svl-inner-tabs {
+    border-bottom: 2px solid #e0e7ef;
+    margin-bottom: 16px;
+}
+.svl-inner-tabs .nav-link {
+    color: #4a5568;
+    font-size: 0.88rem;
+    font-weight: 600;
+    padding: 8px 16px;
+    border-radius: 6px 6px 0 0;
+    border: none;
+    background: transparent;
+}
+.svl-inner-tabs .nav-link.active {
+    color: #1a3c6e;
+    background: #f0f5ff;
+    border-bottom: 2px solid #1a3c6e;
+}
+.svl-inner-tabs .nav-link:hover:not(.active) {
+    background: #f5f7fa;
+    color: #1a3c6e;
+}
+.svl-tab-count {
+    display: inline-block;
+    background: #1a3c6e;
+    color: #fff;
+    font-size: 0.72rem;
+    font-weight: 700;
+    border-radius: 10px;
+    padding: 1px 7px;
+    margin-left: 5px;
+    vertical-align: middle;
+}
+.svl-tab-content {
+    padding-top: 4px;
+}
+
+/* ── Analytics ── */
+.svl-category-banner {
+    background: linear-gradient(90deg, #1a3c6e 0%, #2a5298 100%);
+    color: #fff;
+    border-radius: 8px;
+    padding: 10px 18px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.svl-category-label {
+    font-size: 0.85rem;
+    opacity: 0.85;
+}
+.svl-category-value {
+    font-weight: 700;
+    font-size: 1rem;
+    background: rgba(255,255,255,0.2);
+    border-radius: 6px;
+    padding: 2px 12px;
+}
+.svl-analytics-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 14px;
+    margin-bottom: 8px;
+}
+.svl-metric-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    background: #f8faff;
+    border: 1px solid #e4ecf5;
+    border-radius: 10px;
+    padding: 12px 14px;
+}
+.svl-metric-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1rem;
+}
+.svl-metric-body {
+    flex: 1;
+    min-width: 0;
+}
+.svl-metric-label {
+    font-size: 0.77rem;
+    color: #6b7280;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.svl-metric-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #1a3c6e;
+    line-height: 1.2;
+    margin: 2px 0;
+}
+.svl-metric-bar {
+    height: 5px;
+    background: #e4ecf5;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 4px;
+}
+.svl-metric-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.5s ease;
+    max-width: 100%;
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+    .svl-card-header { flex-direction: column; align-items: flex-start; }
+    .svl-chevron { margin-left: 0; }
+    .svl-table { font-size: 0.78rem; }
+    .svl-table thead th,
+    .svl-table tbody td { padding: 7px 8px; }
+    .svl-analytics-grid { grid-template-columns: 1fr 1fr; }
+}
