@@ -1176,7 +1176,11 @@ public class HomepageController {
             row.put("timeLimit", timeLimit != null ? timeLimit : 0);
             row.put("deadline", deadlineDisplay);
             row.put("lastSubmittedAt", lastSubmittedAt);
-            row.put("isSubmitted", latestMatchingSubmission != null);
+            // A student is "queued" if they currently have an exam waiting (not yet taken)
+            boolean isQueued = distributedExams.containsKey(studentEmail) && !distributedExams.get(studentEmail).isEmpty();
+            // A student is "submitted" only if they are NOT currently queued AND have a matching submission
+            row.put("isQueued", isQueued);
+            row.put("isSubmitted", !isQueued && latestMatchingSubmission != null);
             row.put("isUnlocked", unlockedExams.containsKey(studentEmail) && !unlockedExams.get(studentEmail).isEmpty());
             distributionTracker.add(row);
         }
@@ -1203,14 +1207,22 @@ public class HomepageController {
                 value.put("timeLimit", timeLimit);
                 value.put("deadline", deadline);
                 value.put("assignedCount", 0);
+                value.put("queuedCount", 0);
                 value.put("submittedCount", 0);
                 return value;
             });
 
             quizRow.put("assignedCount", ((Integer) quizRow.get("assignedCount")) + 1);
 
+            boolean studentIsQueued = Boolean.TRUE.equals(row.get("isQueued"));
+            boolean studentIsSubmitted = Boolean.TRUE.equals(row.get("isSubmitted"));
+
+            if (studentIsQueued) {
+                quizRow.put("queuedCount", ((Integer) quizRow.get("queuedCount")) + 1);
+            }
+
             List<ExamSubmission> studentSubs = submissionsByStudent.getOrDefault(studentEmail, new ArrayList<>());
-            boolean submittedThisQuiz = studentSubs.stream()
+            boolean submittedThisQuiz = !studentIsQueued && studentSubs.stream()
                 .anyMatch(sub -> examName.equals(sub.getExamName()));
 
             if (submittedThisQuiz) {
@@ -1222,7 +1234,8 @@ public class HomepageController {
         for (Map<String, Object> quizRow : quizSummaryMap.values()) {
             int assigned = (Integer) quizRow.get("assignedCount");
             int submitted = (Integer) quizRow.get("submittedCount");
-            quizRow.put("notSubmittedCount", assigned - submitted);
+            int queued = (Integer) quizRow.get("queuedCount");
+            quizRow.put("notSubmittedCount", assigned - submitted - queued);
             quizRow.put("filterExamName", String.valueOf(quizRow.get("examName")));
             quizRow.put("filterActivityType", String.valueOf(quizRow.get("activityType")));
             quizRow.put("filterTimeLimit", String.valueOf(quizRow.get("timeLimit")));
@@ -1233,7 +1246,10 @@ public class HomepageController {
         long distributedSubmittedCount = distributionTracker.stream()
             .filter(row -> Boolean.TRUE.equals(row.get("isSubmitted")))
             .count();
-        long distributedNotSubmittedCount = distributionTracker.size() - distributedSubmittedCount;
+        long distributedQueuedCount = distributionTracker.stream()
+            .filter(row -> Boolean.TRUE.equals(row.get("isQueued")))
+            .count();
+        long distributedNotSubmittedCount = distributionTracker.size() - distributedSubmittedCount - distributedQueuedCount;
 
         List<Map<String, Object>> submittedStudents = distributionTracker.stream()
             .filter(row -> Boolean.TRUE.equals(row.get("isSubmitted")))
@@ -1258,6 +1274,7 @@ public class HomepageController {
         model.addAttribute("distributionTracker", distributionTracker);
         model.addAttribute("quizDistributionSummary", quizDistributionSummary);
         model.addAttribute("distributedSubmittedCount", distributedSubmittedCount);
+        model.addAttribute("distributedQueuedCount", distributedQueuedCount);
         model.addAttribute("distributedNotSubmittedCount", distributedNotSubmittedCount);
         model.addAttribute("submittedStudents", submittedStudents);
         model.addAttribute("classroomStudentSummary", classroomStudentSummary);

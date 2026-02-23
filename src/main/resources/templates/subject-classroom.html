@@ -71,6 +71,8 @@
                     <div class="d-flex align-items-center gap-2">
                         <span class="badge bg-success-subtle text-success border border-success-subtle"
                               th:text="${distributedSubmittedCount} + ' Students Submitted'">0 Students Submitted</span>
+                        <span class="badge bg-info-subtle text-info border border-info-subtle"
+                              th:text="${distributedQueuedCount} + ' Queued'">0 Queued</span>
                         <span class="badge bg-warning-subtle text-warning border border-warning-subtle"
                               th:text="${distributedNotSubmittedCount} + ' Pending'">0 Pending</span>
                     </div>
@@ -92,6 +94,7 @@
                                 <th>Time Limit</th>
                                 <th>Deadline</th>
                                 <th>Assigned</th>
+                                <th>Queued</th>
                                 <th>Submitted</th>
                                 <th>Not Submitted</th>
                                 <th>Status</th>
@@ -111,15 +114,18 @@
                                 <td th:text="${quiz.timeLimit} + ' min'">0 min</td>
                                 <td th:text="${quiz.deadline}">Deadline</td>
                                 <td><span class="badge bg-secondary" th:text="${quiz.assignedCount}">0</span></td>
+                                <td><span class="badge bg-info text-dark" th:text="${quiz['queuedCount'] ?: 0}">0</span></td>
                                 <td><span class="badge bg-success" th:text="${quiz.submittedCount}">0</span></td>
                                 <td><span class="badge bg-warning text-dark" th:text="${quiz.notSubmittedCount}">0</span></td>
                                 <td>
                                     <span class="badge bg-success"
                                           th:if="${quiz.assignedCount > 0 and quiz.submittedCount == quiz.assignedCount}">Completed</span>
+                                    <span class="badge bg-info text-dark"
+                                          th:if="${(quiz['queuedCount'] ?: 0) > 0 and quiz.submittedCount < quiz.assignedCount}">Queued</span>
                                     <span class="badge bg-primary"
-                                          th:if="${quiz.submittedCount > 0 and quiz.submittedCount < quiz.assignedCount}">Ongoing</span>
+                                          th:if="${(quiz['queuedCount'] ?: 0) == 0 and quiz.submittedCount > 0 and quiz.submittedCount < quiz.assignedCount}">Ongoing</span>
                                     <span class="badge bg-secondary"
-                                          th:if="${quiz.submittedCount == 0}">Waiting for submissions</span>
+                                          th:if="${(quiz['queuedCount'] ?: 0) == 0 and quiz.submittedCount == 0}">Waiting for submissions</span>
                                 </td>
                                 <td>
                                     <a class="btn btn-sm btn-outline-primary"
