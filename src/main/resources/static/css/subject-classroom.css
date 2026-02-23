@@ -5,6 +5,15 @@ body {
     min-height: 100vh;
 }
 
+.teacher-content-wrapper,
+.main-container,
+.classroom-header,
+.section-card {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
 .main-container {
     max-width: 1200px;
     margin: 0 auto;

@@ -37,6 +37,12 @@
                     <form th:action="@{/teacher/process-exams}" method="post" enctype="multipart/form-data" id="uploadForm">
 
                         <div id="examSection" class="mb-4 text-start">
+                            <div class="mb-3">
+                                <label class="form-label fw-bold text-info">Quiz Name <em class="fw-normal">Optional</em></label>
+                                <input class="form-control" type="text" name="quizName"
+                                       placeholder="e.g., Midterm Algebra Quiz" maxlength="120">
+                            </div>
+
                             <div class="row mb-3">
                                 <div class="col-md-6">
                                     <label class="form-label fw-bold text-info">Subject Name *</label>

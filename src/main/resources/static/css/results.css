@@ -5,6 +5,11 @@ body.results-page {
     padding-top: 20px; 
 }
 
+.results-toolbar {
+    border-radius: 14px;
+    background: #ffffff;
+}
+
 /* Google Docs Paper Design */
 .google-doc-page {
     background: white;

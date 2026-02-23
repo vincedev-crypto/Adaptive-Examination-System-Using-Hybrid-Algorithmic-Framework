@@ -13,165 +13,70 @@
 <div class="teacher-layout">
     <div th:replace="teacher-nav :: teacherNav"></div>
 
-    <!-- Main content area -->
     <div class="teacher-content-wrapper">
-<div class="container">
-    <div class="row">
-        <div class="col-md-10 mx-auto">
-            <!-- Header -->
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <div>
-                    <h2 class="text-primary mb-0">Subject Management</h2>
-                    <p class="text-muted mb-0">Manage subjects and enrolled students</p>
-                </div>
-                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSubjectModal">
-                    <i class="bi bi-plus-circle"></i> Create New Subject
-                </button>
-            </div>
-
-            <!-- Success/Error Messages -->
-            <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show">
-                <i class="bi bi-check-circle"></i> <span th:text="${successMessage}"></span>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-            
-            <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show">
-                <i class="bi bi-exclamation-triangle"></i> <span th:text="${errorMessage}"></span>
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            </div>
-
-            <!-- Subjects Grid -->
-            <div th:if="${#lists.isEmpty(subjects)}" class="card upload-card p-5 text-center">
-                <i class="bi bi-inbox display-1 text-muted mb-3"></i>
-                <h4 class="text-muted">No Subjects Yet</h4>
-                <p class="text-muted">Create your first subject to get started</p>
-                <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#createSubjectModal">
-                    <i class="bi bi-plus-circle"></i> Create First Subject
-                </button>
-            </div>
-
-            <div th:if="${!#lists.isEmpty(subjects)}" class="row">
-                <div th:each="subject : ${subjects}" class="col-md-6 col-lg-4 mb-4">
-                    <div class="card upload-card h-100 subject-card">
-                        <div class="card-body">
-                            <div class="d-flex justify-content-between align-items-start mb-3">
-                                <h5 class="card-title mb-0" th:text="${subject.subjectName}">Subject Name</h5>
-                                <div class="dropdown">
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" 
-                                            data-bs-toggle="dropdown">
-                                        <i class="bi bi-three-dots-vertical"></i>
-                                    </button>
-                                    <ul class="dropdown-menu">
-                                        <li>
-                                            <a class="dropdown-item" th:href="@{/teacher/subject-classroom/{id}(id=${subject.id})}">
-                                                <i class="bi bi-door-open"></i> Open Classroom
-                                            </a>
-                                        </li>
-                                        <li>
-                                            <button class="dropdown-item" data-bs-toggle="modal" 
-                                                    th:attr="data-bs-target='#enrollModal' + ${subject.id}">
-                                                <i class="bi bi-person-plus"></i> Enroll Students
-                                            </button>
-                                        </li>
-                                        <li><hr class="dropdown-divider"></li>
-                                        <li>
-                                            <form th:action="@{/teacher/delete-subject}" method="post" 
-                                                  onsubmit="return confirm('Delete this subject? This will also remove all enrollments.')">
-                                                <input type="hidden" name="subjectId" th:value="${subject.id}">
-                                                <button type="submit" class="dropdown-item text-danger">
-                                                    <i class="bi bi-trash"></i> Delete Subject
-                                                </button>
-                                            </form>
-                                        </li>
-                                    </ul>
-                                </div>
-                            </div>
-                            
-                            <p class="card-text text-muted small mb-3" th:text="${subject.description ?: 'No description'}">
-                                Description
-                            </p>
-                            
-                            <div class="mb-3">
-                                <span class="badge bg-primary">
-                                    <i class="bi bi-people"></i> 
-                                    <span th:text="${enrollmentCountBySubject[subject.id] ?: 0}">0</span> Students
-                                </span>
-                            </div>
-                            
-                            <div class="d-grid gap-2">
-                                <a th:href="@{/teacher/subject-classroom/{id}(id=${subject.id})}" 
-                                   class="btn btn-primary btn-sm">
-                                    <i class="bi bi-door-open"></i> View Classroom
-                                </a>
-                                <button class="btn btn-outline-primary btn-sm" 
-                                        data-bs-toggle="modal" 
-                                        th:attr="data-bs-target='#enrollModal' + ${subject.id}">
-                                    <i class="bi bi-person-plus"></i> Enroll Students
-                                </button>
-                            </div>
+        <div class="container">
+            <div class="row">
+                <div class="col-md-10 mx-auto">
+                    <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                        <div>
+                            <h2 class="text-primary mb-0">Subject Management</h2>
+                            <p class="text-muted mb-0">Manage subjects and enrolled students</p>
                         </div>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createSubjectModal">
+                            <i class="bi bi-plus-circle"></i> Create New Subject
+                        </button>
                     </div>
-                    
-                    <!-- Enroll Student Modal -->
-                    <div class="modal fade" th:id="'enrollModal' + ${subject.id}" tabindex="-1">
-                        <div class="modal-dialog">
-                            <div class="modal-content">
-                                <div class="modal-header">
-                                    <h5 class="modal-title">
-                                        Enroll Students in <span th:text="${subject.subjectName}">Subject</span>
-                                    </h5>
-                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                                </div>
-                                <div class="modal-body">
-                                    <form th:action="@{/teacher/enroll-student}" method="post">
-                                        <input type="hidden" name="subjectId" th:value="${subject.id}">
-                                        <div class="mb-3">
-                                            <label class="form-label">Select Student</label>
-                                            <select name="studentEmail" class="form-select" required>
-                                                <option value="" disabled selected>Choose a student...</option>
-                                                <option th:each="student : ${allStudents}" 
-                                                        th:value="${student.email}" 
-                                                        th:text="${student.fullName + ' (' + student.email + ')'}">
-                                                </option>
-                                            </select>
-                                        </div>
-                                        <div th:if="${#lists.isEmpty(allStudents)}" class="alert alert-warning">
-                                            <i class="bi bi-exclamation-triangle"></i> No registered students found.
-                                        </div>
-                                        <div class="d-grid">
-                                            <button type="submit" class="btn btn-primary" 
-                                                    th:disabled="${#lists.isEmpty(allStudents)}">
-                                                <i class="bi bi-person-plus-fill"></i> Enroll Student
+
+                    <div th:if="${successMessage}" class="alert alert-success alert-dismissible fade show">
+                        <i class="bi bi-check-circle"></i> <span th:text="${successMessage}"></span>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+
+                    <div th:if="${errorMessage}" class="alert alert-danger alert-dismissible fade show">
+                        <i class="bi bi-exclamation-triangle"></i> <span th:text="${errorMessage}"></span>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+
+                    <div th:if="${#lists.isEmpty(subjects)}" class="card upload-card p-5 text-center">
+                        <i class="bi bi-inbox display-1 text-muted mb-3"></i>
+                        <h4 class="text-muted">No Subjects Yet</h4>
+                        <p class="text-muted">Create your first subject to get started</p>
+                        <button class="btn btn-primary mt-2" data-bs-toggle="modal" data-bs-target="#createSubjectModal">
+                            <i class="bi bi-plus-circle"></i> Create First Subject
+                        </button>
+                    </div>
+
+                    <div th:if="${!#lists.isEmpty(subjects)}" class="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+                        <div th:each="subject : ${subjects}" class="col">
+                            <div class="card upload-card h-100 subject-card">
+                                <div class="card-body d-flex flex-column">
+                                    <div class="d-flex justify-content-between align-items-start mb-3 gap-2">
+                                        <h5 class="card-title mb-0" th:text="${subject.subjectName}">Subject Name</h5>
+                                        <form th:action="@{/teacher/delete-subject}" method="post" class="ms-2 flex-shrink-0"
+                                              onsubmit="return confirm('Delete this subject? This will also remove all enrollments.')">
+                                            <input type="hidden" name="subjectId" th:value="${subject.id}">
+                                            <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete Subject">
+                                                <i class="bi bi-trash"></i>
                                             </button>
-                                        </div>
-                                    </form>
-                                    
-                                    <!-- Show already enrolled students -->
-                                    <hr class="my-3">
-                                    <h6 class="text-muted mb-2">Enrolled Students:</h6>
-                                    <div th:with="subjectEnrollments=${enrollmentsBySubject[subject.id]}">
-                                        <div th:if="${subjectEnrollments == null || subjectEnrollments.isEmpty()}" 
-                                             class="text-muted small">
-                                            <em>No students enrolled yet</em>
-                                        </div>
-                                        <ul th:if="${subjectEnrollments != null && !subjectEnrollments.isEmpty()}" 
-                                            class="list-group list-group-flush">
-                                            <li th:each="enrollment : ${subjectEnrollments}" 
-                                                class="list-group-item d-flex justify-content-between align-items-center px-0">
-                                                <span>
-                                                    <i class="bi bi-person-circle"></i>
-                                                    <span th:text="${enrollment.studentName}">Student</span>
-                                                    <br>
-                                                    <small class="text-muted" th:text="${enrollment.studentEmail}">email</small>
-                                                </span>
-                                                <form th:action="@{/teacher/remove-student}" method="post">
-                                                    <input type="hidden" name="enrollmentId" th:value="${enrollment.id}">
-                                                    <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                        <i class="bi bi-x-lg"></i>
-                                                    </button>
-                                                </form>
-                                            </li>
-                                        </ul>
+                                        </form>
+                                    </div>
+
+                                    <p class="card-text text-muted small mb-3" th:text="${subject.description ?: 'No description'}">
+                                        Description
+                                    </p>
+
+                                    <div class="mb-3">
+                                        <span class="badge bg-primary">
+                                            <i class="bi bi-people"></i>
+                                            <span th:text="${enrollmentCountBySubject[subject.id] ?: 0}">0</span> Students
+                                        </span>
+                                    </div>
+
+                                    <div class="d-grid mt-auto">
+                                        <a th:href="@{/teacher/subject-classroom/{id}(id=${subject.id})}"
+                                           class="btn btn-primary btn-sm view-classroom-btn">
+                                            <i class="bi bi-door-open"></i> View Classroom
+                                        </a>
                                     </div>
                                 </div>
                             </div>
@@ -183,7 +88,6 @@
     </div>
 </div>
 
-<!-- Create Subject Modal -->
 <div class="modal fade" id="createSubjectModal" tabindex="-1">
     <div class="modal-dialog">
         <div class="modal-content">
@@ -195,12 +99,12 @@
                 <form th:action="@{/teacher/create-subject}" method="post">
                     <div class="mb-3">
                         <label class="form-label">Subject Name *</label>
-                        <input type="text" name="subjectName" class="form-control" 
+                        <input type="text" name="subjectName" class="form-control"
                                placeholder="e.g., Computer Science 101" required>
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Description (Optional)</label>
-                        <textarea name="description" class="form-control" rows="3" 
+                        <textarea name="description" class="form-control" rows="3"
                                   placeholder="Brief description of the subject"></textarea>
                     </div>
                     <div class="d-grid">
@@ -216,15 +120,50 @@
 
 <style>
 .subject-card {
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 
 .subject-card:hover {
-    transform: translateY(-5px);
-    box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+
+.subject-card .card-title {
+    word-break: break-word;
+    color: #7a1022;
+}
+
+.subject-card .btn-outline-danger {
+    padding: 0.2rem 0.45rem;
+    line-height: 1.2;
+    color: #b4233b;
+    border-color: #e58a98;
+    background: #fff;
+    opacity: 1;
+}
+
+.subject-card .btn-outline-danger:hover,
+.subject-card .btn-outline-danger:focus {
+    color: #fff;
+    background: #b4233b;
+    border-color: #b4233b;
+}
+
+.view-classroom-btn {
+    font-weight: 600;
 }
 </style>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.view-classroom-btn').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+            e.preventDefault();
+            window.location.assign(this.href);
+        });
+    });
+});
+</script>
 </body>
 </html>

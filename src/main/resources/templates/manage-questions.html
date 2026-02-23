@@ -23,9 +23,26 @@
     </script>
     <script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js"></script>
     <style>
+        .mq-card {
+            border: 1px solid var(--eac-border);
+            border-radius: 16px;
+            box-shadow: 0 12px 28px rgba(60, 36, 13, 0.09);
+            background: var(--eac-surface);
+            overflow: hidden;
+        }
+        .mq-header {
+            background: linear-gradient(135deg, var(--eac-maroon) 0%, #8f1a2e 100%);
+            color: #fff;
+            border-bottom: 2px solid #d4a32a;
+        }
+        .mq-section-header {
+            background: #221f1f;
+            color: #fff;
+        }
         .question-card {
             transition: all 0.3s ease;
             border-left: 4px solid transparent;
+            background: #fff;
         }
         .question-card:hover {
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -49,8 +66,28 @@
             color: #6c757d;
         }
         .add-question-form {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: #fff;
+            color: #212529;
+            border: 1px solid #eadfce;
+            border-radius: 16px;
+        }
+        .mq-help {
+            background: #f8f9fb;
+            border: 1px solid #e4e7ee;
+            border-radius: 10px;
+            padding: 0.75rem;
+            color: #495057;
+            font-size: 0.88rem;
+        }
+        .mq-help code {
+            color: #7a1022;
+            background: #f2e8eb;
+            border-radius: 6px;
+            padding: 0.05rem 0.35rem;
+        }
+        .mq-add-header {
+            border-bottom: 1px solid #eadfce;
+            background: #fcfaf7;
         }
         .form-control:focus, .form-select:focus {
             border-color: #667eea;
@@ -62,9 +99,42 @@
             border-radius: 8px;
             margin: 10px 0;
         }
+        .mq-edit {
+            color: #0d6efd !important;
+            border-color: #0d6efd !important;
+            background: #fff !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+        .mq-edit:hover {
+            background: #0d6efd !important;
+            color: #fff !important;
+        }
+        .mq-delete {
+            color: #dc3545 !important;
+            border-color: #dc3545 !important;
+            background: #fff !important;
+            opacity: 1 !important;
+            visibility: visible !important;
+        }
+        .mq-delete i,
+        .mq-edit i {
+            color: inherit !important;
+        }
+        .mq-delete:hover {
+            background: #dc3545 !important;
+            color: #fff !important;
+        }
+        #mathPreviewContainer {
+            display: none;
+            background: #fff;
+            border: 1px solid #dfe3ea;
+            color: #212529;
+            min-height: 48px;
+        }
     </style>
 </head>
-<body>
+<body class="homepage-page">
 
 <div class="teacher-layout">
     <div th:replace="teacher-nav :: teacherNav"></div>
@@ -74,8 +144,8 @@
 <div class="container">
     <div class="row mb-4">
         <div class="col-md-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-primary text-white">
+            <div class="card mq-card">
+                <div class="card-header mq-header">
                     <h4 class="mb-0"><i class="bi bi-file-earmark-text"></i> Exam Details</h4>
                 </div>
                 <div class="card-body">
@@ -121,9 +191,9 @@
                                 </li>
                             </ul>
                         </div>
-                        <a th:href="@{/teacher/homepage}" class="btn btn-outline-secondary">
-                            <i class="bi bi-arrow-left"></i> Back to Dashboard
-                        </a>
+                        <button type="button" class="btn btn-outline-secondary" onclick="goBackSmart()">
+                            <i class="bi bi-arrow-left"></i> Back
+                        </button>
                     </div>
                 </div>
             </div>
@@ -133,8 +203,8 @@
     <!-- Add New Question Section -->
     <div class="row mb-4">
         <div class="col-md-12">
-            <div class="card shadow-sm add-question-form">
-                <div class="card-header border-0">
+            <div class="card add-question-form">
+                <div class="card-header border-0 mq-add-header">
                     <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Add New Question</h5>
                 </div>
                 <div class="card-body">
@@ -146,18 +216,17 @@
                             <textarea class="form-control" name="questionText" id="questionTextarea" rows="4" 
                                       placeholder="Enter the question text..." required
                                       oninput="updateMathPreview()"></textarea>
-                            <small class="form-text text-white-50">
-                                For multiple choice questions, include all options (A, B, C, D, etc.) in the question text.<br>
-                                <strong>Supported formats:</strong><br>
-                                • <strong>Images:</strong> Use &lt;img src="URL" alt="description"&gt;<br>
-                                • <strong>Videos:</strong> Use &lt;video src="URL" controls&gt;&lt;/video&gt;<br>
-                                • <strong>Equations (inline):</strong> <code style="color:#ffd;">$x^2 + y^2 = r^2$</code> or <code style="color:#ffd;">\(x^2\)</code><br>
-                                • <strong>Equations (block):</strong> <code style="color:#ffd;">$$\frac{a}{b}$$</code> or <code style="color:#ffd;">\[\int_0^\infty\]</code>
-                            </small>
+                            <div class="mq-help mt-2">
+                                <div>For multiple choice questions, include all options (A, B, C, D, etc.) in the question text.</div>
+                                <div class="mt-1"><strong>Supported formats</strong></div>
+                                <div>• Images: <code>&lt;img src="URL" alt="description"&gt;</code></div>
+                                <div>• Videos: <code>&lt;video src="URL" controls&gt;&lt;/video&gt;</code></div>
+                                <div>• Equations (inline): <code>$x^2 + y^2 = r^2$</code> or <code>\(x^2\)</code></div>
+                                <div>• Equations (block): <code>$$\frac{a}{b}$$</code> or <code>\[\int_0^\infty\]</code></div>
+                            </div>
                             <!-- Live LaTeX preview -->
-                            <div id="mathPreviewContainer" class="mt-2 p-3 rounded" 
-                                 style="display:none; background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.3); color:#fff; min-height:48px;">
-                                <small class="d-block mb-1" style="opacity:.7; font-size:.75rem;">⟨ LaTeX Preview ⟩</small>
+                            <div id="mathPreviewContainer" class="mt-2 p-3 rounded">
+                                <small class="d-block mb-1 text-muted" style="font-size:.75rem;">⟨ LaTeX Preview ⟩</small>
                                 <div id="mathPreview"></div>
                             </div>
                         </div>
@@ -167,7 +236,7 @@
                                 <label class="form-label fw-bold">Correct Answer *</label>
                                 <input type="text" class="form-control" name="answer" 
                                        placeholder="e.g., A, B, C, D or full answer text" required>
-                                <small class="form-text text-white-50">Enter the letter or full text of the correct answer</small>
+                                <small class="form-text text-muted">Enter the letter or full text of the correct answer</small>
                             </div>
                             
                             <div class="col-md-6 mb-3">
@@ -204,8 +273,8 @@
     <!-- Existing Questions List -->
     <div class="row">
         <div class="col-md-12">
-            <div class="card shadow-sm">
-                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+            <div class="card mq-card">
+                <div class="card-header mq-section-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="bi bi-list-ol"></i> All Questions</h5>
                     <span class="badge bg-light text-dark" th:text="${#lists.size(exam.questions)} + ' Questions'">100 Questions</span>
                 </div>
@@ -234,13 +303,53 @@
                                     <div class="mb-0 question-media" th:utext="${question}" style="white-space: pre-wrap;"></div>
                                 </div>
                                 <div class="ms-3">
+                                    <button class="btn btn-sm btn-outline-primary me-1 mq-edit" type="button"
+                                            data-bs-toggle="collapse"
+                                            th:attr="data-bs-target='#editQuestion' + ${iterStat.index}, aria-controls='editQuestion' + ${iterStat.index}">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
                                     <form th:action="@{/teacher/delete-question}" method="post" style="display: inline;"
                                           onsubmit="return confirm('Are you sure you want to delete this question?');">
                                         <input type="hidden" name="examId" th:value="${exam.examId}">
                                         <input type="hidden" name="questionIndex" th:value="${iterStat.index}">
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger mq-delete">
                                             <i class="bi bi-trash"></i>
                                         </button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <div class="collapse mt-3" th:id="'editQuestion' + ${iterStat.index}">
+                                <div class="card card-body bg-light border">
+                                    <form th:action="@{/teacher/edit-question}" method="post" class="row g-2">
+                                        <input type="hidden" name="examId" th:value="${exam.examId}">
+                                        <input type="hidden" name="questionIndex" th:value="${iterStat.index}">
+
+                                        <div class="col-12">
+                                            <label class="form-label small fw-semibold mb-1">Question Text</label>
+                                            <textarea class="form-control form-control-sm" name="questionText" rows="3" required th:text="${question}"></textarea>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-semibold mb-1">Answer</label>
+                                            <input type="text" class="form-control form-control-sm" name="answer" required
+                                                   th:value="${exam.answerKey[iterStat.index]}">
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label small fw-semibold mb-1">Difficulty</label>
+                                            <select class="form-select form-select-sm" name="difficulty" required>
+                                                <option value="Easy" th:selected="${exam.difficulties[iterStat.index] == 'Easy'}">Easy</option>
+                                                <option value="Medium" th:selected="${exam.difficulties[iterStat.index] == 'Medium'}">Medium</option>
+                                                <option value="Hard" th:selected="${exam.difficulties[iterStat.index] == 'Hard'}">Hard</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-4 d-flex align-items-end">
+                                            <button type="submit" class="btn btn-sm btn-primary w-100">
+                                                <i class="bi bi-check2-circle me-1"></i>Save Changes
+                                            </button>
+                                        </div>
                                     </form>
                                 </div>
                             </div>
@@ -266,6 +375,14 @@
 
     // Live LaTeX preview
     let previewDebounce;
+    function goBackSmart() {
+        if (window.history.length > 1) {
+            window.history.back();
+            return;
+        }
+        window.location.href = '/teacher/homepage';
+    }
+
     function updateMathPreview() {
         clearTimeout(previewDebounce);
         previewDebounce = setTimeout(function() {

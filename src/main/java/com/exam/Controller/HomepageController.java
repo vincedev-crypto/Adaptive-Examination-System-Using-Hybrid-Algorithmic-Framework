@@ -15,6 +15,7 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -69,6 +70,7 @@ import com.lowagie.text.pdf.PdfWriter;
 
 import jakarta.annotation.PostConstruct;
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Controller
 @RequestMapping("/teacher")
@@ -93,6 +95,9 @@ public class HomepageController {
     private SubjectRepository subjectRepository;
 
     private static Map<String, List<String>> distributedExams = new HashMap<>();
+    private static Map<String, Map<String, Object>> distributedExamMetadata = new HashMap<>();
+    private static Map<String, List<String>> distributedQuestionDifficulties = new HashMap<>();
+    private static Map<String, List<String>> distributedQuestionTopics = new HashMap<>();
     
     // Store uploaded exams with their metadata
     private static Map<String, UploadedExam> uploadedExams = new HashMap<>();
@@ -200,6 +205,18 @@ public class HomepageController {
     public static Map<String, List<String>> getDistributedExams() {
         return distributedExams;
     }
+
+    public static Map<String, Object> getDistributedExamMetadata(String studentEmail) {
+        return distributedExamMetadata.get(studentEmail);
+    }
+
+    public static List<String> getDistributedQuestionDifficulties(String studentEmail) {
+        return distributedQuestionDifficulties.get(studentEmail);
+    }
+
+    public static List<String> getDistributedQuestionTopics(String studentEmail) {
+        return distributedQuestionTopics.get(studentEmail);
+    }
     
     // Check if exam is unlocked for student
     public static boolean isExamUnlocked(String studentEmail, String examName) {
@@ -218,6 +235,9 @@ public class HomepageController {
     // Remove student from distributed exams after they have submitted
     public static void removeDistributedExam(String studentEmail) {
         distributedExams.remove(studentEmail);
+        distributedExamMetadata.remove(studentEmail);
+        distributedQuestionDifficulties.remove(studentEmail);
+        distributedQuestionTopics.remove(studentEmail);
     }
 
     @GetMapping("/homepage")
@@ -550,6 +570,40 @@ public class HomepageController {
         return "redirect:/teacher/manage-questions/" + examId;
     }
 
+    @PostMapping("/edit-question")
+    public String editQuestion(@RequestParam String examId,
+                               @RequestParam int questionIndex,
+                               @RequestParam String questionText,
+                               @RequestParam String answer,
+                               @RequestParam String difficulty,
+                               org.springframework.web.servlet.mvc.support.RedirectAttributes redirectAttributes) {
+        UploadedExam exam = uploadedExams.get(examId);
+
+        if (exam == null) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Exam not found!");
+            return "redirect:/teacher/homepage";
+        }
+
+        try {
+            if (questionIndex < 0 || questionIndex >= exam.getQuestions().size()) {
+                redirectAttributes.addFlashAttribute("errorMessage", "Invalid question index!");
+                return "redirect:/teacher/manage-questions/" + examId;
+            }
+
+            exam.getQuestions().set(questionIndex, questionText);
+            if (questionIndex < exam.getDifficulties().size()) {
+                exam.getDifficulties().set(questionIndex, difficulty);
+            }
+            exam.getAnswerKey().put(questionIndex, answer);
+
+            redirectAttributes.addFlashAttribute("successMessage", "Question updated successfully!");
+        } catch (Exception e) {
+            redirectAttributes.addFlashAttribute("errorMessage", "Error updating question: " + e.getMessage());
+        }
+
+        return "redirect:/teacher/manage-questions/" + examId;
+    }
+
     @PostMapping("/enroll-student")
     public String enrollStudent(@RequestParam String studentEmail,
                                @RequestParam Long subjectId,
@@ -625,7 +679,10 @@ public class HomepageController {
     }
     
     @GetMapping("/subject-classroom/{subjectId}")
-    public String viewSubjectClassroom(@PathVariable Long subjectId, Model model, java.security.Principal principal) {
+    public String viewSubjectClassroom(@PathVariable Long subjectId, Model model, java.security.Principal principal, HttpSession session, HttpServletResponse response) {
+        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+        response.setHeader("Pragma", "no-cache");
+        response.setDateHeader("Expires", 0);
         String teacherEmail = principal.getName();
         
         // Verify the subject belongs to this teacher
@@ -650,6 +707,9 @@ public class HomepageController {
             .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, 
                                        Comparator.nullsLast(Comparator.reverseOrder())))
             .collect(Collectors.toList());
+
+        Map<String, List<ExamSubmission>> submissionsByStudent = submissions.stream()
+            .collect(Collectors.groupingBy(ExamSubmission::getStudentEmail));
         
         // Get all students for enrollment
         List<User> allStudents = userRepository.findAll().stream()
@@ -662,18 +722,193 @@ public class HomepageController {
             .filter(exam -> subjectName.equals(exam.getSubject()))
             .collect(Collectors.toList());
 
+        // Build distribution tracking rows so teacher can monitor assigned exam settings per student
+        List<Map<String, Object>> distributionTracker = new ArrayList<>();
+        for (EnrolledStudent enrolled : enrolledStudents) {
+            String studentEmail = enrolled.getStudentEmail();
+            List<String> assignedQuestions = distributedExams.get(studentEmail);
+
+            boolean hasAssignedExam = assignedQuestions != null && !assignedQuestions.isEmpty();
+
+            String examName = (String) session.getAttribute("examName_" + studentEmail);
+            String examSubject = (String) session.getAttribute("examSubject_" + studentEmail);
+            String activityType = (String) session.getAttribute("examActivityType_" + studentEmail);
+            Integer timeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentEmail);
+            String deadlineRaw = (String) session.getAttribute("examDeadline_" + studentEmail);
+
+            Map<String, Object> metadata = distributedExamMetadata.get(studentEmail);
+            if (metadata != null) {
+                if (examName == null || examName.isBlank()) {
+                    Object value = metadata.get("examName");
+                    examName = value != null ? String.valueOf(value) : null;
+                }
+                if (examSubject == null || examSubject.isBlank()) {
+                    Object value = metadata.get("examSubject");
+                    examSubject = value != null ? String.valueOf(value) : null;
+                }
+                if (activityType == null || activityType.isBlank()) {
+                    Object value = metadata.get("examActivityType");
+                    activityType = value != null ? String.valueOf(value) : null;
+                }
+                if (timeLimit == null) {
+                    Object value = metadata.get("examTimeLimit");
+                    if (value instanceof Number) {
+                        timeLimit = ((Number) value).intValue();
+                    }
+                }
+                if (deadlineRaw == null || deadlineRaw.isBlank()) {
+                    Object value = metadata.get("examDeadline");
+                    deadlineRaw = value != null ? String.valueOf(value) : null;
+                }
+            }
+
+            List<ExamSubmission> studentSubs = submissionsByStudent.getOrDefault(studentEmail, new ArrayList<>());
+            final String initialExamName = examName;
+            final String initialExamSubject = examSubject;
+            ExamSubmission latestMatchingSubmission = studentSubs.stream()
+                .filter(sub -> initialExamName != null && sub.getExamName() != null && initialExamName.equalsIgnoreCase(sub.getExamName()))
+                .filter(sub -> initialExamSubject == null || initialExamSubject.isEmpty() ||
+                    (sub.getSubject() != null && initialExamSubject.equalsIgnoreCase(sub.getSubject())))
+                .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .findFirst()
+                .orElse(null);
+
+            if (latestMatchingSubmission == null) {
+                latestMatchingSubmission = studentSubs.stream()
+                    .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                    .findFirst()
+                    .orElse(null);
+            }
+
+            if (!hasAssignedExam && latestMatchingSubmission == null) {
+                continue;
+            }
+
+            if ((examName == null || examName.isBlank()) && latestMatchingSubmission != null) {
+                examName = latestMatchingSubmission.getExamName();
+            }
+            if ((examSubject == null || examSubject.isBlank()) && latestMatchingSubmission != null) {
+                examSubject = latestMatchingSubmission.getSubject();
+            }
+            if ((activityType == null || activityType.isBlank()) && latestMatchingSubmission != null) {
+                activityType = latestMatchingSubmission.getActivityType();
+            }
+
+            String lastSubmittedAt = "Not submitted";
+            if (latestMatchingSubmission != null && latestMatchingSubmission.getSubmittedAt() != null) {
+                lastSubmittedAt = latestMatchingSubmission.getSubmittedAt()
+                    .format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm"));
+            }
+
+            String deadlineDisplay = "Not set";
+            if (deadlineRaw != null && !deadlineRaw.trim().isEmpty()) {
+                try {
+                    deadlineDisplay = java.time.LocalDateTime.parse(deadlineRaw)
+                        .format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm"));
+                } catch (Exception ignored) {
+                    deadlineDisplay = deadlineRaw;
+                }
+            }
+
+            Map<String, Object> row = new HashMap<>();
+            row.put("studentName", enrolled.getStudentName());
+            row.put("studentEmail", studentEmail);
+            row.put("examName", examName != null ? examName : "Assigned Exam");
+            row.put("subject", examSubject != null ? examSubject : subject.getSubjectName());
+            row.put("activityType", activityType != null ? activityType : "Exam");
+            int assignedQuestionCount = 0;
+            if (assignedQuestions != null) {
+                assignedQuestionCount = assignedQuestions.size();
+            }
+            row.put("questionCount", assignedQuestionCount > 0 ? assignedQuestionCount : (latestMatchingSubmission != null ? latestMatchingSubmission.getTotalQuestions() : 0));
+            row.put("timeLimit", timeLimit != null ? timeLimit : 0);
+            row.put("deadline", deadlineDisplay);
+            row.put("lastSubmittedAt", lastSubmittedAt);
+            row.put("isSubmitted", latestMatchingSubmission != null);
+            row.put("isUnlocked", unlockedExams.containsKey(studentEmail) && !unlockedExams.get(studentEmail).isEmpty());
+            distributionTracker.add(row);
+        }
+
+        distributionTracker.sort(Comparator.comparing(row -> ((String) row.get("studentName")), String.CASE_INSENSITIVE_ORDER));
+
+        // Per-quiz tracking summary (assigned/submitted/not submitted)
+        Map<String, Map<String, Object>> quizSummaryMap = new LinkedHashMap<>();
+        for (Map<String, Object> row : distributionTracker) {
+            String examName = (String) row.get("examName");
+            String examSubject = (String) row.get("subject");
+            String activityType = (String) row.get("activityType");
+            Integer timeLimit = (Integer) row.get("timeLimit");
+            String deadline = (String) row.get("deadline");
+            String studentEmail = (String) row.get("studentEmail");
+
+            String quizKey = examName + "||" + examSubject + "||" + activityType + "||" + timeLimit + "||" + deadline;
+
+            Map<String, Object> quizRow = quizSummaryMap.computeIfAbsent(quizKey, key -> {
+                Map<String, Object> value = new HashMap<>();
+                value.put("examName", examName);
+                value.put("subject", examSubject);
+                value.put("activityType", activityType);
+                value.put("timeLimit", timeLimit);
+                value.put("deadline", deadline);
+                value.put("assignedCount", 0);
+                value.put("submittedCount", 0);
+                return value;
+            });
+
+            quizRow.put("assignedCount", ((Integer) quizRow.get("assignedCount")) + 1);
+
+            List<ExamSubmission> studentSubs = submissionsByStudent.getOrDefault(studentEmail, new ArrayList<>());
+            boolean submittedThisQuiz = studentSubs.stream()
+                .anyMatch(sub -> examName.equals(sub.getExamName()));
+
+            if (submittedThisQuiz) {
+                quizRow.put("submittedCount", ((Integer) quizRow.get("submittedCount")) + 1);
+            }
+        }
+
+        List<Map<String, Object>> quizDistributionSummary = new ArrayList<>();
+        for (Map<String, Object> quizRow : quizSummaryMap.values()) {
+            int assigned = (Integer) quizRow.get("assignedCount");
+            int submitted = (Integer) quizRow.get("submittedCount");
+            quizRow.put("notSubmittedCount", assigned - submitted);
+            quizDistributionSummary.add(quizRow);
+        }
+
+        long distributedSubmittedCount = distributionTracker.stream()
+            .filter(row -> Boolean.TRUE.equals(row.get("isSubmitted")))
+            .count();
+        long distributedNotSubmittedCount = distributionTracker.size() - distributedSubmittedCount;
+
+        List<Map<String, Object>> submittedStudents = distributionTracker.stream()
+            .filter(row -> Boolean.TRUE.equals(row.get("isSubmitted")))
+            .map(row -> {
+                Map<String, Object> submittedRow = new HashMap<>();
+                submittedRow.put("studentName", row.get("studentName"));
+                submittedRow.put("studentEmail", row.get("studentEmail"));
+                submittedRow.put("examName", row.get("examName"));
+                submittedRow.put("lastSubmittedAt", row.get("lastSubmittedAt"));
+                return submittedRow;
+            })
+            .collect(Collectors.toList());
+
         model.addAttribute("subject", subject);
         model.addAttribute("enrolledStudents", enrolledStudents);
         model.addAttribute("submissions", submissions);
         model.addAttribute("teacherEmail", teacherEmail);
         model.addAttribute("allStudents", allStudents);
         model.addAttribute("uploadedExams", subjectExams);
+        model.addAttribute("distributionTracker", distributionTracker);
+        model.addAttribute("quizDistributionSummary", quizDistributionSummary);
+        model.addAttribute("distributedSubmittedCount", distributedSubmittedCount);
+        model.addAttribute("distributedNotSubmittedCount", distributedNotSubmittedCount);
+        model.addAttribute("submittedStudents", submittedStudents);
         
         return "subject-classroom";
     }
 
     @PostMapping("/distribute")
     public String distributeExam(@RequestParam String targetStudent,
+                                 @RequestParam(required = false) Long subjectId,
                                  @RequestParam String examId,
                                  @RequestParam Integer timeLimit,
                                  @RequestParam String deadline,
@@ -683,6 +918,9 @@ public class HomepageController {
                                  @RequestParam(required = false) Integer questionCount,
                                  HttpSession session) {
         doDistributeForStudent(targetStudent, examId, timeLimit, deadline, easyPercent, mediumPercent, hardPercent, questionCount, session);
+        if (subjectId != null) {
+            return "redirect:/teacher/subject-classroom/" + subjectId;
+        }
         return "redirect:/teacher/homepage";
     }
 
@@ -806,9 +1044,11 @@ public class HomepageController {
 
             distributedExams.put(targetStudent, uniqueExam);
             session.setAttribute("questionDifficulties_" + targetStudent, finalDifficulties);
+            distributedQuestionDifficulties.put(targetStudent, new ArrayList<>(finalDifficulties));
 
             List<String> questionTopics = extractTopicsFromQuestions(finalQuestions, selectedExam.getSubject());
             session.setAttribute("questionTopics_" + targetStudent, questionTopics);
+            distributedQuestionTopics.put(targetStudent, new ArrayList<>(questionTopics));
             System.out.println("📚 Extracted " + questionTopics.size() + " question topics for Random Forest");
 
             session.setAttribute("examSubject_" + targetStudent, selectedExam.getSubject());
@@ -816,6 +1056,14 @@ public class HomepageController {
             session.setAttribute("examName_" + targetStudent, selectedExam.getExamName());
             session.setAttribute("examTimeLimit_" + targetStudent, timeLimit);
             session.setAttribute("examDeadline_" + targetStudent, deadline);
+
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("examSubject", selectedExam.getSubject());
+            metadata.put("examActivityType", selectedExam.getActivityType());
+            metadata.put("examName", selectedExam.getExamName());
+            metadata.put("examTimeLimit", timeLimit);
+            metadata.put("examDeadline", deadline);
+            distributedExamMetadata.put(targetStudent, metadata);
 
             if (studentAnswerKey != null && !studentAnswerKey.isEmpty()) {
                 answerKeyService.storeStudentAnswerKey(targetStudent, studentAnswerKey);
@@ -836,6 +1084,13 @@ public class HomepageController {
     public String unlockExam(@RequestParam String studentEmail,
                             HttpSession session) {
         String examName = (String) session.getAttribute("examName_" + studentEmail);
+        if (examName == null || examName.isEmpty()) {
+            Map<String, Object> metadata = distributedExamMetadata.get(studentEmail);
+            if (metadata != null) {
+                Object metaExamName = metadata.get("examName");
+                examName = metaExamName != null ? String.valueOf(metaExamName) : null;
+            }
+        }
         
         if (examName != null) {
             // Add to unlocked exams
@@ -916,6 +1171,7 @@ public class HomepageController {
     public String processExams(@RequestParam(value = "examCreated", required = false) MultipartFile examCreated,
                                @RequestParam(value = "answerKeyPdf", required = false) MultipartFile answerKeyPdf,
                                @RequestParam(value = "subject", required = false) String subject,
+                               @RequestParam(value = "quizName", required = false) String quizName,
                                @RequestParam(value = "activityType", required = false) String activityType,
                                HttpSession session, Model model) throws Exception {
         if (examCreated != null && !examCreated.isEmpty()) {
@@ -960,13 +1216,19 @@ public class HomepageController {
             
             // Store the uploaded exam for later selection
             String examId = "EXAM_" + System.currentTimeMillis();
-            String examName = examCreated.getOriginalFilename().replace(".pdf", "");
+            String originalFilename = examCreated.getOriginalFilename();
+            String fallbackName = (originalFilename != null ? originalFilename : "uploaded_exam")
+                .replaceFirst("(?i)\\.pdf$", "")
+                .replaceFirst("(?i)\\.csv$", "");
+            String examName = (quizName != null && !quizName.trim().isEmpty()) ? quizName.trim() : fallbackName;
             String examSubject = (subject != null && !subject.isEmpty()) ? subject : "General";
             String examActivityType = (activityType != null && !activityType.isEmpty()) ? activityType : "Exam";
             
             UploadedExam uploadedExam = new UploadedExam(examId, examName, examSubject, examActivityType, 
                                                          randomizedLines, difficultyLevels, finalAnswerKey);
             uploadedExams.put(examId, uploadedExam);
+            model.addAttribute("processedExamId", examId);
+            model.addAttribute("processedExamName", examName);
             
             // Build sorted answer key list so teacher can see it on the results page
             if (finalAnswerKey != null && !finalAnswerKey.isEmpty()) {

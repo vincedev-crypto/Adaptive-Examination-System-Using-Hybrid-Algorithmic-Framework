@@ -6,9 +6,10 @@
     <title th:text="${subject.subjectName} + ' - Classroom'">Subject Classroom</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link th:href="@{/css/style.css}" rel="stylesheet">
     <link rel="stylesheet" th:href="@{/css/subject-classroom.css}">
 </head>
-<body>
+<body class="homepage-page">
     <div class="teacher-layout">
         <!-- Left sidebar -->
         <div th:replace="teacher-nav :: teacherNav"></div>
@@ -50,6 +51,126 @@
                         <i class="bi bi-person-plus"></i> Enroll Students
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <div class="section-card">
+            <div class="d-flex justify-content-between align-items-center mb-4 flex-wrap gap-2">
+                <h3 class="mb-0">
+                    <i class="bi bi-clipboard-check text-primary"></i> Distributed Exam Tracking
+                </h3>
+                <div class="d-flex align-items-center gap-2">
+                    <span class="badge bg-success-subtle text-success border border-success-subtle"
+                          th:text="${distributedSubmittedCount} + ' Students Submitted'">0 Students Submitted</span>
+                    <span class="badge bg-warning-subtle text-warning border border-warning-subtle"
+                          th:text="${distributedNotSubmittedCount} + ' Pending'">0 Pending</span>
+                </div>
+            </div>
+
+            <div th:if="${submittedStudents != null && !submittedStudents.isEmpty()}" class="mb-3">
+                <div class="small fw-semibold text-muted mb-2">Who Submitted</div>
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Email</th>
+                            <th>Exam</th>
+                            <th>Submitted At</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="s : ${submittedStudents}">
+                            <td class="fw-semibold" th:text="${s.studentName}">Student Name</td>
+                            <td th:text="${s.studentEmail}">email@example.com</td>
+                            <td th:text="${s.examName}">Exam</td>
+                            <td th:text="${s.lastSubmittedAt}">-</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div th:if="${quizDistributionSummary != null && !quizDistributionSummary.isEmpty()}" class="mb-3">
+                <div class="small fw-semibold text-muted mb-2">Per Quiz Submission Status</div>
+                <div class="table-responsive">
+                    <table class="table table-striped align-middle">
+                        <thead>
+                        <tr>
+                            <th>Quiz</th>
+                            <th>Type</th>
+                            <th>Time Limit</th>
+                            <th>Deadline</th>
+                            <th>Assigned</th>
+                            <th>Submitted</th>
+                            <th>Not Submitted</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="quiz : ${quizDistributionSummary}">
+                            <td>
+                                <div class="fw-semibold" th:text="${quiz.examName}">Quiz Name</div>
+                                <small class="text-muted" th:text="${quiz.subject}">Subject</small>
+                            </td>
+                            <td>
+                                <span class="badge" th:classappend="${quiz.activityType == 'Exam' ? 'bg-danger' : 'bg-primary'}"
+                                      th:text="${quiz.activityType}">Type</span>
+                            </td>
+                            <td th:text="${quiz.timeLimit} + ' min'">0 min</td>
+                            <td th:text="${quiz.deadline}">Deadline</td>
+                            <td><span class="badge bg-secondary" th:text="${quiz.assignedCount}">0</span></td>
+                            <td><span class="badge bg-success" th:text="${quiz.submittedCount}">0</span></td>
+                            <td><span class="badge bg-warning text-dark" th:text="${quiz.notSubmittedCount}">0</span></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div th:if="${distributionTracker == null || distributionTracker.isEmpty()}" class="empty-state">
+                <i class="bi bi-hourglass-split"></i>
+                <p class="mb-0">No quiz assigned yet.</p>
+                <small class="text-muted">Once you distribute an exam, its subject, time limit, and deadline will appear here.</small>
+            </div>
+
+            <div th:if="${distributionTracker != null && !distributionTracker.isEmpty()}" class="table-responsive">
+                <table class="table table-striped align-middle">
+                    <thead>
+                    <tr>
+                        <th>Student</th>
+                        <th>Exam</th>
+                        <th>Subject</th>
+                        <th>Type</th>
+                        <th>Questions</th>
+                        <th>Time Limit</th>
+                        <th>Deadline</th>
+                        <th>Last Submitted</th>
+                        <th>Status</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="item : ${distributionTracker}">
+                        <td>
+                            <div class="fw-semibold" th:text="${item.studentName}">Student Name</div>
+                            <small class="text-muted" th:text="${item.studentEmail}">email@example.com</small>
+                        </td>
+                        <td class="fw-semibold" th:text="${item.examName}">Exam</td>
+                        <td th:text="${item.subject}">Subject</td>
+                        <td>
+                            <span class="badge" th:classappend="${item.activityType == 'Exam' ? 'bg-danger' : 'bg-primary'}"
+                                  th:text="${item.activityType}">Type</span>
+                        </td>
+                        <td><span class="badge bg-secondary" th:text="${item.questionCount}">0</span></td>
+                        <td th:text="${item.timeLimit} + ' min'">0 min</td>
+                        <td th:text="${item.deadline}">Deadline</td>
+                        <td th:text="${item.lastSubmittedAt}">Not submitted</td>
+                        <td>
+                            <span th:if="${item.isUnlocked}" class="badge bg-success">Unlocked</span>
+                            <span th:unless="${item.isUnlocked}" class="badge bg-warning text-dark">Queued</span>
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -179,6 +300,7 @@
                         <div th:if="${!#lists.isEmpty(uploadedExams)}">
                             <div th:each="exam,examStat : ${uploadedExams}" class="mb-4">
                                 <form th:action="@{/teacher/distribute}" method="post">
+                                    <input type="hidden" name="subjectId" th:value="${subject.id}">
                                     <input type="hidden" name="targetStudent" th:value="${student.studentEmail}">
                                     <input type="hidden" name="examId"        th:value="${exam.examId}">
 

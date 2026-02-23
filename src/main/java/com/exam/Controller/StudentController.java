@@ -91,10 +91,19 @@ public class StudentController {
                     // Check if student has exam distributed for this subject
                     boolean hasExam = getDistributedExams().containsKey(studentEmail);
                     if (hasExam) {
+                        Map<String, Object> distributedMeta = HomepageController.getDistributedExamMetadata(studentEmail);
                         String examSubject = (String) session.getAttribute("examSubject_" + studentEmail);
+                        if ((examSubject == null || examSubject.isEmpty()) && distributedMeta != null) {
+                            Object metaSubject = distributedMeta.get("examSubject");
+                            examSubject = metaSubject != null ? String.valueOf(metaSubject) : null;
+                        }
                         
                         if (subjectName != null && subjectName.equals(examSubject)) {
                             String examName = (String) session.getAttribute("examName_" + studentEmail);
+                            if ((examName == null || examName.isEmpty()) && distributedMeta != null) {
+                                Object metaExamName = distributedMeta.get("examName");
+                                examName = metaExamName != null ? String.valueOf(metaExamName) : null;
+                            }
                             
                             // Safety check: only show as pending if student has NOT already submitted this exam+subject combo
                             boolean alreadySubmitted = examName != null &&
@@ -104,6 +113,22 @@ public class StudentController {
                                 String examActivityType = (String) session.getAttribute("examActivityType_" + studentEmail);
                                 Integer examTimeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentEmail);
                                 String examDeadline = (String) session.getAttribute("examDeadline_" + studentEmail);
+                                if (distributedMeta != null) {
+                                    if (examActivityType == null || examActivityType.isEmpty()) {
+                                        Object metaType = distributedMeta.get("examActivityType");
+                                        examActivityType = metaType != null ? String.valueOf(metaType) : null;
+                                    }
+                                    if (examTimeLimit == null) {
+                                        Object metaTime = distributedMeta.get("examTimeLimit");
+                                        if (metaTime instanceof Integer) {
+                                            examTimeLimit = (Integer) metaTime;
+                                        }
+                                    }
+                                    if (examDeadline == null || examDeadline.isEmpty()) {
+                                        Object metaDeadline = distributedMeta.get("examDeadline");
+                                        examDeadline = metaDeadline != null ? String.valueOf(metaDeadline) : null;
+                                    }
+                                }
                                 List<String> examQuestions = getDistributedExams().get(studentEmail);
                                 
                                 Map<String, Object> activity = new HashMap<>();
@@ -323,6 +348,11 @@ public class StudentController {
         
         // MULTIPLE ATTEMPTS ALLOWED - Students can retake exams, all submissions stored in database
         String examName = (String) session.getAttribute("examName_" + studentId);
+        Map<String, Object> distributedMeta = HomepageController.getDistributedExamMetadata(studentId);
+        if ((examName == null || examName.isEmpty()) && distributedMeta != null) {
+            Object metaExamName = distributedMeta.get("examName");
+            examName = metaExamName != null ? String.valueOf(metaExamName) : null;
+        }
         boolean isUnlocked = false;
         
         if (examName != null) {
@@ -348,6 +378,10 @@ public class StudentController {
         // Check if deadline has passed (SKIP if exam is unlocked)
         if (!isUnlocked) {
             String deadline = (String) session.getAttribute("examDeadline_" + studentId);
+            if ((deadline == null || deadline.isEmpty()) && distributedMeta != null) {
+                Object metaDeadline = distributedMeta.get("examDeadline");
+                deadline = metaDeadline != null ? String.valueOf(metaDeadline) : null;
+            }
             if (deadline != null && !deadline.isEmpty()) {
                 try {
                     java.time.LocalDateTime deadlineDateTime = java.time.LocalDateTime.parse(deadline);
@@ -387,6 +421,26 @@ public class StudentController {
         String activityType = (String) session.getAttribute("examActivityType_" + studentId);
         Integer timeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentId);
         String examDeadline = (String) session.getAttribute("examDeadline_" + studentId);
+        if (distributedMeta != null) {
+            if (subject == null || subject.isEmpty()) {
+                Object metaSubject = distributedMeta.get("examSubject");
+                subject = metaSubject != null ? String.valueOf(metaSubject) : null;
+            }
+            if (activityType == null || activityType.isEmpty()) {
+                Object metaType = distributedMeta.get("examActivityType");
+                activityType = metaType != null ? String.valueOf(metaType) : null;
+            }
+            if (timeLimit == null) {
+                Object metaTime = distributedMeta.get("examTimeLimit");
+                if (metaTime instanceof Integer) {
+                    timeLimit = (Integer) metaTime;
+                }
+            }
+            if (examDeadline == null || examDeadline.isEmpty()) {
+                Object metaDeadline = distributedMeta.get("examDeadline");
+                examDeadline = metaDeadline != null ? String.valueOf(metaDeadline) : null;
+            }
+        }
         
         // ALWAYS set start time to NOW when student accesses exam page (force reset)
         // Use epoch milliseconds for reliable JavaScript Date handling
@@ -405,6 +459,12 @@ public class StudentController {
         // Get question difficulties from session
         @SuppressWarnings("unchecked")
         List<String> difficulties = (List<String>) session.getAttribute("questionDifficulties_" + studentId);
+        if (difficulties == null) {
+            difficulties = HomepageController.getDistributedQuestionDifficulties(studentId);
+            if (difficulties != null) {
+                session.setAttribute("questionDifficulties_" + studentId, difficulties);
+            }
+        }
         if (difficulties == null) {
             // Generate default difficulties if not found
             difficulties = new ArrayList<>();
@@ -541,6 +601,18 @@ public class StudentController {
             List<String> questionTopics = (List<String>) session.getAttribute("questionTopics_" + studentId);
             @SuppressWarnings("unchecked")
             List<String> questionDifficulties = (List<String>) session.getAttribute("questionDifficulties_" + studentId);
+            if (questionTopics == null) {
+                questionTopics = HomepageController.getDistributedQuestionTopics(studentId);
+                if (questionTopics != null) {
+                    session.setAttribute("questionTopics_" + studentId, questionTopics);
+                }
+            }
+            if (questionDifficulties == null) {
+                questionDifficulties = HomepageController.getDistributedQuestionDifficulties(studentId);
+                if (questionDifficulties != null) {
+                    session.setAttribute("questionDifficulties_" + studentId, questionDifficulties);
+                }
+            }
             
             // Default values if not found in session
             if (questionTopics == null) {
@@ -664,6 +736,21 @@ public class StudentController {
             String examName = (String) session.getAttribute("examName_" + studentId);
             String subject = (String) session.getAttribute("examSubject_" + studentId);
             String activityType = (String) session.getAttribute("examActivityType_" + studentId);
+            Map<String, Object> submitMeta = HomepageController.getDistributedExamMetadata(studentId);
+            if (submitMeta != null) {
+                if (examName == null || examName.isEmpty()) {
+                    Object metaExamName = submitMeta.get("examName");
+                    examName = metaExamName != null ? String.valueOf(metaExamName) : null;
+                }
+                if (subject == null || subject.isEmpty()) {
+                    Object metaSubject = submitMeta.get("examSubject");
+                    subject = metaSubject != null ? String.valueOf(metaSubject) : null;
+                }
+                if (activityType == null || activityType.isEmpty()) {
+                    Object metaType = submitMeta.get("examActivityType");
+                    activityType = metaType != null ? String.valueOf(metaType) : null;
+                }
+            }
             
             submission.setExamName(examName != null ? examName : "General Exam");
             submission.setSubject(subject != null ? subject : "General");
