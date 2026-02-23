@@ -1645,24 +1645,61 @@ public class HomepageController {
             List<String> selectedDifficulties = new ArrayList<>();
             List<Integer> selectedOriginalIndices = new ArrayList<>();
 
-            for (int i = 0; i < Math.min(easyCount, easyIndices.size()); i++) {
+            // Track how many were actually picked vs requested per tier
+            int easyPicked   = Math.min(easyCount,   easyIndices.size());
+            int mediumPicked = Math.min(mediumCount,  mediumIndices.size());
+            int hardPicked   = Math.min(hardCount,    hardIndices.size());
+
+            // Calculate total deficit (questions we couldn't fill from their own tier)
+            int deficit = totalQuestions - (easyPicked + mediumPicked + hardPicked);
+
+            // Build pools of leftover indices (already shuffled) not yet selected
+            List<Integer> easyLeftover   = easyIndices.subList(easyPicked,   easyIndices.size());
+            List<Integer> mediumLeftover = mediumIndices.subList(mediumPicked, mediumIndices.size());
+            List<Integer> hardLeftover   = hardIndices.subList(hardPicked,    hardIndices.size());
+
+            // Collect all leftover indices (combined surplus from every tier)
+            List<Integer> allLeftover = new ArrayList<>();
+            allLeftover.addAll(easyLeftover);
+            allLeftover.addAll(mediumLeftover);
+            allLeftover.addAll(hardLeftover);
+            Collections.shuffle(allLeftover, rand);
+
+            // Fill the deficit from the combined leftover pool
+            int fillFromLeftover = Math.min(deficit, allLeftover.size());
+
+            // Now add the primary selections
+            for (int i = 0; i < easyPicked; i++) {
                 int idx = easyIndices.get(i);
                 selectedQuestions.add(allQuestions.get(idx));
                 selectedDifficulties.add(allDifficulties.get(idx));
                 selectedOriginalIndices.add(idx + 1);
             }
-            for (int i = 0; i < Math.min(mediumCount, mediumIndices.size()); i++) {
+            for (int i = 0; i < mediumPicked; i++) {
                 int idx = mediumIndices.get(i);
                 selectedQuestions.add(allQuestions.get(idx));
                 selectedDifficulties.add(allDifficulties.get(idx));
                 selectedOriginalIndices.add(idx + 1);
             }
-            for (int i = 0; i < Math.min(hardCount, hardIndices.size()); i++) {
+            for (int i = 0; i < hardPicked; i++) {
                 int idx = hardIndices.get(i);
                 selectedQuestions.add(allQuestions.get(idx));
                 selectedDifficulties.add(allDifficulties.get(idx));
                 selectedOriginalIndices.add(idx + 1);
             }
+            // Fill remaining slots from the leftover pool to always reach totalQuestions
+            for (int i = 0; i < fillFromLeftover; i++) {
+                int idx = allLeftover.get(i);
+                selectedQuestions.add(allQuestions.get(idx));
+                selectedDifficulties.add(allDifficulties.get(idx));
+                selectedOriginalIndices.add(idx + 1);
+            }
+
+            System.out.println("Selection breakdown — Easy: " + easyPicked + "/" + easyCount
+                + ", Medium: " + mediumPicked + "/" + mediumCount
+                + ", Hard: " + hardPicked + "/" + hardCount
+                + ", Deficit filled from surplus: " + fillFromLeftover
+                + " | Final total: " + selectedQuestions.size());
 
             List<Integer> shuffleIndices = new ArrayList<>();
             for (int i = 0; i < selectedQuestions.size(); i++) shuffleIndices.add(i);
