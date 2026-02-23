@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Processed Papers</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body class="homepage-page">
+<div class="teacher-layout">
+    <div th:replace="~{teacher-nav :: teacherNav}"></div>
+
+    <div class="teacher-content-wrapper">
+        <div class="container-fluid">
+
+            <!-- Header -->
+            <div class="d-flex justify-content-between align-items-center mb-4 pt-2">
+                <div>
+                    <h4 class="fw-bold mb-0" style="color: var(--eac-maroon);">
+                        <i class="bi bi-file-earmark-check-fill me-2"></i>Processed Papers
+                    </h4>
+                    <p class="text-muted small mb-0">
+                        <span th:text="${totalProcessed}">0</span> paper(s) processed
+                    </p>
+                </div>
+            </div>
+
+            <!-- Search -->
+            <div class="results-card p-3 mb-3">
+                <form method="get" th:action="@{/teacher/processed-papers}" class="row g-2 align-items-center">
+                    <div class="col-md-10">
+                        <input type="text" name="search" class="form-control"
+                               placeholder="Search by exam name, subject, activity type, question or answer..."
+                               th:value="${search}">
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search me-1"></i>Search
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Table -->
+            <div class="results-card p-0" th:if="${processedExams != null and !processedExams.isEmpty()}">
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">#</th>
+                                <th>Exam Name</th>
+                                <th>Subject</th>
+                                <th>Activity Type</th>
+                                <th>Questions</th>
+                                <th>Date Processed</th>
+                                <th class="text-center">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="exam, stat : ${processedExams}"
+                                style="cursor:pointer;"
+                                th:onclick="|window.location.href='@{/teacher/processed-papers/{id}(id=${exam.examId})}'|">
+                                <td class="ps-3 text-muted" th:text="${stat.count}">1</td>
+                                <td>
+                                    <span class="fw-semibold" th:text="${exam.examName}">Exam Name</span>
+                                </td>
+                                <td th:text="${exam.subject}">Subject</td>
+                                <td>
+                                    <span class="badge bg-secondary" th:text="${exam.activityType}">Exam</span>
+                                </td>
+                                <td th:text="${exam.questions != null ? exam.questions.size() : 0}">0</td>
+                                <td th:text="${exam.uploadedAt != null ? #temporals.format(exam.uploadedAt, 'MMM dd, yyyy hh:mm a') : '-'}">-</td>
+                                <td class="text-center" onclick="event.stopPropagation()">
+                                    <a th:href="@{/teacher/processed-papers/{id}(id=${exam.examId})}"
+                                       class="btn btn-sm btn-outline-primary me-1">
+                                        <i class="bi bi-eye me-1"></i>View
+                                    </a>
+                                    <a th:href="@{/teacher/manage-questions/{id}(id=${exam.examId})}"
+                                       class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-pencil-square me-1"></i>Manage
+                                    </a>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div class="results-card p-5 text-center" th:if="${processedExams == null or processedExams.isEmpty()}">
+                <i class="bi bi-file-earmark-x display-4 text-muted"></i>
+                <h5 class="mt-3 text-muted">No Processed Papers Found</h5>
+                <p class="text-muted small" th:if="${search != null and !search.isEmpty()}">
+                    No results match your search "<strong th:text="${search}"></strong>".
+                    <a th:href="@{/teacher/processed-papers}">Clear search</a>
+                </p>
+                <p class="text-muted small" th:if="${search == null or search.isEmpty()}">
+                    Upload and process an exam paper to see it listed here.
+                </p>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
