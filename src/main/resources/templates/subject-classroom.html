@@ -78,11 +78,7 @@
                 <div style="height:1px; background:#eadfce; margin:1rem 0;"></div>
 
                 <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-                    <small class="text-muted">View the complete student-level status list (Submitted, Not Submitted, Queued) in a separate page.</small>
-                    <a class="btn btn-sm btn-outline-primary"
-                       th:href="@{/teacher/subject-classroom/{id}/distribution-students(id=${subject.id})}">
-                        <i class="bi bi-list-ul me-1"></i> View Student Tracking List
-                    </a>
+                    <small class="text-muted">Use each quiz row action to view submitted, not submitted, and queued students for that specific quiz.</small>
                 </div>
 
                 <div th:if="${quizDistributionSummary != null && !quizDistributionSummary.isEmpty()}" class="mb-3">
@@ -99,6 +95,7 @@
                                 <th>Submitted</th>
                                 <th>Not Submitted</th>
                                 <th>Status</th>
+                                <th>Action</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -123,6 +120,12 @@
                                           th:if="${quiz.submittedCount > 0 and quiz.submittedCount < quiz.assignedCount}">Ongoing</span>
                                     <span class="badge bg-secondary"
                                           th:if="${quiz.submittedCount == 0}">Waiting for submissions</span>
+                                </td>
+                                <td>
+                                    <a class="btn btn-sm btn-outline-primary"
+                                       th:href="@{/teacher/subject-classroom/{id}/distribution-students(id=${subject.id},examName=${quiz.filterExamName},activityType=${quiz.filterActivityType},timeLimit=${quiz.filterTimeLimit},deadline=${quiz.filterDeadline})}">
+                                        <i class="bi bi-people me-1"></i> View Students
+                                    </a>
                                 </td>
                             </tr>
                             </tbody>
@@ -501,6 +504,65 @@
     const questionCountHint = document.getElementById('questionCountHint');
     const manageSelectedQuizBtn = document.getElementById('manageSelectedQuizBtn');
     const distributeQuizModalEl = document.getElementById('distributeQuizModal');
+    const distributeQuizForm = document.getElementById('distributeQuizForm');
+    const modalDraftKey = `distributeQuizDraft:${window.location.pathname}`;
+
+    function saveDistributeModalDraft() {
+        if (!distributeQuizForm) return;
+
+        const easyInput = distributeQuizForm.querySelector('[name="easyPercent"]');
+        const mediumInput = distributeQuizForm.querySelector('[name="mediumPercent"]');
+        const hardInput = distributeQuizForm.querySelector('[name="hardPercent"]');
+        const deadlineInput = distributeQuizForm.querySelector('.deadline-input');
+        const presetInput = distributeQuizForm.querySelector('.deadline-preset');
+
+        const payload = {
+            examId: examSelect ? examSelect.value : '',
+            questionCount: questionCountInput ? questionCountInput.value : '',
+            easyPercent: easyInput ? easyInput.value : '',
+            mediumPercent: mediumInput ? mediumInput.value : '',
+            hardPercent: hardInput ? hardInput.value : '',
+            deadline: deadlineInput ? deadlineInput.value : '',
+            deadlinePreset: presetInput ? presetInput.value : '',
+            selectedStudents: modalStudentChecks().filter(cb => cb.checked).map(cb => cb.value)
+        };
+
+        sessionStorage.setItem(modalDraftKey, JSON.stringify(payload));
+    }
+
+    function restoreDistributeModalDraft() {
+        const draftRaw = sessionStorage.getItem(modalDraftKey);
+        if (!draftRaw) return;
+
+        try {
+            const draft = JSON.parse(draftRaw);
+            if (examSelect && typeof draft.examId === 'string') {
+                examSelect.value = draft.examId;
+            }
+            if (questionCountInput && draft.questionCount !== undefined) {
+                questionCountInput.value = draft.questionCount;
+            }
+
+            const easyInput = distributeQuizForm ? distributeQuizForm.querySelector('[name="easyPercent"]') : null;
+            const mediumInput = distributeQuizForm ? distributeQuizForm.querySelector('[name="mediumPercent"]') : null;
+            const hardInput = distributeQuizForm ? distributeQuizForm.querySelector('[name="hardPercent"]') : null;
+            const deadlineInput = distributeQuizForm ? distributeQuizForm.querySelector('.deadline-input') : null;
+            const presetInput = distributeQuizForm ? distributeQuizForm.querySelector('.deadline-preset') : null;
+
+            if (easyInput && draft.easyPercent !== undefined) easyInput.value = draft.easyPercent;
+            if (mediumInput && draft.mediumPercent !== undefined) mediumInput.value = draft.mediumPercent;
+            if (hardInput && draft.hardPercent !== undefined) hardInput.value = draft.hardPercent;
+            if (presetInput && draft.deadlinePreset !== undefined) presetInput.value = draft.deadlinePreset;
+            if (deadlineInput && draft.deadline !== undefined) deadlineInput.value = draft.deadline;
+
+            const selected = new Set(Array.isArray(draft.selectedStudents) ? draft.selectedStudents : []);
+            modalStudentChecks().forEach(cb => {
+                cb.checked = selected.has(cb.value);
+            });
+        } catch (e) {
+            sessionStorage.removeItem(modalDraftKey);
+        }
+    }
 
     function checkedStudentsCount() {
         return modalStudentChecks().filter(cb => cb.checked).length;
@@ -578,6 +640,7 @@
                 updateQuestionCountBounds();
                 updateDistributeBtnState();
                 updateManageQuizButton();
+                saveDistributeModalDraft();
             });
         }
 
@@ -588,7 +651,9 @@
                     alert('Please select a processed exam first.');
                     return;
                 }
-                window.location.href = `/teacher/manage-questions/${encodeURIComponent(examId)}`;
+                saveDistributeModalDraft();
+                const returnTo = `${window.location.pathname}?reopenDistributeModal=1`;
+                window.location.href = `/teacher/manage-questions/${encodeURIComponent(examId)}?returnTo=${encodeURIComponent(returnTo)}`;
             });
         }
 
@@ -597,6 +662,7 @@
                 modalStudentChecks().forEach(cb => cb.checked = this.checked);
                 updateSelectedCountBadge();
                 updateDistributeBtnState();
+                saveDistributeModalDraft();
             });
         }
 
@@ -604,8 +670,14 @@
             cb.addEventListener('change', () => {
                 updateSelectedCountBadge();
                 updateDistributeBtnState();
+                saveDistributeModalDraft();
             });
         });
+
+        if (distributeQuizForm) {
+            distributeQuizForm.addEventListener('input', saveDistributeModalDraft);
+            distributeQuizForm.addEventListener('change', saveDistributeModalDraft);
+        }
 
         syncDistributeModalState();
 
@@ -615,6 +687,17 @@
         }
 
         window.addEventListener('pageshow', syncDistributeModalState);
+
+        const url = new URL(window.location.href);
+        if (url.searchParams.get('reopenDistributeModal') === '1' && distributeQuizModalEl) {
+            restoreDistributeModalDraft();
+            syncDistributeModalState();
+            const modalInstance = bootstrap.Modal.getOrCreateInstance(distributeQuizModalEl);
+            modalInstance.show();
+            url.searchParams.delete('reopenDistributeModal');
+            const cleanSearch = url.searchParams.toString();
+            window.history.replaceState({}, document.title, `${url.pathname}${cleanSearch ? '?' + cleanSearch : ''}${url.hash}`);
+        }
 
         // Students & Grades search
         const searchInput = document.getElementById('classroomStudentSearch');

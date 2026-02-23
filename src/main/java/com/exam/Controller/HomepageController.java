@@ -51,6 +51,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.util.UriUtils;
 
 import com.exam.entity.EnrolledStudent;
 import com.exam.entity.ExamSubmission;
@@ -97,6 +98,11 @@ public class HomepageController {
 
     private static final Map<String, List<String>> distributedExams = new HashMap<>();
     private static final Map<String, Map<String, Object>> distributedExamMetadata = new HashMap<>();
+    private static final Map<String, List<Map<String, Object>>> distributedExamHistory = new HashMap<>();
+    private static final Map<String, Map<String, List<String>>> distributedExamQuestionsByAssignment = new HashMap<>();
+    private static final Map<String, Map<String, List<String>>> distributedQuestionDifficultiesByAssignment = new HashMap<>();
+    private static final Map<String, Map<String, List<String>>> distributedQuestionTopicsByAssignment = new HashMap<>();
+    private static final Map<String, Map<String, Map<Integer, String>>> distributedAnswerKeysByAssignment = new HashMap<>();
     private static final Map<String, List<String>> distributedQuestionDifficulties = new HashMap<>();
     private static final Map<String, List<String>> distributedQuestionTopics = new HashMap<>();
     
@@ -211,6 +217,68 @@ public class HomepageController {
         return distributedExamMetadata.get(studentEmail);
     }
 
+    public static List<Map<String, Object>> getDistributedExamHistory(String studentEmail) {
+        List<Map<String, Object>> history = distributedExamHistory.get(studentEmail);
+        if (history == null) {
+            return new ArrayList<>();
+        }
+        return history.stream().map(HashMap::new).collect(Collectors.toList());
+    }
+
+    public static Map<String, Object> getDistributedExamAssignmentMetadata(String studentEmail, String assignmentId) {
+        if (assignmentId == null || assignmentId.isBlank()) {
+            return null;
+        }
+        return getDistributedExamHistory(studentEmail).stream()
+            .filter(item -> assignmentId.equals(item.get("assignmentId")))
+            .findFirst()
+            .orElse(null);
+    }
+
+    public static List<String> getDistributedExamQuestions(String studentEmail, String assignmentId) {
+        if (assignmentId == null || assignmentId.isBlank()) {
+            return distributedExams.get(studentEmail);
+        }
+        Map<String, List<String>> byAssignment = distributedExamQuestionsByAssignment.get(studentEmail);
+        if (byAssignment == null) {
+            return null;
+        }
+        return byAssignment.get(assignmentId);
+    }
+
+    public static List<String> getDistributedQuestionDifficulties(String studentEmail, String assignmentId) {
+        if (assignmentId == null || assignmentId.isBlank()) {
+            return distributedQuestionDifficulties.get(studentEmail);
+        }
+        Map<String, List<String>> byAssignment = distributedQuestionDifficultiesByAssignment.get(studentEmail);
+        if (byAssignment == null) {
+            return null;
+        }
+        return byAssignment.get(assignmentId);
+    }
+
+    public static List<String> getDistributedQuestionTopics(String studentEmail, String assignmentId) {
+        if (assignmentId == null || assignmentId.isBlank()) {
+            return distributedQuestionTopics.get(studentEmail);
+        }
+        Map<String, List<String>> byAssignment = distributedQuestionTopicsByAssignment.get(studentEmail);
+        if (byAssignment == null) {
+            return null;
+        }
+        return byAssignment.get(assignmentId);
+    }
+
+    public static Map<Integer, String> getDistributedAnswerKey(String studentEmail, String assignmentId) {
+        if (assignmentId == null || assignmentId.isBlank()) {
+            return null;
+        }
+        Map<String, Map<Integer, String>> byAssignment = distributedAnswerKeysByAssignment.get(studentEmail);
+        if (byAssignment == null) {
+            return null;
+        }
+        return byAssignment.get(assignmentId);
+    }
+
     public static List<String> getDistributedQuestionDifficulties(String studentEmail) {
         return distributedQuestionDifficulties.get(studentEmail);
     }
@@ -237,8 +305,66 @@ public class HomepageController {
     public static void removeDistributedExam(String studentEmail) {
         distributedExams.remove(studentEmail);
         distributedExamMetadata.remove(studentEmail);
+        distributedExamHistory.remove(studentEmail);
+        distributedExamQuestionsByAssignment.remove(studentEmail);
+        distributedQuestionDifficultiesByAssignment.remove(studentEmail);
+        distributedQuestionTopicsByAssignment.remove(studentEmail);
+        distributedAnswerKeysByAssignment.remove(studentEmail);
         distributedQuestionDifficulties.remove(studentEmail);
         distributedQuestionTopics.remove(studentEmail);
+    }
+
+    public static void removeDistributedExam(String studentEmail, String assignmentId) {
+        if (assignmentId == null || assignmentId.isBlank()) {
+            removeDistributedExam(studentEmail);
+            return;
+        }
+
+        List<Map<String, Object>> history = distributedExamHistory.get(studentEmail);
+        if (history != null) {
+            history.removeIf(item -> assignmentId.equals(item.get("assignmentId")));
+            if (history.isEmpty()) {
+                distributedExamHistory.remove(studentEmail);
+                distributedExamMetadata.remove(studentEmail);
+            } else {
+                distributedExamMetadata.put(studentEmail, new HashMap<>(history.get(history.size() - 1)));
+            }
+        }
+
+        Map<String, List<String>> questionsByAssignment = distributedExamQuestionsByAssignment.get(studentEmail);
+        if (questionsByAssignment != null) {
+            questionsByAssignment.remove(assignmentId);
+            if (questionsByAssignment.isEmpty()) {
+                distributedExamQuestionsByAssignment.remove(studentEmail);
+                distributedExams.remove(studentEmail);
+            }
+        }
+
+        Map<String, List<String>> difficultiesByAssignment = distributedQuestionDifficultiesByAssignment.get(studentEmail);
+        if (difficultiesByAssignment != null) {
+            difficultiesByAssignment.remove(assignmentId);
+            if (difficultiesByAssignment.isEmpty()) {
+                distributedQuestionDifficultiesByAssignment.remove(studentEmail);
+                distributedQuestionDifficulties.remove(studentEmail);
+            }
+        }
+
+        Map<String, List<String>> topicsByAssignment = distributedQuestionTopicsByAssignment.get(studentEmail);
+        if (topicsByAssignment != null) {
+            topicsByAssignment.remove(assignmentId);
+            if (topicsByAssignment.isEmpty()) {
+                distributedQuestionTopicsByAssignment.remove(studentEmail);
+                distributedQuestionTopics.remove(studentEmail);
+            }
+        }
+
+        Map<String, Map<Integer, String>> answerKeysByAssignment = distributedAnswerKeysByAssignment.get(studentEmail);
+        if (answerKeysByAssignment != null) {
+            answerKeysByAssignment.remove(assignmentId);
+            if (answerKeysByAssignment.isEmpty()) {
+                distributedAnswerKeysByAssignment.remove(studentEmail);
+            }
+        }
     }
 
     @GetMapping("/homepage")
@@ -463,7 +589,9 @@ public class HomepageController {
      * Show the manage questions page for a specific exam
      */
     @GetMapping("/manage-questions/{examId}")
-    public String showManageQuestions(@PathVariable String examId, Model model) {
+    public String showManageQuestions(@PathVariable String examId,
+                                      @RequestParam(required = false) String returnTo,
+                                      Model model) {
         UploadedExam exam = uploadedExams.get(examId);
         
         if (exam == null) {
@@ -475,7 +603,28 @@ public class HomepageController {
             .map(this::formatQuestionForManageView)
             .collect(Collectors.toList());
         model.addAttribute("questionDisplay", questionDisplay);
+        model.addAttribute("returnTo", sanitizeManageReturnTo(returnTo));
         return "manage-questions";
+    }
+
+    private String sanitizeManageReturnTo(String returnTo) {
+        if (returnTo == null || returnTo.isBlank()) {
+            return "";
+        }
+        String trimmed = returnTo.trim();
+        if (!trimmed.startsWith("/") || trimmed.startsWith("//") || trimmed.contains("\n") || trimmed.contains("\r")) {
+            return "";
+        }
+        return trimmed;
+    }
+
+    private String manageQuestionsRedirect(String examId, String returnTo) {
+        String safeReturnTo = sanitizeManageReturnTo(returnTo);
+        StringBuilder redirect = new StringBuilder("redirect:/teacher/manage-questions/").append(examId);
+        if (!safeReturnTo.isEmpty()) {
+            redirect.append("?returnTo=").append(UriUtils.encode(safeReturnTo, "UTF-8"));
+        }
+        return redirect.toString();
     }
     
     /**
@@ -488,6 +637,7 @@ public class HomepageController {
                              @RequestParam(required = false) String choicesText,
                              @RequestParam String answer,
                              @RequestParam String difficulty,
+                             @RequestParam(required = false) String returnTo,
                              @RequestParam(value = "questionImage", required = false) MultipartFile questionImage,
                              @RequestParam(value = "questionVideo", required = false) MultipartFile questionVideo,
                              Model model,
@@ -505,7 +655,7 @@ public class HomepageController {
 
             if (normalizedQuestionText.isEmpty()) {
                 redirectAttributes.addFlashAttribute("errorMessage", "Question text is required.");
-                return "redirect:/teacher/manage-questions/" + examId;
+                return manageQuestionsRedirect(examId, returnTo);
             }
 
             String storedAnswer;
@@ -517,13 +667,13 @@ public class HomepageController {
                 normalizedQuestionText = normalizedQuestionText.replaceFirst("(?i)^\\[TEXT_INPUT\\]\\s*", "").trim();
                 if (choicesText == null || choicesText.trim().isEmpty()) {
                     redirectAttributes.addFlashAttribute("errorMessage", "Please provide choices for multiple choice questions.");
-                    return "redirect:/teacher/manage-questions/" + examId;
+                    return manageQuestionsRedirect(examId, returnTo);
                 }
                 normalizedQuestionText = buildMultipleChoiceQuestion(normalizedQuestionText, choicesText);
                 storedAnswer = answer != null ? answer.trim() : "";
                 if (storedAnswer.isEmpty()) {
                     redirectAttributes.addFlashAttribute("errorMessage", "Correct answer is required for multiple choice questions.");
-                    return "redirect:/teacher/manage-questions/" + examId;
+                    return manageQuestionsRedirect(examId, returnTo);
                 }
             }
 
@@ -557,7 +707,7 @@ public class HomepageController {
             System.err.println("Error adding question: " + e.getMessage());
         }
         
-        return "redirect:/teacher/manage-questions/" + examId;
+        return manageQuestionsRedirect(examId, returnTo);
     }
     
     /**
@@ -566,6 +716,7 @@ public class HomepageController {
     @PostMapping("/delete-question")
     public String deleteQuestion(@RequestParam String examId,
                                 @RequestParam int questionIndex,
+                                @RequestParam(required = false) String returnTo,
                                 org.springframework.web.servlet.mvc.support.RedirectAttributes redirectAttributes) {
         UploadedExam exam = uploadedExams.get(examId);
         
@@ -611,7 +762,7 @@ public class HomepageController {
             System.err.println("Error deleting question: " + e.getMessage());
         }
         
-        return "redirect:/teacher/manage-questions/" + examId;
+        return manageQuestionsRedirect(examId, returnTo);
     }
 
     @PostMapping("/edit-question")
@@ -621,6 +772,7 @@ public class HomepageController {
                                @RequestParam(defaultValue = "MULTIPLE_CHOICE") String questionType,
                                @RequestParam String answer,
                                @RequestParam String difficulty,
+                               @RequestParam(required = false) String returnTo,
                                @RequestParam(value = "questionImage", required = false) MultipartFile questionImage,
                                @RequestParam(value = "questionVideo", required = false) MultipartFile questionVideo,
                                org.springframework.web.servlet.mvc.support.RedirectAttributes redirectAttributes) {
@@ -634,7 +786,7 @@ public class HomepageController {
         try {
             if (questionIndex < 0 || questionIndex >= exam.getQuestions().size()) {
                 redirectAttributes.addFlashAttribute("errorMessage", "Invalid question index!");
-                return "redirect:/teacher/manage-questions/" + examId;
+                return manageQuestionsRedirect(examId, returnTo);
             }
 
             String normalizedQuestionText = questionText != null ? questionText.trim() : "";
@@ -642,7 +794,7 @@ public class HomepageController {
 
             if (normalizedQuestionText.isEmpty()) {
                 redirectAttributes.addFlashAttribute("errorMessage", "Question text is required.");
-                return "redirect:/teacher/manage-questions/" + examId;
+                return manageQuestionsRedirect(examId, returnTo);
             }
 
             String storedAnswer;
@@ -655,7 +807,7 @@ public class HomepageController {
                 storedAnswer = answer != null ? answer.trim() : "";
                 if (storedAnswer.isEmpty()) {
                     redirectAttributes.addFlashAttribute("errorMessage", "Correct answer is required for multiple choice questions.");
-                    return "redirect:/teacher/manage-questions/" + examId;
+                    return manageQuestionsRedirect(examId, returnTo);
                 }
             }
 
@@ -680,7 +832,7 @@ public class HomepageController {
             redirectAttributes.addFlashAttribute("errorMessage", "Error updating question: " + e.getMessage());
         }
 
-        return "redirect:/teacher/manage-questions/" + examId;
+        return manageQuestionsRedirect(examId, returnTo);
     }
 
     private String saveQuestionMediaFile(String examId, MultipartFile mediaFile, String mediaType) throws IOException {
@@ -1071,6 +1223,10 @@ public class HomepageController {
             int assigned = (Integer) quizRow.get("assignedCount");
             int submitted = (Integer) quizRow.get("submittedCount");
             quizRow.put("notSubmittedCount", assigned - submitted);
+            quizRow.put("filterExamName", String.valueOf(quizRow.get("examName")));
+            quizRow.put("filterActivityType", String.valueOf(quizRow.get("activityType")));
+            quizRow.put("filterTimeLimit", String.valueOf(quizRow.get("timeLimit")));
+            quizRow.put("filterDeadline", String.valueOf(quizRow.get("deadline")));
             quizDistributionSummary.add(quizRow);
         }
 
@@ -1139,6 +1295,10 @@ public class HomepageController {
 
     @GetMapping("/subject-classroom/{subjectId}/distribution-students")
     public String viewSubjectDistributionStudents(@PathVariable Long subjectId,
+                                                  @RequestParam(required = false) String filterExamName,
+                                                  @RequestParam(required = false) String filterActivityType,
+                                                  @RequestParam(required = false) Integer filterTimeLimit,
+                                                  @RequestParam(required = false) String filterDeadline,
                                                   Model model,
                                                   java.security.Principal principal,
                                                   HttpSession session,
@@ -1279,6 +1439,20 @@ public class HomepageController {
 
         distributionTracker.sort(Comparator.comparing(row -> ((String) row.get("studentName")), String.CASE_INSENSITIVE_ORDER));
 
+        String examNameFilter = filterExamName != null ? filterExamName.trim() : "";
+        String activityTypeFilter = filterActivityType != null ? filterActivityType.trim() : "";
+        String deadlineFilter = filterDeadline != null ? filterDeadline.trim() : "";
+        boolean hasQuizFilter = !examNameFilter.isEmpty() || !activityTypeFilter.isEmpty() || filterTimeLimit != null || !deadlineFilter.isEmpty();
+
+        if (hasQuizFilter) {
+            distributionTracker = distributionTracker.stream()
+                .filter(row -> examNameFilter.isEmpty() || examNameFilter.equalsIgnoreCase(String.valueOf(row.get("examName"))))
+                .filter(row -> activityTypeFilter.isEmpty() || activityTypeFilter.equalsIgnoreCase(String.valueOf(row.get("activityType"))))
+                .filter(row -> filterTimeLimit == null || filterTimeLimit.equals(row.get("timeLimit")))
+                .filter(row -> deadlineFilter.isEmpty() || deadlineFilter.equalsIgnoreCase(String.valueOf(row.get("deadline"))))
+                .collect(Collectors.toList());
+        }
+
         List<Map<String, Object>> submittedStudents = distributionTracker.stream()
             .filter(row -> Boolean.TRUE.equals(row.get("isSubmitted")))
             .collect(Collectors.toList());
@@ -1299,6 +1473,11 @@ public class HomepageController {
         model.addAttribute("notSubmittedCount", notSubmittedStudents.size());
         model.addAttribute("queuedCount", queuedStudents.size());
         model.addAttribute("totalTrackedCount", distributionTracker.size());
+        model.addAttribute("activeQuizFilter", hasQuizFilter);
+        model.addAttribute("filterExamName", examNameFilter);
+        model.addAttribute("filterActivityType", activityTypeFilter);
+        model.addAttribute("filterTimeLimit", filterTimeLimit);
+        model.addAttribute("filterDeadline", deadlineFilter);
 
         return "subject-distribution-students";
     }
@@ -1510,12 +1689,33 @@ public class HomepageController {
             session.setAttribute("examDeadline_" + targetStudent, deadline);
 
             Map<String, Object> metadata = new HashMap<>();
+            String assignmentId = "A_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
+            metadata.put("assignmentId", assignmentId);
             metadata.put("examSubject", selectedExam.getSubject());
             metadata.put("examActivityType", selectedExam.getActivityType());
             metadata.put("examName", selectedExam.getExamName());
             metadata.put("examTimeLimit", timeLimit);
             metadata.put("examDeadline", deadline);
+            metadata.put("questionCount", uniqueExam.size());
             distributedExamMetadata.put(targetStudent, metadata);
+
+            Map<String, Object> historyEntry = new HashMap<>(metadata);
+            historyEntry.put("distributedAt", java.time.LocalDateTime.now().toString());
+            List<Map<String, Object>> history = distributedExamHistory.computeIfAbsent(targetStudent, k -> new ArrayList<>());
+            history.add(historyEntry);
+
+            distributedExamQuestionsByAssignment
+                .computeIfAbsent(targetStudent, k -> new HashMap<>())
+                .put(assignmentId, new ArrayList<>(uniqueExam));
+            distributedQuestionDifficultiesByAssignment
+                .computeIfAbsent(targetStudent, k -> new HashMap<>())
+                .put(assignmentId, new ArrayList<>(finalDifficulties));
+            distributedQuestionTopicsByAssignment
+                .computeIfAbsent(targetStudent, k -> new HashMap<>())
+                .put(assignmentId, new ArrayList<>(questionTopics));
+            distributedAnswerKeysByAssignment
+                .computeIfAbsent(targetStudent, k -> new HashMap<>())
+                .put(assignmentId, new HashMap<>(studentAnswerKey));
 
             if (!studentAnswerKey.isEmpty()) {
                 answerKeyService.storeStudentAnswerKey(targetStudent, studentAnswerKey);

@@ -88,64 +88,44 @@ public class StudentController {
                     // Get activities (exams) for this subject
                     List<Map<String, Object>> activities = new ArrayList<>();
                     
-                    // Check if student has exam distributed for this subject
-                    boolean hasExam = getDistributedExams().containsKey(studentEmail);
-                    if (hasExam) {
-                        Map<String, Object> distributedMeta = HomepageController.getDistributedExamMetadata(studentEmail);
-                        String examSubject = (String) session.getAttribute("examSubject_" + studentEmail);
-                        if ((examSubject == null || examSubject.isEmpty()) && distributedMeta != null) {
-                            Object metaSubject = distributedMeta.get("examSubject");
-                            examSubject = metaSubject != null ? String.valueOf(metaSubject) : null;
-                        }
-                        
-                        if (subjectName != null && subjectName.equals(examSubject)) {
-                            String examName = (String) session.getAttribute("examName_" + studentEmail);
-                            if ((examName == null || examName.isEmpty()) && distributedMeta != null) {
-                                Object metaExamName = distributedMeta.get("examName");
-                                examName = metaExamName != null ? String.valueOf(metaExamName) : null;
+                    // Check all distributed assignments for this subject
+                    List<Map<String, Object>> assignmentHistory = HomepageController.getDistributedExamHistory(studentEmail);
+                    if (!assignmentHistory.isEmpty()) {
+                        for (Map<String, Object> assignment : assignmentHistory) {
+                            String examSubject = String.valueOf(assignment.getOrDefault("examSubject", ""));
+                            if (subjectName == null || !subjectName.equals(examSubject)) {
+                                continue;
                             }
-                            
-                            // Safety check: only show as pending if student has NOT already submitted this exam+subject combo
-                            boolean alreadySubmitted = examName != null &&
+
+                            String examName = String.valueOf(assignment.getOrDefault("examName", ""));
+                            String assignmentId = String.valueOf(assignment.getOrDefault("assignmentId", ""));
+                            boolean alreadySubmitted = examName != null && !examName.isBlank() &&
                                 !examSubmissionRepository.findByStudentEmailAndExamNameAndSubject(studentEmail, examName, examSubject).isEmpty();
-                            
-                            if (!alreadySubmitted) {
-                                String examActivityType = (String) session.getAttribute("examActivityType_" + studentEmail);
-                                Integer examTimeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentEmail);
-                                String examDeadline = (String) session.getAttribute("examDeadline_" + studentEmail);
-                                if (distributedMeta != null) {
-                                    if (examActivityType == null || examActivityType.isEmpty()) {
-                                        Object metaType = distributedMeta.get("examActivityType");
-                                        examActivityType = metaType != null ? String.valueOf(metaType) : null;
-                                    }
-                                    if (examTimeLimit == null) {
-                                        Object metaTime = distributedMeta.get("examTimeLimit");
-                                        if (metaTime instanceof Integer) {
-                                            examTimeLimit = (Integer) metaTime;
-                                        }
-                                    }
-                                    if (examDeadline == null || examDeadline.isEmpty()) {
-                                        Object metaDeadline = distributedMeta.get("examDeadline");
-                                        examDeadline = metaDeadline != null ? String.valueOf(metaDeadline) : null;
-                                    }
+
+                            if (alreadySubmitted) {
+                                if (assignmentId != null && !assignmentId.isBlank()) {
+                                    HomepageController.removeDistributedExam(studentEmail, assignmentId);
                                 }
-                                List<String> examQuestions = getDistributedExams().get(studentEmail);
-                                
-                                Map<String, Object> activity = new HashMap<>();
-                                activity.put("name", examName != null ? examName : "Untitled Exam");
-                                activity.put("type", examActivityType != null ? examActivityType : "Exam");
-                                activity.put("timeLimit", examTimeLimit != null ? examTimeLimit : 60);
-                                activity.put("questionCount", examQuestions != null ? examQuestions.size() : 0);
-                                activity.put("deadline", formatDeadline(examDeadline));
-                                activity.put("status", "pending");
-                                activity.put("icon", getActivityIcon(examActivityType));
-                                activity.put("color", getActivityColor(examActivityType));
-                                activities.add(activity);
-                            } else {
-                                // Student already submitted — clean up the stale distributed exam entry
-                                HomepageController.removeDistributedExam(studentEmail);
-                                System.out.println("🧹 Cleaned up stale distributed exam for student: " + studentEmail);
+                                continue;
                             }
+
+                            String examActivityType = String.valueOf(assignment.getOrDefault("examActivityType", "Exam"));
+                            Object timeObj = assignment.get("examTimeLimit");
+                            int examTimeLimit = timeObj instanceof Number ? ((Number) timeObj).intValue() : 60;
+                            String examDeadline = String.valueOf(assignment.getOrDefault("examDeadline", ""));
+                            List<String> examQuestions = HomepageController.getDistributedExamQuestions(studentEmail, assignmentId);
+
+                            Map<String, Object> activity = new HashMap<>();
+                            activity.put("name", (examName != null && !examName.isBlank()) ? examName : "Untitled Exam");
+                            activity.put("type", examActivityType != null ? examActivityType : "Exam");
+                            activity.put("timeLimit", examTimeLimit);
+                            activity.put("questionCount", examQuestions != null ? examQuestions.size() : 0);
+                            activity.put("deadline", formatDeadline(examDeadline));
+                            activity.put("status", "pending");
+                            activity.put("icon", getActivityIcon(examActivityType));
+                            activity.put("color", getActivityColor(examActivityType));
+                            activity.put("startUrl", "/student/take-exam?assignmentId=" + assignmentId);
+                            activities.add(activity);
                         }
                     }
                     
@@ -456,18 +436,52 @@ public class StudentController {
     }
 
     @GetMapping("/take-exam")
-    public String takeExam(HttpSession session, Model model, java.security.Principal principal) {
+    public String takeExam(@RequestParam(required = false) String assignmentId,
+                           HttpSession session,
+                           Model model,
+                           java.security.Principal principal) {
         String studentId = principal.getName();
-        List<String> exam = getDistributedExams().get(studentId);
+        Map<String, Object> selectedAssignment = null;
+        List<Map<String, Object>> assignmentHistory = HomepageController.getDistributedExamHistory(studentId);
+
+        if (!assignmentHistory.isEmpty()) {
+            if (assignmentId != null && !assignmentId.isBlank()) {
+                for (Map<String, Object> assignment : assignmentHistory) {
+                    if (assignmentId.equals(assignment.get("assignmentId"))) {
+                        selectedAssignment = assignment;
+                        break;
+                    }
+                }
+            }
+            if (selectedAssignment == null) {
+                selectedAssignment = assignmentHistory.get(assignmentHistory.size() - 1);
+                Object chosenId = selectedAssignment.get("assignmentId");
+                assignmentId = chosenId != null ? String.valueOf(chosenId) : assignmentId;
+            }
+        }
+
+        if ((assignmentId == null || assignmentId.isBlank()) && selectedAssignment == null) {
+            model.addAttribute("error", "No exam available for you yet.");
+            return "redirect:/student/dashboard";
+        }
+
+        List<String> exam = HomepageController.getDistributedExamQuestions(studentId, assignmentId);
+        if (exam == null || exam.isEmpty()) {
+            exam = getDistributedExams().get(studentId);
+        }
         
         if (exam == null || exam.isEmpty()) {
             model.addAttribute("error", "No exam available for you yet.");
             return "redirect:/student/dashboard";
         }
+
+        session.setAttribute("currentAssignmentId_" + studentId, assignmentId);
         
         // MULTIPLE ATTEMPTS ALLOWED - Students can retake exams, all submissions stored in database
         String examName = (String) session.getAttribute("examName_" + studentId);
-        Map<String, Object> distributedMeta = HomepageController.getDistributedExamMetadata(studentId);
+        Map<String, Object> distributedMeta = selectedAssignment != null
+            ? selectedAssignment
+            : HomepageController.getDistributedExamMetadata(studentId);
         if ((examName == null || examName.isEmpty()) && distributedMeta != null) {
             Object metaExamName = distributedMeta.get("examName");
             examName = metaExamName != null ? String.valueOf(metaExamName) : null;
@@ -575,9 +589,29 @@ public class StudentController {
         examInfo.put("startTimeMillis", String.valueOf(startTimeMillis));
         model.addAttribute("examInfo", examInfo);
         
-        // Get question difficulties from session
+        // Keep selected assignment metadata in session for submit flow
+        if (distributedMeta != null) {
+            session.setAttribute("examName_" + studentId, String.valueOf(distributedMeta.getOrDefault("examName", examName)));
+            session.setAttribute("examSubject_" + studentId, String.valueOf(distributedMeta.getOrDefault("examSubject", subject)));
+            session.setAttribute("examActivityType_" + studentId, String.valueOf(distributedMeta.getOrDefault("examActivityType", activityType)));
+            Object metaLimit = distributedMeta.get("examTimeLimit");
+            if (metaLimit instanceof Number numberValue) {
+                session.setAttribute("examTimeLimit_" + studentId, numberValue.intValue());
+            }
+            session.setAttribute("examDeadline_" + studentId, String.valueOf(distributedMeta.getOrDefault("examDeadline", examDeadline)));
+        }
+
+        Map<Integer, String> assignmentKey = HomepageController.getDistributedAnswerKey(studentId, assignmentId);
+        if (assignmentKey != null && !assignmentKey.isEmpty()) {
+            session.setAttribute("currentAssignmentAnswerKey_" + studentId, assignmentKey);
+        }
+
+        // Get question difficulties from assignment/session
         @SuppressWarnings("unchecked")
         List<String> difficulties = (List<String>) session.getAttribute("questionDifficulties_" + studentId);
+        if (difficulties == null || (assignmentId != null && !assignmentId.isBlank())) {
+            difficulties = HomepageController.getDistributedQuestionDifficulties(studentId, assignmentId);
+        }
         if (difficulties == null) {
             difficulties = HomepageController.getDistributedQuestionDifficulties(studentId);
             if (difficulties != null) {
@@ -593,6 +627,11 @@ public class StudentController {
         }
         model.addAttribute("difficulties", difficulties);
         
+        List<String> topics = HomepageController.getDistributedQuestionTopics(studentId, assignmentId);
+        if (topics != null) {
+            session.setAttribute("questionTopics_" + studentId, topics);
+        }
+
         model.addAttribute("exam", exam);
         return "student-exam-paginated";
     }
@@ -602,9 +641,15 @@ public class StudentController {
                             HttpSession session, Model model,
                             java.security.Principal principal) {
         String studentId = principal != null ? principal.getName() : "guest";
+        String currentAssignmentId = (String) session.getAttribute("currentAssignmentId_" + studentId);
+        Map<String, Object> currentAssignmentMeta = HomepageController.getDistributedExamAssignmentMetadata(studentId, currentAssignmentId);
         
         // Check if deadline has passed (allow submission with warning if just exceeded)
         String deadline = (String) session.getAttribute("examDeadline_" + studentId);
+        if ((deadline == null || deadline.isEmpty()) && currentAssignmentMeta != null) {
+            Object assignmentDeadline = currentAssignmentMeta.get("examDeadline");
+            deadline = assignmentDeadline != null ? String.valueOf(assignmentDeadline) : null;
+        }
         boolean deadlineExceeded = false;
         if (deadline != null && !deadline.isEmpty()) {
             try {
@@ -634,8 +679,15 @@ public class StudentController {
             }
         }
         
-        // Get answer key for this student from the AnswerKeyService
-        Map<Integer, String> key = answerKeyService.getStudentAnswerKey(studentId);
+        // Get answer key for this assignment
+        @SuppressWarnings("unchecked")
+        Map<Integer, String> key = (Map<Integer, String>) session.getAttribute("currentAssignmentAnswerKey_" + studentId);
+        if ((key == null || key.isEmpty()) && currentAssignmentId != null && !currentAssignmentId.isBlank()) {
+            key = HomepageController.getDistributedAnswerKey(studentId, currentAssignmentId);
+        }
+        if (key == null || key.isEmpty()) {
+            key = answerKeyService.getStudentAnswerKey(studentId);
+        }
         
         // Fallback to session if not found in service (backward compatibility)
         if (key == null) {
@@ -855,7 +907,9 @@ public class StudentController {
             String examName = (String) session.getAttribute("examName_" + studentId);
             String subject = (String) session.getAttribute("examSubject_" + studentId);
             String activityType = (String) session.getAttribute("examActivityType_" + studentId);
-            Map<String, Object> submitMeta = HomepageController.getDistributedExamMetadata(studentId);
+            Map<String, Object> submitMeta = currentAssignmentMeta != null
+                ? currentAssignmentMeta
+                : HomepageController.getDistributedExamMetadata(studentId);
             if (submitMeta != null) {
                 if (examName == null || examName.isEmpty()) {
                     Object metaExamName = submitMeta.get("examName");
@@ -919,9 +973,12 @@ public class StudentController {
                 System.out.println("🔒 EXAM RE-LOCKED after submission: " + submittedExamName + " for " + studentId);
             }
 
-            // Remove student from distributed exams so the exam no longer appears as pending
-            HomepageController.removeDistributedExam(studentId);
-            System.out.println("🗑️ EXAM REMOVED from distributed list for student: " + studentId);
+            // Remove only the submitted assignment from distributed exams
+            HomepageController.removeDistributedExam(studentId, currentAssignmentId);
+            System.out.println("🗑️ ASSIGNMENT REMOVED from distributed list for student: " + studentId + " | assignmentId=" + currentAssignmentId);
+
+            session.removeAttribute("currentAssignmentId_" + studentId);
+            session.removeAttribute("currentAssignmentAnswerKey_" + studentId);
             
             // Store results in session for display after redirect
             session.setAttribute("lastSubmissionId", savedSubmission.getId());
