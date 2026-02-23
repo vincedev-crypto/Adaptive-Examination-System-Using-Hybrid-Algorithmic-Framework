@@ -36,13 +36,13 @@
             border-bottom: 2px solid #d4a32a;
         }
         .mq-section-header {
-            background: linear-gradient(135deg, #221f1f 0%, #3a2e2e 100%);
+            background: #221f1f;
             color: #fff;
         }
         .question-card {
             transition: all 0.3s ease;
             border-left: 4px solid transparent;
-            background: #fdfdfd;
+            background: #fff;
         }
         .question-card:hover {
             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
@@ -132,27 +132,6 @@
             color: #212529;
             min-height: 48px;
         }
-        .mq-search-input {
-            max-width: 320px;
-            border-radius: 999px;
-        }
-        .mq-meta-chip {
-            border: 1px solid #eadfce;
-            background: #fff8ef;
-            color: #5b2b0f;
-            border-radius: 999px;
-            padding: 0.35rem 0.65rem;
-            font-size: 0.85rem;
-            font-weight: 600;
-        }
-        .question-media img, .question-media video {
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-            margin-top: 8px;
-            margin-bottom: 8px;
-            border: 1px solid #e3d8c9;
-        }
     </style>
 </head>
 <body class="homepage-page">
@@ -229,7 +208,7 @@
                     <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Add New Question</h5>
                 </div>
                 <div class="card-body">
-                    <form th:action="@{/teacher/add-question}" method="post" enctype="multipart/form-data">
+                    <form th:action="@{/teacher/add-question}" method="post">
                         <input type="hidden" name="examId" th:value="${exam.examId}">
                         
                         <div class="mb-3">
@@ -242,7 +221,6 @@
                                 <div class="mt-1"><strong>Supported formats</strong></div>
                                 <div>• Images: <code>&lt;img src="URL" alt="description"&gt;</code></div>
                                 <div>• Videos: <code>&lt;video src="URL" controls&gt;&lt;/video&gt;</code></div>
-                                <div>• Or upload media using the file pickers below</div>
                                 <div>• Equations (inline): <code>$x^2 + y^2 = r^2$</code> or <code>\(x^2\)</code></div>
                                 <div>• Equations (block): <code>$$\frac{a}{b}$$</code> or <code>\[\int_0^\infty\]</code></div>
                             </div>
@@ -252,39 +230,13 @@
                                 <div id="mathPreview"></div>
                             </div>
                         </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-bold">Question Type *</label>
-                                <select class="form-select" id="addQuestionType" name="questionType" onchange="toggleAddQuestionTypeFields()" required>
-                                    <option value="MULTIPLE_CHOICE" selected>Multiple Choice</option>
-                                    <option value="OPEN_ENDED">Open-Ended (Teacher Graded)</option>
-                                </select>
-                            </div>
-                            <div class="col-md-6 mb-3" id="mcqChoicesContainer">
-                                <label class="form-label fw-bold">Choices (one per line) *</label>
-                                <textarea class="form-control" name="choicesText" id="addChoicesText" rows="3"
-                                          placeholder="Choice A&#10;Choice B&#10;Choice C&#10;Choice D"></textarea>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-bold">Import Image (Optional)</label>
-                                <input type="file" class="form-control" name="questionImage" accept="image/*">
-                            </div>
-                            <div class="col-md-6 mb-3">
-                                <label class="form-label fw-bold">Import Video (Optional)</label>
-                                <input type="file" class="form-control" name="questionVideo" accept="video/*">
-                            </div>
-                        </div>
                         
                         <div class="row">
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-bold">Correct Answer *</label>
-                                <input type="text" class="form-control" name="answer" id="addAnswerInput"
+                                <input type="text" class="form-control" name="answer" 
                                        placeholder="e.g., A, B, C, D or full answer text" required>
-                                <small class="form-text text-muted" id="addAnswerHint">Enter the letter or full text of the correct answer</small>
+                                <small class="form-text text-muted">Enter the letter or full text of the correct answer</small>
                             </div>
                             
                             <div class="col-md-6 mb-3">
@@ -324,11 +276,7 @@
             <div class="card mq-card">
                 <div class="card-header mq-section-header d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="bi bi-list-ol"></i> All Questions</h5>
-                    <div class="d-flex align-items-center gap-2 flex-wrap justify-content-end">
-                        <input type="text" id="manageQuestionSearch" class="form-control form-control-sm mq-search-input"
-                               placeholder="🔎 Search question or answer...">
-                        <span class="badge bg-light text-dark" th:text="${#lists.size(exam.questions)} + ' Questions'">100 Questions</span>
-                    </div>
+                    <span class="badge bg-light text-dark" th:text="${#lists.size(exam.questions)} + ' Questions'">100 Questions</span>
                 </div>
                 <div class="card-body p-0">
                     <div th:if="${#lists.isEmpty(exam.questions)}" class="alert alert-info m-3">
@@ -338,7 +286,6 @@
                     <div class="list-group list-group-flush">
                         <div th:each="question, iterStat : ${exam.questions}" 
                              class="list-group-item question-card"
-                             th:attr="data-question-search=${#strings.toLowerCase(question) + ' ' + #strings.toLowerCase(exam.answerKey[iterStat.index])}"
                              th:classappend="${exam.difficulties[iterStat.index] == 'Easy'} ? 'difficulty-easy' : 
                                             (${exam.difficulties[iterStat.index] == 'Medium'} ? 'difficulty-medium' : 'difficulty-hard')">
                             <div class="d-flex justify-content-between align-items-start">
@@ -349,12 +296,11 @@
                                               th:classappend="${exam.difficulties[iterStat.index] == 'Easy'} ? 'bg-success' : 
                                                              (${exam.difficulties[iterStat.index] == 'Medium'} ? 'bg-warning' : 'bg-danger')"
                                               th:text="${exam.difficulties[iterStat.index]}">Easy</span>
-                                        <span class="mq-meta-chip ms-2" th:if="${exam.answerKey[iterStat.index] != null}">
-                                            <i class="bi bi-key"></i> Answer:
-                                            <span th:text="${exam.answerKey[iterStat.index] == 'MANUAL_GRADE' ? 'Teacher Graded' : exam.answerKey[iterStat.index]}">A</span>
+                                        <span class="badge bg-secondary ms-2" th:if="${exam.answerKey[iterStat.index] != null}">
+                                            <i class="bi bi-key"></i> Answer: <span th:text="${exam.answerKey[iterStat.index]}">A</span>
                                         </span>
                                     </div>
-                                    <div class="mb-0 question-media" th:utext="${questionDisplay[iterStat.index]}" style="white-space: pre-wrap;"></div>
+                                    <div class="mb-0 question-media" th:utext="${question}" style="white-space: pre-wrap;"></div>
                                 </div>
                                 <div class="ms-3">
                                     <button class="btn btn-sm btn-outline-primary me-1 mq-edit" type="button"
@@ -375,7 +321,7 @@
 
                             <div class="collapse mt-3" th:id="'editQuestion' + ${iterStat.index}">
                                 <div class="card card-body bg-light border">
-                                    <form th:action="@{/teacher/edit-question}" method="post" class="row g-2" enctype="multipart/form-data">
+                                    <form th:action="@{/teacher/edit-question}" method="post" class="row g-2">
                                         <input type="hidden" name="examId" th:value="${exam.examId}">
                                         <input type="hidden" name="questionIndex" th:value="${iterStat.index}">
 
@@ -385,16 +331,8 @@
                                         </div>
 
                                         <div class="col-md-4">
-                                            <label class="form-label small fw-semibold mb-1">Question Type</label>
-                                            <select class="form-select form-select-sm edit-question-type" name="questionType" onchange="toggleEditQuestionTypeFields(this)" required>
-                                                <option value="MULTIPLE_CHOICE" th:selected="${!#strings.startsWith(question, '[TEXT_INPUT]')}">Multiple Choice</option>
-                                                <option value="OPEN_ENDED" th:selected="${#strings.startsWith(question, '[TEXT_INPUT]')}">Open-Ended</option>
-                                            </select>
-                                        </div>
-
-                                        <div class="col-md-4">
                                             <label class="form-label small fw-semibold mb-1">Answer</label>
-                                            <input type="text" class="form-control form-control-sm edit-answer-input" name="answer" required
+                                            <input type="text" class="form-control form-control-sm" name="answer" required
                                                    th:value="${exam.answerKey[iterStat.index]}">
                                         </div>
 
@@ -411,16 +349,6 @@
                                             <button type="submit" class="btn btn-sm btn-primary w-100">
                                                 <i class="bi bi-check2-circle me-1"></i>Save Changes
                                             </button>
-                                        </div>
-
-                                        <div class="col-md-6">
-                                            <label class="form-label small fw-semibold mb-1">Import Image (Optional)</label>
-                                            <input type="file" class="form-control form-control-sm" name="questionImage" accept="image/*">
-                                        </div>
-
-                                        <div class="col-md-6">
-                                            <label class="form-label small fw-semibold mb-1">Import Video (Optional)</label>
-                                            <input type="file" class="form-control form-control-sm" name="questionVideo" accept="video/*">
                                         </div>
                                     </form>
                                 </div>
@@ -474,66 +402,6 @@
             }
         }, 400);
     }
-
-    function toggleAddQuestionTypeFields() {
-        const typeSelect = document.getElementById('addQuestionType');
-        const choicesContainer = document.getElementById('mcqChoicesContainer');
-        const choicesText = document.getElementById('addChoicesText');
-        const answerInput = document.getElementById('addAnswerInput');
-        const answerHint = document.getElementById('addAnswerHint');
-
-        if (!typeSelect || !choicesContainer || !choicesText || !answerInput || !answerHint) return;
-
-        const isOpenEnded = typeSelect.value === 'OPEN_ENDED';
-        choicesContainer.style.display = isOpenEnded ? 'none' : '';
-        choicesText.required = !isOpenEnded;
-        answerInput.required = !isOpenEnded;
-        answerInput.readOnly = isOpenEnded;
-        if (isOpenEnded) {
-            answerInput.value = '';
-            answerInput.placeholder = 'Not required for open-ended questions';
-            answerHint.textContent = 'Teacher will grade this question manually.';
-        } else {
-            answerInput.placeholder = 'e.g., A, B, C, D or full answer text';
-            answerHint.textContent = 'Enter the letter or full text of the correct answer';
-        }
-    }
-
-    function toggleEditQuestionTypeFields(selectEl) {
-        if (!selectEl) return;
-        const form = selectEl.closest('form');
-        if (!form) return;
-        const answerInput = form.querySelector('.edit-answer-input');
-        if (!answerInput) return;
-
-        const isOpenEnded = selectEl.value === 'OPEN_ENDED';
-        answerInput.required = !isOpenEnded;
-        answerInput.readOnly = isOpenEnded;
-        if (isOpenEnded) {
-            answerInput.value = '';
-            answerInput.placeholder = 'Teacher will grade this manually';
-        } else {
-            answerInput.placeholder = 'Correct answer';
-        }
-    }
-
-    const manageQuestionSearch = document.getElementById('manageQuestionSearch');
-    if (manageQuestionSearch) {
-        manageQuestionSearch.addEventListener('input', function () {
-            const query = this.value.toLowerCase().trim();
-            document.querySelectorAll('.question-card').forEach(card => {
-                const key = (card.getAttribute('data-question-search') || '').toLowerCase();
-                card.style.display = (!query || key.includes(query)) ? '' : 'none';
-            });
-        });
-    }
-
-    document.addEventListener('DOMContentLoaded', function () {
-        toggleAddQuestionTypeFields();
-        document.querySelectorAll('.edit-question-type').forEach(selectEl => {
-            toggleEditQuestionTypeFields(selectEl);
-        });
-    });
 </script>
 
 </body>

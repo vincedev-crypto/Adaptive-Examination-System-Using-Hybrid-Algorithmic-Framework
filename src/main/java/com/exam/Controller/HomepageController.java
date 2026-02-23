@@ -18,7 +18,6 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -70,8 +69,8 @@ import com.lowagie.text.Paragraph;
 import com.lowagie.text.pdf.PdfWriter;
 
 import jakarta.annotation.PostConstruct;
-import jakarta.servlet.http.HttpServletResponse;
 import jakarta.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletResponse;
 
 @Controller
 @RequestMapping("/teacher")
@@ -95,13 +94,13 @@ public class HomepageController {
     @Autowired
     private SubjectRepository subjectRepository;
 
-    private static final Map<String, List<String>> distributedExams = new HashMap<>();
-    private static final Map<String, Map<String, Object>> distributedExamMetadata = new HashMap<>();
-    private static final Map<String, List<String>> distributedQuestionDifficulties = new HashMap<>();
-    private static final Map<String, List<String>> distributedQuestionTopics = new HashMap<>();
+    private static Map<String, List<String>> distributedExams = new HashMap<>();
+    private static Map<String, Map<String, Object>> distributedExamMetadata = new HashMap<>();
+    private static Map<String, List<String>> distributedQuestionDifficulties = new HashMap<>();
+    private static Map<String, List<String>> distributedQuestionTopics = new HashMap<>();
     
     // Store uploaded exams with their metadata
-    private static final Map<String, UploadedExam> uploadedExams = new HashMap<>();
+    private static Map<String, UploadedExam> uploadedExams = new HashMap<>();
 
     /**
      * Regex: detect LaTeX segments (\command{} or var^{} or var_{}) for auto-wrapping in $...$.
@@ -116,14 +115,14 @@ public class HomepageController {
     
     // Helper class to store exam metadata
     public static class UploadedExam {
-        private final String examId;
-        private final String examName;
-        private final String subject;
-        private final String activityType;
-        private final List<String> questions;
-        private final List<String> difficulties; // Store difficulty for each question
-        private final Map<Integer, String> answerKey;
-        private final java.time.LocalDateTime uploadedAt;
+        private String examId;
+        private String examName;
+        private String subject;
+        private String activityType;
+        private List<String> questions;
+        private List<String> difficulties; // Store difficulty for each question
+        private Map<Integer, String> answerKey;
+        private java.time.LocalDateTime uploadedAt;
         
         public UploadedExam(String examId, String examName, String subject, String activityType, 
                           List<String> questions, List<String> difficulties, Map<Integer, String> answerKey) {
@@ -174,7 +173,7 @@ public class HomepageController {
     }
 
     // Store for unlocked exams (studentEmail -> examName)
-    private static final Map<String, Set<String>> unlockedExams = new HashMap<>();
+    private static Map<String, Set<String>> unlockedExams = new HashMap<>();
 
     /**
      * Initialize null boolean fields in existing ExamSubmission records
@@ -194,7 +193,7 @@ public class HomepageController {
             }
             
             if (needsUpdate) {
-                examSubmissionRepository.saveAll(Objects.requireNonNull(submissions));
+                examSubmissionRepository.saveAll(submissions);
                 System.out.println("✅ Initialized null boolean fields in " + submissions.size() + " ExamSubmission records");
             }
         } catch (Exception e) {
@@ -277,6 +276,7 @@ public class HomepageController {
                 status.put("hasExam", true);
                 
                 // Check if student has submitted
+                String examNameForStudent = (String) null; // We'll need to track this
                 boolean hasSubmitted = submissions.stream()
                     .anyMatch(sub -> sub.getStudentEmail().equals(studentEmail));
                 status.put("hasSubmitted", hasSubmitted);
@@ -403,20 +403,21 @@ public class HomepageController {
         
         if (statusFilter != null && !statusFilter.isEmpty()) {
             switch (statusFilter) {
-                case "graded" ->
+                case "graded":
                     filteredSubmissions = filteredSubmissions.stream()
                             .filter(ExamSubmission::isGraded)
                             .collect(Collectors.toList());
-                case "pending" ->
+                    break;
+                case "pending":
                     filteredSubmissions = filteredSubmissions.stream()
                             .filter(s -> !s.isGraded())
                             .collect(Collectors.toList());
-                case "released" ->
+                    break;
+                case "released":
                     filteredSubmissions = filteredSubmissions.stream()
                             .filter(ExamSubmission::isResultsReleased)
                             .collect(Collectors.toList());
-                default -> {
-                }
+                    break;
             }
         }
         
@@ -471,10 +472,6 @@ public class HomepageController {
         }
         
         model.addAttribute("exam", exam);
-        List<String> questionDisplay = exam.getQuestions().stream()
-            .map(this::formatQuestionForManageView)
-            .collect(Collectors.toList());
-        model.addAttribute("questionDisplay", questionDisplay);
         return "manage-questions";
     }
     
@@ -484,12 +481,8 @@ public class HomepageController {
     @PostMapping("/add-question")
     public String addQuestion(@RequestParam String examId,
                              @RequestParam String questionText,
-                             @RequestParam(defaultValue = "MULTIPLE_CHOICE") String questionType,
-                             @RequestParam(required = false) String choicesText,
                              @RequestParam String answer,
                              @RequestParam String difficulty,
-                             @RequestParam(value = "questionImage", required = false) MultipartFile questionImage,
-                             @RequestParam(value = "questionVideo", required = false) MultipartFile questionVideo,
                              Model model,
                              org.springframework.web.servlet.mvc.support.RedirectAttributes redirectAttributes) {
         UploadedExam exam = uploadedExams.get(examId);
@@ -500,50 +493,13 @@ public class HomepageController {
         }
         
         try {   
-            String normalizedQuestionText = questionText != null ? questionText.trim() : "";
-            String normalizedType = questionType != null ? questionType.trim().toUpperCase() : "MULTIPLE_CHOICE";
-
-            if (normalizedQuestionText.isEmpty()) {
-                redirectAttributes.addFlashAttribute("errorMessage", "Question text is required.");
-                return "redirect:/teacher/manage-questions/" + examId;
-            }
-
-            String storedAnswer;
-            if ("OPEN_ENDED".equals(normalizedType)) {
-                normalizedQuestionText = normalizedQuestionText.replaceFirst("(?i)^\\[TEXT_INPUT\\]\\s*", "").trim();
-                normalizedQuestionText = "[TEXT_INPUT]" + normalizedQuestionText;
-                storedAnswer = "MANUAL_GRADE";
-            } else {
-                normalizedQuestionText = normalizedQuestionText.replaceFirst("(?i)^\\[TEXT_INPUT\\]\\s*", "").trim();
-                if (choicesText == null || choicesText.trim().isEmpty()) {
-                    redirectAttributes.addFlashAttribute("errorMessage", "Please provide choices for multiple choice questions.");
-                    return "redirect:/teacher/manage-questions/" + examId;
-                }
-                normalizedQuestionText = buildMultipleChoiceQuestion(normalizedQuestionText, choicesText);
-                storedAnswer = answer != null ? answer.trim() : "";
-                if (storedAnswer.isEmpty()) {
-                    redirectAttributes.addFlashAttribute("errorMessage", "Correct answer is required for multiple choice questions.");
-                    return "redirect:/teacher/manage-questions/" + examId;
-                }
-            }
-
-            String imageUrl = saveQuestionMediaFile(examId, questionImage, "image");
-            String videoUrl = saveQuestionMediaFile(examId, questionVideo, "video");
-
-            if (imageUrl != null) {
-                normalizedQuestionText += "\n[IMG:" + imageUrl + "]";
-            }
-            if (videoUrl != null) {
-                normalizedQuestionText += "\n[VID:" + videoUrl + "]";
-            }
-
             // Add the new question to the existing lists
-            exam.getQuestions().add(normalizedQuestionText);
+            exam.getQuestions().add(questionText);
             exam.getDifficulties().add(difficulty);
             
             // Add answer to the answer key (using the next question number)
             int questionNumber = exam.getQuestions().size() - 1; // 0-based index
-            exam.getAnswerKey().put(questionNumber, storedAnswer);
+            exam.getAnswerKey().put(questionNumber, answer);
             
             redirectAttributes.addFlashAttribute("successMessage", 
                 "Question added successfully! Total questions: " + exam.getQuestions().size());
@@ -554,7 +510,7 @@ public class HomepageController {
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("errorMessage", 
                 "Error adding question: " + e.getMessage());
-            System.err.println("Error adding question: " + e.getMessage());
+            e.printStackTrace();
         }
         
         return "redirect:/teacher/manage-questions/" + examId;
@@ -608,7 +564,7 @@ public class HomepageController {
         } catch (Exception e) {
             redirectAttributes.addFlashAttribute("errorMessage", 
                 "Error deleting question: " + e.getMessage());
-            System.err.println("Error deleting question: " + e.getMessage());
+            e.printStackTrace();
         }
         
         return "redirect:/teacher/manage-questions/" + examId;
@@ -618,11 +574,8 @@ public class HomepageController {
     public String editQuestion(@RequestParam String examId,
                                @RequestParam int questionIndex,
                                @RequestParam String questionText,
-                               @RequestParam(defaultValue = "MULTIPLE_CHOICE") String questionType,
                                @RequestParam String answer,
                                @RequestParam String difficulty,
-                               @RequestParam(value = "questionImage", required = false) MultipartFile questionImage,
-                               @RequestParam(value = "questionVideo", required = false) MultipartFile questionVideo,
                                org.springframework.web.servlet.mvc.support.RedirectAttributes redirectAttributes) {
         UploadedExam exam = uploadedExams.get(examId);
 
@@ -637,43 +590,11 @@ public class HomepageController {
                 return "redirect:/teacher/manage-questions/" + examId;
             }
 
-            String normalizedQuestionText = questionText != null ? questionText.trim() : "";
-            String normalizedType = questionType != null ? questionType.trim().toUpperCase() : "MULTIPLE_CHOICE";
-
-            if (normalizedQuestionText.isEmpty()) {
-                redirectAttributes.addFlashAttribute("errorMessage", "Question text is required.");
-                return "redirect:/teacher/manage-questions/" + examId;
-            }
-
-            String storedAnswer;
-            if ("OPEN_ENDED".equals(normalizedType)) {
-                normalizedQuestionText = normalizedQuestionText.replaceFirst("(?i)^\\[TEXT_INPUT\\]\\s*", "").trim();
-                normalizedQuestionText = "[TEXT_INPUT]" + normalizedQuestionText;
-                storedAnswer = "MANUAL_GRADE";
-            } else {
-                normalizedQuestionText = normalizedQuestionText.replaceFirst("(?i)^\\[TEXT_INPUT\\]\\s*", "").trim();
-                storedAnswer = answer != null ? answer.trim() : "";
-                if (storedAnswer.isEmpty()) {
-                    redirectAttributes.addFlashAttribute("errorMessage", "Correct answer is required for multiple choice questions.");
-                    return "redirect:/teacher/manage-questions/" + examId;
-                }
-            }
-
-            String imageUrl = saveQuestionMediaFile(examId, questionImage, "image");
-            String videoUrl = saveQuestionMediaFile(examId, questionVideo, "video");
-
-            if (imageUrl != null) {
-                normalizedQuestionText += "\n[IMG:" + imageUrl + "]";
-            }
-            if (videoUrl != null) {
-                normalizedQuestionText += "\n[VID:" + videoUrl + "]";
-            }
-
-            exam.getQuestions().set(questionIndex, normalizedQuestionText);
+            exam.getQuestions().set(questionIndex, questionText);
             if (questionIndex < exam.getDifficulties().size()) {
                 exam.getDifficulties().set(questionIndex, difficulty);
             }
-            exam.getAnswerKey().put(questionIndex, storedAnswer);
+            exam.getAnswerKey().put(questionIndex, answer);
 
             redirectAttributes.addFlashAttribute("successMessage", "Question updated successfully!");
         } catch (Exception e) {
@@ -683,73 +604,6 @@ public class HomepageController {
         return "redirect:/teacher/manage-questions/" + examId;
     }
 
-    private String saveQuestionMediaFile(String examId, MultipartFile mediaFile, String mediaType) throws IOException {
-        if (mediaFile == null || mediaFile.isEmpty()) {
-            return null;
-        }
-
-        String originalFilename = Objects.requireNonNullElse(mediaFile.getOriginalFilename(), "media");
-        String extension = "";
-        int dotIndex = originalFilename.lastIndexOf('.');
-        if (dotIndex >= 0) {
-            extension = originalFilename.substring(dotIndex).toLowerCase();
-        }
-
-        Set<String> allowedExtensions = "image".equalsIgnoreCase(mediaType)
-            ? Set.of(".png", ".jpg", ".jpeg", ".gif", ".webp")
-            : Set.of(".mp4", ".webm", ".ogg", ".mov");
-
-        if (!allowedExtensions.contains(extension)) {
-            throw new IOException("Invalid " + mediaType + " format. Allowed: " + String.join(", ", allowedExtensions));
-        }
-
-        Path mediaDir = Paths.get("uploads", "question-media", examId);
-        Files.createDirectories(mediaDir);
-
-        String fileName = mediaType.toLowerCase() + "_" + UUID.randomUUID().toString().replace("-", "") + extension;
-        Path targetPath = mediaDir.resolve(fileName);
-        Files.copy(mediaFile.getInputStream(), targetPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-
-        return "/uploads/question-media/" + examId + "/" + fileName;
-    }
-
-    private String buildMultipleChoiceQuestion(String questionText, String choicesText) {
-        List<String> choices = Arrays.stream(choicesText.split("\\r?\\n"))
-            .map(String::trim)
-            .filter(line -> !line.isEmpty())
-            .collect(Collectors.toList());
-
-        if (choices.isEmpty()) {
-            return questionText;
-        }
-
-        StringBuilder builtQuestion = new StringBuilder(questionText.trim());
-        char label = 'A';
-        for (String choice : choices) {
-            if (label > 'Z') {
-                break;
-            }
-            builtQuestion.append("\n").append(label).append(") ").append(choice);
-            label++;
-        }
-        return builtQuestion.toString();
-    }
-
-    private String formatQuestionForManageView(String questionText) {
-        if (questionText == null) {
-            return "";
-        }
-
-        String formatted = questionText
-            .replaceFirst("(?i)^\\[TEXT_INPUT\\]\\s*", "")
-            .replaceAll("(?i)\\[IMG:([^\\]]+)\\]",
-                "<div class=\"question-media my-2\"><img src=\"$1\" alt=\"Question image\" class=\"img-fluid rounded border\"/></div>")
-            .replaceAll("(?i)\\[VID:([^\\]]+)\\]",
-                "<div class=\"question-media my-2\"><video src=\"$1\" controls class=\"w-100 rounded border\" style=\"max-height:320px;\"></video></div>");
-
-        return formatted.replace("\n", "<br>");
-    }
-
     @PostMapping("/enroll-student")
     public String enrollStudent(@RequestParam String studentEmail,
                                @RequestParam Long subjectId,
@@ -757,7 +611,7 @@ public class HomepageController {
         String teacherEmail = principal.getName();
         
         // Get subject details
-        Optional<Subject> subjectOpt = subjectRepository.findById(Objects.requireNonNull(subjectId));
+        Optional<Subject> subjectOpt = subjectRepository.findById(subjectId);
         if (subjectOpt.isEmpty() || !subjectOpt.get().getTeacherEmail().equals(teacherEmail)) {
             return "redirect:/teacher/homepage";
         }
@@ -815,9 +669,9 @@ public class HomepageController {
         String teacherEmail = principal.getName();
         
         // Verify the subject belongs to this teacher before deleting
-        Optional<Subject> subjectOpt = subjectRepository.findById(Objects.requireNonNull(subjectId));
+        Optional<Subject> subjectOpt = subjectRepository.findById(subjectId);
         if (subjectOpt.isPresent() && subjectOpt.get().getTeacherEmail().equals(teacherEmail)) {
-            subjectRepository.deleteById(Objects.requireNonNull(subjectId));
+            subjectRepository.deleteById(subjectId);
             System.out.println("🗑️ Subject deleted: " + subjectOpt.get().getSubjectName());
         }
         
@@ -832,7 +686,7 @@ public class HomepageController {
         String teacherEmail = principal.getName();
         
         // Verify the subject belongs to this teacher
-        Optional<Subject> subjectOpt = subjectRepository.findById(Objects.requireNonNull(subjectId));
+        Optional<Subject> subjectOpt = subjectRepository.findById(subjectId);
         if (subjectOpt.isEmpty() || !subjectOpt.get().getTeacherEmail().equals(teacherEmail)) {
             return "redirect:/teacher/homepage";
         }
@@ -853,6 +707,9 @@ public class HomepageController {
             .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, 
                                        Comparator.nullsLast(Comparator.reverseOrder())))
             .collect(Collectors.toList());
+
+        Map<String, List<ExamSubmission>> submissionsByStudent = submissions.stream()
+            .collect(Collectors.groupingBy(ExamSubmission::getStudentEmail));
         
         // Get all students for enrollment
         List<User> allStudents = userRepository.findAll().stream()
@@ -863,71 +720,14 @@ public class HomepageController {
         String subjectName = subject.getSubjectName();
         List<UploadedExam> subjectExams = uploadedExams.values().stream()
             .filter(exam -> subjectName.equals(exam.getSubject()))
-            .sorted(Comparator.comparing(UploadedExam::getUploadedAt,
-                                        Comparator.nullsLast(Comparator.reverseOrder())))
             .collect(Collectors.toList());
 
-        // Also expose all processed exams so late enrollees can still receive previously processed quizzes
-        List<UploadedExam> allProcessedExams = uploadedExams.values().stream()
-            .sorted(Comparator.comparing(UploadedExam::getUploadedAt,
-                                        Comparator.nullsLast(Comparator.reverseOrder())))
-            .collect(Collectors.toList());
-
-        // Build classroom-level Students & Grades summary (scoped to this subject only)
-        Map<String, List<ExamSubmission>> submissionsByStudent = submissions.stream()
-            .collect(Collectors.groupingBy(ExamSubmission::getStudentEmail));
-
-        List<Map<String, Object>> classroomStudentSummary = new ArrayList<>();
-        for (EnrolledStudent enrolled : enrolledStudents) {
-            String studentEmail = enrolled.getStudentEmail();
-            List<ExamSubmission> studentSubs = submissionsByStudent.getOrDefault(studentEmail, new ArrayList<>());
-
-            long gradedCount = studentSubs.stream().filter(ExamSubmission::isGraded).count();
-            long pendingCount = studentSubs.stream().filter(s -> !s.isGraded()).count();
-            long releasedCount = studentSubs.stream().filter(ExamSubmission::isResultsReleased).count();
-            double averagePercentage = studentSubs.stream()
-                .filter(ExamSubmission::isGraded)
-                .mapToDouble(ExamSubmission::getFinalPercentage)
-                .average()
-                .orElse(0.0);
-
-            Map<String, Object> entry = new HashMap<>();
-            entry.put("studentEmail", studentEmail);
-            entry.put("studentName", enrolled.getStudentName());
-            entry.put("totalSubmissions", studentSubs.size());
-            entry.put("gradedCount", gradedCount);
-            entry.put("pendingCount", pendingCount);
-            entry.put("releasedCount", releasedCount);
-            entry.put("averageScore", String.format("%.1f", averagePercentage));
-            entry.put("submissions", studentSubs);
-            classroomStudentSummary.add(entry);
-        }
-
-        classroomStudentSummary.sort((a, b) ->
-            Integer.compare((Integer) b.get("totalSubmissions"), (Integer) a.get("totalSubmissions")));
-
-        Map<String, Object> classroomStats = new HashMap<>();
-        classroomStats.put("totalSubmissions", submissions.size());
-        classroomStats.put("gradedCount", submissions.stream().filter(ExamSubmission::isGraded).count());
-        classroomStats.put("pendingCount", submissions.stream().filter(s -> !s.isGraded()).count());
-        classroomStats.put("releasedCount", submissions.stream().filter(ExamSubmission::isResultsReleased).count());
-        double classroomAverage = submissions.stream()
-            .filter(ExamSubmission::isGraded)
-            .mapToDouble(ExamSubmission::getFinalPercentage)
-            .average()
-            .orElse(0.0);
-        classroomStats.put("averagePercentage", String.format("%.1f", classroomAverage));
-
-        // Which enrolled students already have a queued exam (for "Queued" badge in distribute modal)
-        Set<String> distributedStudentEmails = distributedExams.keySet().stream()
-            .filter(studentEmails::contains)
-            .collect(Collectors.toSet());
-
-        // Build distribution tracking rows so teacher can monitor assigned/submitted exam status per student
+        // Build distribution tracking rows so teacher can monitor assigned exam settings per student
         List<Map<String, Object>> distributionTracker = new ArrayList<>();
         for (EnrolledStudent enrolled : enrolledStudents) {
             String studentEmail = enrolled.getStudentEmail();
             List<String> assignedQuestions = distributedExams.get(studentEmail);
+
             boolean hasAssignedExam = assignedQuestions != null && !assignedQuestions.isEmpty();
 
             String examName = (String) session.getAttribute("examName_" + studentEmail);
@@ -952,8 +752,8 @@ public class HomepageController {
                 }
                 if (timeLimit == null) {
                     Object value = metadata.get("examTimeLimit");
-                    if (value instanceof Number numberValue) {
-                        timeLimit = numberValue.intValue();
+                    if (value instanceof Number) {
+                        timeLimit = ((Number) value).intValue();
                     }
                 }
                 if (deadlineRaw == null || deadlineRaw.isBlank()) {
@@ -1097,210 +897,13 @@ public class HomepageController {
         model.addAttribute("teacherEmail", teacherEmail);
         model.addAttribute("allStudents", allStudents);
         model.addAttribute("uploadedExams", subjectExams);
-        model.addAttribute("allProcessedExams", allProcessedExams);
-        model.addAttribute("distributedStudentEmails", distributedStudentEmails);
         model.addAttribute("distributionTracker", distributionTracker);
         model.addAttribute("quizDistributionSummary", quizDistributionSummary);
         model.addAttribute("distributedSubmittedCount", distributedSubmittedCount);
         model.addAttribute("distributedNotSubmittedCount", distributedNotSubmittedCount);
         model.addAttribute("submittedStudents", submittedStudents);
-        model.addAttribute("classroomStudentSummary", classroomStudentSummary);
-        model.addAttribute("classroomStats", classroomStats);
         
         return "subject-classroom";
-    }
-
-    @GetMapping("/subject-classroom/{subjectId}/enrolled-students")
-    public String viewSubjectEnrolledStudents(@PathVariable Long subjectId,
-                                              Model model,
-                                              java.security.Principal principal,
-                                              HttpServletResponse response) {
-        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        response.setHeader("Pragma", "no-cache");
-        response.setDateHeader("Expires", 0);
-
-        String teacherEmail = principal.getName();
-        Optional<Subject> subjectOpt = subjectRepository.findById(Objects.requireNonNull(subjectId));
-        if (subjectOpt.isEmpty() || !subjectOpt.get().getTeacherEmail().equals(teacherEmail)) {
-            return "redirect:/teacher/homepage";
-        }
-
-        Subject subject = subjectOpt.get();
-        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findBySubjectId(subjectId).stream()
-            .sorted(Comparator.comparing(EnrolledStudent::getStudentName, String.CASE_INSENSITIVE_ORDER))
-            .collect(Collectors.toList());
-
-        model.addAttribute("subject", subject);
-        model.addAttribute("enrolledStudents", enrolledStudents);
-        model.addAttribute("enrolledCount", enrolledStudents.size());
-
-        return "subject-enrolled-students";
-    }
-
-    @GetMapping("/subject-classroom/{subjectId}/distribution-students")
-    public String viewSubjectDistributionStudents(@PathVariable Long subjectId,
-                                                  Model model,
-                                                  java.security.Principal principal,
-                                                  HttpSession session,
-                                                  HttpServletResponse response) {
-        response.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-        response.setHeader("Pragma", "no-cache");
-        response.setDateHeader("Expires", 0);
-
-        String teacherEmail = principal.getName();
-        Optional<Subject> subjectOpt = subjectRepository.findById(Objects.requireNonNull(subjectId));
-        if (subjectOpt.isEmpty() || !subjectOpt.get().getTeacherEmail().equals(teacherEmail)) {
-            return "redirect:/teacher/homepage";
-        }
-
-        Subject subject = subjectOpt.get();
-        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findBySubjectId(subjectId).stream()
-            .sorted(Comparator.comparing(EnrolledStudent::getStudentName, String.CASE_INSENSITIVE_ORDER))
-            .collect(Collectors.toList());
-
-        List<String> studentEmails = enrolledStudents.stream()
-            .map(EnrolledStudent::getStudentEmail)
-            .collect(Collectors.toList());
-
-        List<ExamSubmission> submissions = examSubmissionRepository.findAll().stream()
-            .filter(sub -> studentEmails.contains(sub.getStudentEmail())
-                && subject.getSubjectName().equals(sub.getSubject()))
-            .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt,
-                Comparator.nullsLast(Comparator.reverseOrder())))
-            .collect(Collectors.toList());
-
-        Map<String, List<ExamSubmission>> submissionsByStudent = submissions.stream()
-            .collect(Collectors.groupingBy(ExamSubmission::getStudentEmail));
-
-        List<Map<String, Object>> distributionTracker = new ArrayList<>();
-        for (EnrolledStudent enrolled : enrolledStudents) {
-            String studentEmail = enrolled.getStudentEmail();
-            List<String> assignedQuestions = distributedExams.get(studentEmail);
-            boolean hasAssignedExam = assignedQuestions != null && !assignedQuestions.isEmpty();
-
-            String examName = (String) session.getAttribute("examName_" + studentEmail);
-            String examSubject = (String) session.getAttribute("examSubject_" + studentEmail);
-            String activityType = (String) session.getAttribute("examActivityType_" + studentEmail);
-            Integer timeLimit = (Integer) session.getAttribute("examTimeLimit_" + studentEmail);
-            String deadlineRaw = (String) session.getAttribute("examDeadline_" + studentEmail);
-
-            Map<String, Object> metadata = distributedExamMetadata.get(studentEmail);
-            if (metadata != null) {
-                if (examName == null || examName.isBlank()) {
-                    Object value = metadata.get("examName");
-                    examName = value != null ? String.valueOf(value) : null;
-                }
-                if (examSubject == null || examSubject.isBlank()) {
-                    Object value = metadata.get("examSubject");
-                    examSubject = value != null ? String.valueOf(value) : null;
-                }
-                if (activityType == null || activityType.isBlank()) {
-                    Object value = metadata.get("examActivityType");
-                    activityType = value != null ? String.valueOf(value) : null;
-                }
-                if (timeLimit == null) {
-                    Object value = metadata.get("examTimeLimit");
-                    if (value instanceof Number numberValue) {
-                        timeLimit = numberValue.intValue();
-                    }
-                }
-                if (deadlineRaw == null || deadlineRaw.isBlank()) {
-                    Object value = metadata.get("examDeadline");
-                    deadlineRaw = value != null ? String.valueOf(value) : null;
-                }
-            }
-
-            List<ExamSubmission> studentSubs = submissionsByStudent.getOrDefault(studentEmail, new ArrayList<>());
-            final String initialExamName = examName;
-            final String initialExamSubject = examSubject;
-            ExamSubmission latestMatchingSubmission = studentSubs.stream()
-                .filter(sub -> initialExamName != null && sub.getExamName() != null && initialExamName.equalsIgnoreCase(sub.getExamName()))
-                .filter(sub -> initialExamSubject == null || initialExamSubject.isEmpty() ||
-                    (sub.getSubject() != null && initialExamSubject.equalsIgnoreCase(sub.getSubject())))
-                .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                .findFirst()
-                .orElse(null);
-
-            if (latestMatchingSubmission == null) {
-                latestMatchingSubmission = studentSubs.stream()
-                    .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, Comparator.nullsLast(Comparator.reverseOrder())))
-                    .findFirst()
-                    .orElse(null);
-            }
-
-            if (!hasAssignedExam && latestMatchingSubmission == null) {
-                continue;
-            }
-
-            if ((examName == null || examName.isBlank()) && latestMatchingSubmission != null) {
-                examName = latestMatchingSubmission.getExamName();
-            }
-            if ((examSubject == null || examSubject.isBlank()) && latestMatchingSubmission != null) {
-                examSubject = latestMatchingSubmission.getSubject();
-            }
-            if ((activityType == null || activityType.isBlank()) && latestMatchingSubmission != null) {
-                activityType = latestMatchingSubmission.getActivityType();
-            }
-
-            String lastSubmittedAt = "Not submitted";
-            if (latestMatchingSubmission != null && latestMatchingSubmission.getSubmittedAt() != null) {
-                lastSubmittedAt = latestMatchingSubmission.getSubmittedAt()
-                    .format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm"));
-            }
-
-            String deadlineDisplay = "Not set";
-            if (deadlineRaw != null && !deadlineRaw.trim().isEmpty()) {
-                try {
-                    deadlineDisplay = java.time.LocalDateTime.parse(deadlineRaw)
-                        .format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy HH:mm"));
-                } catch (Exception ignored) {
-                    deadlineDisplay = deadlineRaw;
-                }
-            }
-
-            Map<String, Object> row = new HashMap<>();
-            row.put("studentName", enrolled.getStudentName());
-            row.put("studentEmail", studentEmail);
-            row.put("examName", examName != null ? examName : "Assigned Exam");
-            row.put("subject", examSubject != null ? examSubject : subject.getSubjectName());
-            row.put("activityType", activityType != null ? activityType : "Exam");
-            int assignedQuestionCount = 0;
-            if (assignedQuestions != null) {
-                assignedQuestionCount = assignedQuestions.size();
-            }
-            row.put("questionCount", assignedQuestionCount > 0 ? assignedQuestionCount : (latestMatchingSubmission != null ? latestMatchingSubmission.getTotalQuestions() : 0));
-            row.put("timeLimit", timeLimit != null ? timeLimit : 0);
-            row.put("deadline", deadlineDisplay);
-            row.put("lastSubmittedAt", lastSubmittedAt);
-            row.put("isSubmitted", latestMatchingSubmission != null);
-            row.put("isUnlocked", unlockedExams.containsKey(studentEmail) && !unlockedExams.get(studentEmail).isEmpty());
-            distributionTracker.add(row);
-        }
-
-        distributionTracker.sort(Comparator.comparing(row -> ((String) row.get("studentName")), String.CASE_INSENSITIVE_ORDER));
-
-        List<Map<String, Object>> submittedStudents = distributionTracker.stream()
-            .filter(row -> Boolean.TRUE.equals(row.get("isSubmitted")))
-            .collect(Collectors.toList());
-
-        List<Map<String, Object>> notSubmittedStudents = distributionTracker.stream()
-            .filter(row -> !Boolean.TRUE.equals(row.get("isSubmitted")) && Boolean.TRUE.equals(row.get("isUnlocked")))
-            .collect(Collectors.toList());
-
-        List<Map<String, Object>> queuedStudents = distributionTracker.stream()
-            .filter(row -> !Boolean.TRUE.equals(row.get("isSubmitted")) && !Boolean.TRUE.equals(row.get("isUnlocked")))
-            .collect(Collectors.toList());
-
-        model.addAttribute("subject", subject);
-        model.addAttribute("submittedStudents", submittedStudents);
-        model.addAttribute("notSubmittedStudents", notSubmittedStudents);
-        model.addAttribute("queuedStudents", queuedStudents);
-        model.addAttribute("submittedCount", submittedStudents.size());
-        model.addAttribute("notSubmittedCount", notSubmittedStudents.size());
-        model.addAttribute("queuedCount", queuedStudents.size());
-        model.addAttribute("totalTrackedCount", distributionTracker.size());
-
-        return "subject-distribution-students";
     }
 
     @PostMapping("/distribute")
@@ -1314,13 +917,6 @@ public class HomepageController {
                                  @RequestParam(defaultValue = "20") Integer hardPercent,
                                  @RequestParam(required = false) Integer questionCount,
                                  HttpSession session) {
-        if (!isExamAllowedForSubject(subjectId, examId)) {
-            if (subjectId != null) {
-                return "redirect:/teacher/subject-classroom/" + subjectId;
-            }
-            return "redirect:/teacher/homepage";
-        }
-
         doDistributeForStudent(targetStudent, examId, timeLimit, deadline, easyPercent, mediumPercent, hardPercent, questionCount, session);
         if (subjectId != null) {
             return "redirect:/teacher/subject-classroom/" + subjectId;
@@ -1338,10 +934,6 @@ public class HomepageController {
                                   @RequestParam(defaultValue = "20") Integer hardPercent,
                                   @RequestParam(required = false) Integer questionCount,
                                   HttpSession session) {
-        if (!isExamAllowedForSubject(subjectId, examId)) {
-            return "redirect:/teacher/subject-classroom/" + subjectId;
-        }
-
         List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findBySubjectId(subjectId);
         for (EnrolledStudent student : enrolledStudents) {
             doDistributeForStudent(student.getStudentEmail(), examId, timeLimit, deadline,
@@ -1349,50 +941,6 @@ public class HomepageController {
         }
         System.out.println("Distributed to all " + enrolledStudents.size() + " students in subject " + subjectId);
         return "redirect:/teacher/subject-classroom/" + subjectId;
-    }
-
-    @PostMapping("/distribute-selected")
-    public String distributeToSelected(@RequestParam List<String> selectedStudents,
-                                       @RequestParam Long subjectId,
-                                       @RequestParam String examId,
-                                       @RequestParam Integer timeLimit,
-                                       @RequestParam String deadline,
-                                       @RequestParam(defaultValue = "30") Integer easyPercent,
-                                       @RequestParam(defaultValue = "50") Integer mediumPercent,
-                                       @RequestParam(defaultValue = "20") Integer hardPercent,
-                                       @RequestParam(required = false) Integer questionCount,
-                                       HttpSession session) {
-        if (!isExamAllowedForSubject(subjectId, examId)) {
-            return "redirect:/teacher/subject-classroom/" + subjectId;
-        }
-
-        for (String email : selectedStudents) {
-            doDistributeForStudent(email, examId, timeLimit, deadline,
-                                   easyPercent, mediumPercent, hardPercent, questionCount, session);
-        }
-        System.out.println("Distributed to " + selectedStudents.size() + " selected students in subject " + subjectId);
-        return "redirect:/teacher/subject-classroom/" + subjectId;
-    }
-
-    private boolean isExamAllowedForSubject(Long subjectId, String examId) {
-        UploadedExam selectedExam = uploadedExams.get(examId);
-        if (selectedExam == null) {
-            return false;
-        }
-
-        if (subjectId == null) {
-            return true;
-        }
-
-        Optional<Subject> subjectOpt = subjectRepository.findById(subjectId);
-        if (subjectOpt.isEmpty()) {
-            return false;
-        }
-
-        String classroomSubject = subjectOpt.get().getSubjectName();
-        return classroomSubject != null
-            && selectedExam.getSubject() != null
-            && classroomSubject.equalsIgnoreCase(selectedExam.getSubject());
     }
 
     private void doDistributeForStudent(String targetStudent, String examId, Integer timeLimit, String deadline,
@@ -1517,7 +1065,7 @@ public class HomepageController {
             metadata.put("examDeadline", deadline);
             distributedExamMetadata.put(targetStudent, metadata);
 
-            if (!studentAnswerKey.isEmpty()) {
+            if (studentAnswerKey != null && !studentAnswerKey.isEmpty()) {
                 answerKeyService.storeStudentAnswerKey(targetStudent, studentAnswerKey);
                 System.out.println("Stored answer key for " + targetStudent + " with " + studentAnswerKey.size() + " answers");
             }
@@ -1551,6 +1099,29 @@ public class HomepageController {
         }
         
         return "redirect:/teacher/homepage";
+    }
+    
+    /**
+     * Generate difficulty levels for questions based on IRT-inspired distribution
+     * Difficulty spread: 30% Easy, 50% Medium, 20% Hard
+     */
+    private List<String> generateQuestionDifficulties(int numQuestions, SecureRandom rand) {
+        List<String> difficulties = new ArrayList<>();
+        
+        // Calculate distribution
+        int numEasy = (int) Math.ceil(numQuestions * 0.30);
+        int numHard = (int) Math.ceil(numQuestions * 0.20);
+        int numMedium = numQuestions - numEasy - numHard;
+        
+        // Create difficulty pool
+        for (int i = 0; i < numEasy; i++) difficulties.add("Easy");
+        for (int i = 0; i < numMedium; i++) difficulties.add("Medium");
+        for (int i = 0; i < numHard; i++) difficulties.add("Hard");
+        
+        // Shuffle to randomize difficulty order
+        Collections.shuffle(difficulties, rand);
+        
+        return difficulties;
     }
     
     /**
@@ -1603,7 +1174,6 @@ public class HomepageController {
                                @RequestParam(value = "quizName", required = false) String quizName,
                                @RequestParam(value = "activityType", required = false) String activityType,
                                HttpSession session, Model model) throws Exception {
-        String processedExamId = null;
         if (examCreated != null && !examCreated.isEmpty()) {
             Map<Integer, String> answerKey = new HashMap<>();
             String fileName = examCreated.getOriginalFilename();
@@ -1657,7 +1227,6 @@ public class HomepageController {
             UploadedExam uploadedExam = new UploadedExam(examId, examName, examSubject, examActivityType, 
                                                          randomizedLines, difficultyLevels, finalAnswerKey);
             uploadedExams.put(examId, uploadedExam);
-            processedExamId = examId;
             model.addAttribute("processedExamId", examId);
             model.addAttribute("processedExamName", examName);
             
@@ -1675,11 +1244,7 @@ public class HomepageController {
             model.addAttribute("type", "exam");
             model.addAttribute("examUploaded", true);
         }
-
-        if (processedExamId != null) {
-            return "redirect:/teacher/processed-papers/" + processedExamId;
-        }
-        return "redirect:/teacher/processed-papers";
+        return "results";
     }
     
     /**
@@ -1701,7 +1266,7 @@ public class HomepageController {
      */
     private Map<Integer, String> parseAnswerKeyPdf(MultipartFile file) throws IOException {
         Map<Integer, String> answerKey = new HashMap<>();
-        List<String> lines;
+        List<String> lines = new ArrayList<>();
 
         try (PDDocument document = Loader.loadPDF(file.getBytes())) {
             PDFTextStripper stripper = new PDFTextStripper();
@@ -1875,6 +1440,7 @@ public class HomepageController {
             System.out.println("CSV First Line: " + headerLine);
             
             // Detect CSV format based on headers
+            String[] headerCols = parseCsvLine(headerLine);
             boolean hasHeader = headerLine.toLowerCase().contains("question") || 
                                headerLine.toLowerCase().contains("choice") ||
                                headerLine.toLowerCase().contains("answer") ||
@@ -1889,7 +1455,7 @@ public class HomepageController {
             
             // Process all rows using processCSVRow which handles both types
             // Process first line if it's not a header
-            if (!hasHeader && !headerLine.trim().isEmpty()) {
+            if (!hasHeader && headerLine != null && !headerLine.trim().isEmpty()) {
                 processCSVRow(headerLine, 1, questionBlocks, difficultyList, answerKey);
             }
             
@@ -2356,7 +1922,7 @@ public class HomepageController {
         }
         
         fields.add(currentField.toString());
-        return fields.toArray(String[]::new);
+        return fields.toArray(new String[0]);
     }
 
     private List<String> processFisherYates(MultipartFile file, HttpSession session, 
@@ -2816,40 +2382,41 @@ public class HomepageController {
         }
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (Document document = new Document()) {
-            PdfWriter.getInstance(document, baos);
-            document.open();
+        Document document = new Document();
+        PdfWriter.getInstance(document, baos);
+        document.open();
 
-            // Add title with better formatting
-            Paragraph title = new Paragraph("EXAMINATION PAPER");
-            title.setAlignment(Paragraph.ALIGN_CENTER);
-            document.add(title);
-            document.add(new Paragraph(" "));
-            
-            // Add student information section with proper spacing
-            Paragraph nameField = new Paragraph("NAME: ________________________________________");
-            document.add(nameField);
-            document.add(new Paragraph(" "));
-            
-            Paragraph dateField = new Paragraph("DATE: ____________________");
-            document.add(dateField);
-            document.add(new Paragraph(" "));
-            document.add(new Paragraph(" "));
+        // Add title with better formatting
+        Paragraph title = new Paragraph("EXAMINATION PAPER");
+        title.setAlignment(Paragraph.ALIGN_CENTER);
+        document.add(title);
+        document.add(new Paragraph(" "));
+        
+        // Add student information section with proper spacing
+        Paragraph nameField = new Paragraph("NAME: ________________________________________");
+        document.add(nameField);
+        document.add(new Paragraph(" "));
+        
+        Paragraph dateField = new Paragraph("DATE: ____________________");
+        document.add(dateField);
+        document.add(new Paragraph(" "));
+        document.add(new Paragraph(" "));
 
-            // Add questions
-            int questionNumber = 1;
-            for (String question : exam) {
-                // Clean up question text: remove [TEXT_INPUT] and difficulty markers
-                String cleanQuestion = question
-                    .replaceAll("\\[TEXT_INPUT\\]", "")
-                    .replaceAll("\\[(Easy|Medium|Hard|Essay|Open-Ended|Open Ended)\\]", "")
-                    .trim();
-                
-                document.add(new Paragraph(questionNumber + ". " + cleanQuestion.replace("\n", "\n   ")));
-                document.add(new Paragraph("\n"));
-                questionNumber++;
-            }
+        // Add questions
+        int questionNumber = 1;
+        for (String question : exam) {
+            // Clean up question text: remove [TEXT_INPUT] and difficulty markers
+            String cleanQuestion = question
+                .replaceAll("\\[TEXT_INPUT\\]", "")
+                .replaceAll("\\[(Easy|Medium|Hard|Essay|Open-Ended|Open Ended)\\]", "")
+                .trim();
+            
+            document.add(new Paragraph(questionNumber + ". " + cleanQuestion.replace("\n", "\n   ")));
+            document.add(new Paragraph("\n"));
+            questionNumber++;
         }
+
+        document.close();
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
@@ -2870,59 +2437,59 @@ public class HomepageController {
         }
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (XWPFDocument document = new XWPFDocument()) {
+        XWPFDocument document = new XWPFDocument();
 
-            // Add title
-            XWPFParagraph titlePara = document.createParagraph();
-            titlePara.setAlignment(org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER);
-            XWPFRun titleRun = titlePara.createRun();
-            titleRun.setText("EXAMINATION PAPER");
-            titleRun.setBold(true);
-            titleRun.setFontSize(18);
+        // Add title
+        XWPFParagraph titlePara = document.createParagraph();
+        titlePara.setAlignment(org.apache.poi.xwpf.usermodel.ParagraphAlignment.CENTER);
+        XWPFRun titleRun = titlePara.createRun();
+        titleRun.setText("EXAMINATION PAPER");
+        titleRun.setBold(true);
+        titleRun.setFontSize(18);
 
-            // Add blank line
-            document.createParagraph().createRun().addBreak();
+        // Add blank line
+        document.createParagraph().createRun().addBreak();
+        
+        // Add NAME field
+        XWPFParagraph namePara = document.createParagraph();
+        XWPFRun nameRun = namePara.createRun();
+        nameRun.setText("NAME: ________________________________________");
+        nameRun.addBreak();
+        
+        // Add DATE field
+        XWPFParagraph datePara = document.createParagraph();
+        XWPFRun dateRun = datePara.createRun();
+        dateRun.setText("DATE: ____________________");
+        dateRun.addBreak();
+        dateRun.addBreak();
+
+        // Add questions
+        int questionNumber = 1;
+        for (String question : exam) {
+            // Clean up question text: remove [TEXT_INPUT] and difficulty markers
+            String cleanQuestion = question
+                .replaceAll("\\[TEXT_INPUT\\]", "")
+                .replaceAll("\\[(Easy|Medium|Hard|Essay|Open-Ended|Open Ended)\\]", "")
+                .trim();
             
-            // Add NAME field
-            XWPFParagraph namePara = document.createParagraph();
-            XWPFRun nameRun = namePara.createRun();
-            nameRun.setText("NAME: ________________________________________");
-            nameRun.addBreak();
+            XWPFParagraph questionPara = document.createParagraph();
+            XWPFRun questionRun = questionPara.createRun();
             
-            // Add DATE field
-            XWPFParagraph datePara = document.createParagraph();
-            XWPFRun dateRun = datePara.createRun();
-            dateRun.setText("DATE: ____________________");
-            dateRun.addBreak();
-            dateRun.addBreak();
-
-            // Add questions
-            int questionNumber = 1;
-            for (String question : exam) {
-                // Clean up question text: remove [TEXT_INPUT] and difficulty markers
-                String cleanQuestion = question
-                    .replaceAll("\\[TEXT_INPUT\\]", "")
-                    .replaceAll("\\[(Easy|Medium|Hard|Essay|Open-Ended|Open Ended)\\]", "")
-                    .trim();
-                
-                XWPFParagraph questionPara = document.createParagraph();
-                XWPFRun questionRun = questionPara.createRun();
-                
-                String[] lines = cleanQuestion.split("\n");
-                questionRun.setText(questionNumber + ". " + lines[0]);
+            String[] lines = cleanQuestion.split("\n");
+            questionRun.setText(questionNumber + ". " + lines[0]);
+            questionRun.addBreak();
+            
+            for (int i = 1; i < lines.length; i++) {
+                questionRun.setText("   " + lines[i]);
                 questionRun.addBreak();
-                
-                for (int i = 1; i < lines.length; i++) {
-                    questionRun.setText("   " + lines[i]);
-                    questionRun.addBreak();
-                }
-                
-                questionRun.addBreak();
-                questionNumber++;
             }
-
-            document.write(baos);
+            
+            questionRun.addBreak();
+            questionNumber++;
         }
+
+        document.write(baos);
+        document.close();
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"));
@@ -2945,9 +2512,9 @@ public class HomepageController {
         }
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (Document document = new Document()) {
-            PdfWriter.getInstance(document, baos);
-            document.open();
+        Document document = new Document();
+        PdfWriter.getInstance(document, baos);
+        document.open();
 
         // --- Fonts ---
         Font titleFont    = new Font(Font.HELVETICA, 16, Font.BOLD);
@@ -2986,7 +2553,7 @@ public class HomepageController {
         document.add(divider);
 
         // --- Answer key body ---
-            for (int i = 0; i < exam.getQuestions().size(); i++) {
+        for (int i = 0; i < exam.getQuestions().size(); i++) {
             // ── Q-number + difficulty on its own bold line ──
             Paragraph qHeader = new Paragraph();
             qHeader.add(new Chunk(
@@ -3010,8 +2577,9 @@ public class HomepageController {
             answerPara.setIndentationLeft(16f);
             answerPara.setSpacingAfter(4f);
             document.add(answerPara);
-            }
         }
+
+        document.close();
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
@@ -3078,7 +2646,7 @@ public class HomepageController {
         }
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (XWPFDocument document = new XWPFDocument()) {
+        XWPFDocument document = new XWPFDocument();
 
         // Add title
         XWPFParagraph titlePara = document.createParagraph();
@@ -3103,7 +2671,7 @@ public class HomepageController {
         metaRun.addBreak();
 
         // Add questions with answers
-            for (int i = 0; i < exam.getQuestions().size(); i++) {
+        for (int i = 0; i < exam.getQuestions().size(); i++) {
             XWPFParagraph qPara = document.createParagraph();
             XWPFRun qRun = qPara.createRun();
             qRun.setText("Question " + (i + 1) + ":");
@@ -3125,10 +2693,10 @@ public class HomepageController {
             ansRun.setBold(true);
             ansRun.addBreak();
             ansRun.addBreak();
-            }
-
-            document.write(baos);
         }
+
+        document.write(baos);
+        document.close();
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.wordprocessingml.document"));
@@ -3188,7 +2756,7 @@ public class HomepageController {
     
     @GetMapping("/download-result/{submissionId}")
     public ResponseEntity<byte[]> downloadIndividualResult(@PathVariable Long submissionId) throws IOException {
-        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(Objects.requireNonNull(submissionId));
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
         
         if (submissionOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -3269,9 +2837,9 @@ public class HomepageController {
         }
 
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        try (Document document = new Document()) {
-            PdfWriter.getInstance(document, baos);
-            document.open();
+        Document document = new Document();
+        PdfWriter.getInstance(document, baos);
+        document.open();
 
         // Add title
         Paragraph title = new Paragraph("ANSWER KEY - CONFIDENTIAL");
@@ -3285,14 +2853,15 @@ public class HomepageController {
         List<Integer> sortedKeys = new ArrayList<>(answerKey.keySet());
         Collections.sort(sortedKeys);
         
-            for (Integer questionNum : sortedKeys) {
-                String answer = answerKey.get(questionNum);
-                document.add(new Paragraph("Question " + questionNum + ": " + answer));
-            }
-
-            document.add(new Paragraph("\n\n"));
-            document.add(new Paragraph("Total Questions: " + answerKey.size()));
+        for (Integer questionNum : sortedKeys) {
+            String answer = answerKey.get(questionNum);
+            document.add(new Paragraph("Question " + questionNum + ": " + answer));
         }
+
+        document.add(new Paragraph("\n\n"));
+        document.add(new Paragraph("Total Questions: " + answerKey.size()));
+
+        document.close();
 
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_PDF);
@@ -3311,22 +2880,50 @@ public class HomepageController {
     }
     
     /**
-     * Redirect old grade-submissions URL to view-results
+     * Teacher grading page - view submissions needing manual grading
      */
     @GetMapping("/grade-submissions")
-    public String gradeSubmissions() {
-        return "redirect:/teacher/subjects";
+    public String gradeSubmissions(Model model, java.security.Principal principal) {
+        String teacherEmail = principal.getName();
+        
+        // Get all submissions from enrolled students
+        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
+        List<String> studentEmails = enrolledStudents.stream()
+                .map(EnrolledStudent::getStudentEmail)
+                .collect(Collectors.toList());
+        
+        // Get all submissions for these students
+        List<ExamSubmission> allSubmissions = examSubmissionRepository.findAll().stream()
+                .filter(s -> studentEmails.contains(s.getStudentEmail()))
+                .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, 
+                                            Comparator.nullsLast(Comparator.reverseOrder())))
+                .collect(Collectors.toList());
+        
+        // Separate pending and graded
+        List<ExamSubmission> pendingGrading = allSubmissions.stream()
+                .filter(s -> !s.isGraded())
+                .collect(Collectors.toList());
+        
+        List<ExamSubmission> graded = allSubmissions.stream()
+                .filter(ExamSubmission::isGraded)
+                .collect(Collectors.toList());
+        
+        model.addAttribute("pendingGrading", pendingGrading);
+        model.addAttribute("gradedSubmissions", graded);
+        model.addAttribute("totalPending", pendingGrading.size());
+        
+        return "teacher-grade-submissions";
     }
     
     /**
-     * View specific submission for gradingZ
+     * View specific submission for grading
      */
     @GetMapping("/grade/{submissionId}")
     public String gradeSubmission(@PathVariable Long submissionId, Model model) {
-        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(Objects.requireNonNull(submissionId));
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
         
         if (submissionOpt.isEmpty()) {
-            return "redirect:/teacher/subjects";
+            return "redirect:/teacher/grade-submissions";
         }
         
         ExamSubmission submission = submissionOpt.get();
@@ -3340,10 +2937,10 @@ public class HomepageController {
                     String[] parts = detail.split("\\|");
                     if (parts.length >= 4) {
                         Map<String, Object> detailMap = new HashMap<>();
-                        detailMap.put("questionNumber", Integer.valueOf(parts[0]));
+                        detailMap.put("questionNumber", Integer.parseInt(parts[0]));
                         detailMap.put("studentAnswer", parts[1]);
                         detailMap.put("correctAnswer", parts[2]);
-                        detailMap.put("isCorrect", Boolean.valueOf(parts[3]));
+                        detailMap.put("isCorrect", Boolean.parseBoolean(parts[3]));
                         
                         // Check if it's a text input question (might need manual grading)
                         boolean isTextInput = parts[1].length() > 50 || !parts[1].matches("[A-D]\\).+");
@@ -3364,8 +2961,7 @@ public class HomepageController {
         model.addAttribute("submission", submission);
         model.addAttribute("answerDetails", answerDetails);
         model.addAttribute("textInputCount", textInputCount);
-        Integer currentManualScore = submission.getManualScore();
-        model.addAttribute("currentManualScore", currentManualScore != null ? currentManualScore : Integer.valueOf(0));
+        model.addAttribute("currentManualScore", submission.getManualScore() != null ? submission.getManualScore() : 0);
         
         return "teacher-grade-exam";
     }
@@ -3377,7 +2973,7 @@ public class HomepageController {
     public String finalizeGrade(@RequestParam Long submissionId,
                                @RequestParam(required = false, defaultValue = "0") Integer manualScore,
                                @RequestParam(required = false) String teacherComments) {
-        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(Objects.requireNonNull(submissionId));
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
         
         if (submissionOpt.isPresent()) {
             ExamSubmission submission = submissionOpt.get();
@@ -3400,7 +2996,7 @@ public class HomepageController {
             System.out.println("   Final Percentage: " + String.format("%.2f%%", newPercentage));
         }
         
-        return "redirect:/teacher/subjects";
+        return "redirect:/teacher/grade-submissions";
     }
     
     /**
@@ -3408,7 +3004,84 @@ public class HomepageController {
      */
     @GetMapping("/view-students-list")
     public String viewStudentsList(Model model, java.security.Principal principal) {
-        return "redirect:/teacher/subjects";
+        String teacherEmail = principal.getName();
+
+        // Get all enrolled students for this teacher
+        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
+
+        // Create student list with statistics + full submission list + aggregated analytics
+        List<Map<String, Object>> studentList = new ArrayList<>();
+
+        for (EnrolledStudent enrolled : enrolledStudents) {
+            String studentEmail = enrolled.getStudentEmail();
+
+            // Get all submissions for this student, newest first
+            List<ExamSubmission> submissions = examSubmissionRepository.findByStudentEmail(studentEmail)
+                    .stream()
+                    .sorted((a, b) -> {
+                        if (a.getSubmittedAt() == null && b.getSubmittedAt() == null) return 0;
+                        if (a.getSubmittedAt() == null) return 1;
+                        if (b.getSubmittedAt() == null) return -1;
+                        return b.getSubmittedAt().compareTo(a.getSubmittedAt());
+                    })
+                    .collect(Collectors.toList());
+
+            // Calculate grade statistics
+            int totalSubmissions = submissions.size();
+            long gradedCount   = submissions.stream().filter(ExamSubmission::isGraded).count();
+            long pendingCount  = submissions.stream().filter(s -> !s.isGraded()).count();
+            long releasedCount = submissions.stream().filter(ExamSubmission::isResultsReleased).count();
+
+            double averageScore = 0.0;
+            if (gradedCount > 0) {
+                averageScore = submissions.stream()
+                        .filter(ExamSubmission::isGraded)
+                        .mapToDouble(ExamSubmission::getFinalPercentage)
+                        .average()
+                        .orElse(0.0);
+            }
+
+            // Aggregate Random Forest analytics from graded submissions
+            List<ExamSubmission> gradedSubs = submissions.stream()
+                    .filter(ExamSubmission::isGraded)
+                    .collect(Collectors.toList());
+
+            double avgTopicMastery        = gradedSubs.stream().mapToDouble(ExamSubmission::getTopicMastery).average().orElse(0.0);
+            double avgDifficultyResilience = gradedSubs.stream().mapToDouble(ExamSubmission::getDifficultyResilience).average().orElse(0.0);
+            double avgAccuracy            = gradedSubs.stream().mapToDouble(ExamSubmission::getAccuracy).average().orElse(0.0);
+            double avgTimeEfficiency      = gradedSubs.stream().mapToDouble(ExamSubmission::getTimeEfficiency).average().orElse(0.0);
+            double avgConfidence          = gradedSubs.stream().mapToDouble(ExamSubmission::getConfidence).average().orElse(0.0);
+
+            // Most recent performance category (from latest graded submission)
+            String latestCategory = gradedSubs.isEmpty() ? "N/A"
+                    : (gradedSubs.get(0).getPerformanceCategory() != null
+                       ? gradedSubs.get(0).getPerformanceCategory() : "N/A");
+
+            Map<String, Object> studentData = new HashMap<>();
+            studentData.put("studentEmail", studentEmail);
+            studentData.put("studentName", enrolled.getStudentName());
+            studentData.put("totalSubmissions", totalSubmissions);
+            studentData.put("gradedCount", gradedCount);
+            studentData.put("pendingCount", pendingCount);
+            studentData.put("releasedCount", releasedCount);
+            studentData.put("averageScore", String.format("%.1f", averageScore));
+            studentData.put("submissions", submissions);
+            // Analytics
+            studentData.put("avgTopicMastery",         String.format("%.1f", avgTopicMastery));
+            studentData.put("avgDifficultyResilience",  String.format("%.1f", avgDifficultyResilience));
+            studentData.put("avgAccuracy",              String.format("%.1f", avgAccuracy));
+            studentData.put("avgTimeEfficiency",        String.format("%.1f", avgTimeEfficiency));
+            studentData.put("avgConfidence",            String.format("%.1f", avgConfidence));
+            studentData.put("latestCategory",           latestCategory);
+            studentData.put("hasAnalytics",             !gradedSubs.isEmpty());
+
+            studentList.add(studentData);
+        }
+
+        model.addAttribute("studentList", studentList);
+        model.addAttribute("totalStudents", studentList.size());
+
+        return "teacher-view-students-list";
     }
     
     /**
@@ -3416,7 +3089,62 @@ public class HomepageController {
      */
     @GetMapping("/view-student-results/{email}")
     public String viewStudentResults(@PathVariable String email, Model model, java.security.Principal principal) {
-        return "redirect:/teacher/subjects";
+        String teacherEmail = principal.getName();
+        
+        // Verify this student is enrolled with this teacher
+        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
+        boolean isEnrolled = enrolledStudents.stream()
+                .anyMatch(e -> e.getStudentEmail().equals(email));
+        
+        if (!isEnrolled) {
+            return "redirect:/teacher/view-students-list";
+        }
+        
+        // Get all submissions for this student
+        List<ExamSubmission> submissions = examSubmissionRepository.findByStudentEmail(email)
+                .stream()
+                .sorted((a, b) -> b.getSubmittedAt().compareTo(a.getSubmittedAt()))
+                .collect(Collectors.toList());
+        
+        // Calculate statistics
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalSubmissions", submissions.size());
+        stats.put("gradedCount", submissions.stream().filter(ExamSubmission::isGraded).count());
+        stats.put("pendingCount", submissions.stream().filter(s -> !s.isGraded()).count());
+        stats.put("releasedCount", submissions.stream().filter(ExamSubmission::isResultsReleased).count());
+        
+        if (!submissions.isEmpty()) {
+            double avgScore = submissions.stream()
+                    .filter(ExamSubmission::isGraded)
+                    .mapToInt(ExamSubmission::getFinalScore)
+                    .average()
+                    .orElse(0.0);
+            double avgPercentage = submissions.stream()
+                    .filter(ExamSubmission::isGraded)
+                    .mapToDouble(ExamSubmission::getFinalPercentage)
+                    .average()
+                    .orElse(0.0);
+            stats.put("averageScore", String.format("%.1f", avgScore));
+            stats.put("averagePercentage", String.format("%.1f", avgPercentage));
+        } else {
+            stats.put("averageScore", "0.0");
+            stats.put("averagePercentage", "0.0");
+        }
+        
+        // Find student name
+        String studentName = enrolledStudents.stream()
+                .filter(e -> e.getStudentEmail().equals(email))
+                .map(EnrolledStudent::getStudentName)
+                .findFirst()
+                .orElse(email);
+        
+        model.addAttribute("studentEmail", email);
+        model.addAttribute("studentName", studentName);
+        model.addAttribute("submissions", submissions);
+        model.addAttribute("stats", stats);
+        model.addAttribute("studentSummaryList", new ArrayList<>());
+        
+        return "teacher-view-results";
     }
     
     /**
@@ -3429,94 +3157,190 @@ public class HomepageController {
                              @RequestParam(required = false) String statusFilter,
                              @RequestParam(required = false) String studentFilter,
                              java.security.Principal principal) {
-        return "redirect:/teacher/subjects";
-    }
-
-    @GetMapping("/processed-papers")
-    public String viewProcessedPapers(@RequestParam(required = false) String search, Model model) {
-        List<UploadedExam> processedExams = new ArrayList<>(uploadedExams.values());
-        processedExams.sort(Comparator.comparing(UploadedExam::getUploadedAt,
-                                                 Comparator.nullsLast(Comparator.reverseOrder())));
-
-        if (search != null && !search.trim().isEmpty()) {
-            String query = search.trim().toLowerCase();
-            processedExams = processedExams.stream()
-                .filter(exam -> {
-                    boolean inHeader = (exam.getExamName() != null && exam.getExamName().toLowerCase().contains(query))
-                        || (exam.getSubject() != null && exam.getSubject().toLowerCase().contains(query))
-                        || (exam.getActivityType() != null && exam.getActivityType().toLowerCase().contains(query));
-
-                    boolean inQuestions = exam.getQuestions() != null && exam.getQuestions().stream()
-                        .anyMatch(q -> q != null && q.toLowerCase().contains(query));
-
-                    boolean inAnswers = exam.getAnswerKey() != null && exam.getAnswerKey().values().stream()
-                        .anyMatch(a -> a != null && a.toLowerCase().contains(query));
-
-                    return inHeader || inQuestions || inAnswers;
-                })
+        String teacherEmail = principal.getName();
+        
+        // Get all enrolled students for this teacher
+        List<EnrolledStudent> enrolledStudents = enrolledStudentRepository.findByTeacherEmail(teacherEmail);
+        List<String> studentEmails = enrolledStudents.stream()
+                .map(EnrolledStudent::getStudentEmail)
                 .collect(Collectors.toList());
-        }
-
-        model.addAttribute("processedExams", processedExams);
-        model.addAttribute("search", search != null ? search : "");
-        model.addAttribute("totalProcessed", processedExams.size());
-        return "teacher-processed-papers";
-    }
-
-    @GetMapping("/processed-papers/{examId}")
-    public String viewProcessedPaperDetail(@PathVariable String examId,
-                                           @RequestParam(required = false) String questionSearch,
-                                           Model model) {
-        UploadedExam exam = uploadedExams.get(examId);
-        if (exam == null) {
-            return "redirect:/teacher/processed-papers";
-        }
-
-        List<Map<String, Object>> questionRows = new ArrayList<>();
-        List<String> questions = exam.getQuestions() != null ? exam.getQuestions() : new ArrayList<>();
-        List<String> difficulties = exam.getDifficulties() != null ? exam.getDifficulties() : new ArrayList<>();
-        Map<Integer, String> answerKey = exam.getAnswerKey() != null ? exam.getAnswerKey() : new HashMap<>();
-
-        for (int i = 0; i < questions.size(); i++) {
-            int number = i + 1;
-            String block = questions.get(i) != null ? questions.get(i) : "";
-            String prompt = block.split("\\r?\\n", 2)[0]
-                .replaceAll("(?i)\\[(easy|medium|hard|essay|open-ended|open ended|text_input)\\]", "")
-                .replaceAll("(?i)\\[IMG:[^\\]]+\\]", "")
-                .trim();
-
-            String difficulty = i < difficulties.size() ? difficulties.get(i) : "Medium";
-            String answer = answerKey.get(number);
-            if (answer == null) {
-                answer = answerKey.get(i);
-            }
-            if (answer == null || answer.trim().isEmpty()) {
-                answer = "Not Set";
-            }
-
-            Map<String, Object> row = new HashMap<>();
-            row.put("number", number);
-            row.put("question", prompt);
-            row.put("difficulty", difficulty);
-            row.put("answer", answer);
-            questionRows.add(row);
-        }
-
-        if (questionSearch != null && !questionSearch.trim().isEmpty()) {
-            String query = questionSearch.trim().toLowerCase();
-            questionRows = questionRows.stream()
-                .filter(row -> {
-                    String qText = String.valueOf(row.get("question")).toLowerCase();
-                    String aText = String.valueOf(row.get("answer")).toLowerCase();
-                    return qText.contains(query) || aText.contains(query);
-                })
+        
+        // Get all submissions for enrolled students
+        List<ExamSubmission> allSubmissions = examSubmissionRepository.findAll().stream()
+                .filter(s -> studentEmails.contains(s.getStudentEmail()))
+                .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt, 
+                                            Comparator.nullsLast(Comparator.reverseOrder())))
                 .collect(Collectors.toList());
+        
+        // Apply filters
+        List<ExamSubmission> filteredSubmissions = allSubmissions;
+        
+        if (examFilter != null && !examFilter.isEmpty()) {
+            filteredSubmissions = filteredSubmissions.stream()
+                    .filter(s -> s.getExamName().equalsIgnoreCase(examFilter))
+                    .collect(Collectors.toList());
+        }
+        
+        if (subjectFilter != null && !subjectFilter.isEmpty()) {
+            filteredSubmissions = filteredSubmissions.stream()
+                    .filter(s -> s.getSubject().equalsIgnoreCase(subjectFilter))
+                    .collect(Collectors.toList());
+        }
+        
+        if (studentFilter != null && !studentFilter.isEmpty()) {
+            filteredSubmissions = filteredSubmissions.stream()
+                    .filter(s -> s.getStudentEmail().equalsIgnoreCase(studentFilter))
+                    .collect(Collectors.toList());
+        }
+        
+        if (statusFilter != null && !statusFilter.isEmpty()) {
+            switch (statusFilter.toLowerCase()) {
+                case "graded":
+                    filteredSubmissions = filteredSubmissions.stream()
+                            .filter(ExamSubmission::isGraded)
+                            .collect(Collectors.toList());
+                    break;
+                case "pending":
+                    filteredSubmissions = filteredSubmissions.stream()
+                            .filter(s -> !s.isGraded())
+                            .collect(Collectors.toList());
+                    break;
+                case "released":
+                    filteredSubmissions = filteredSubmissions.stream()
+                            .filter(ExamSubmission::isResultsReleased)
+                            .collect(Collectors.toList());
+                    break;
+                case "unreleased":
+                    filteredSubmissions = filteredSubmissions.stream()
+                            .filter(s -> !s.isResultsReleased())
+                            .collect(Collectors.toList());
+                    break;
+            }
+        }
+        
+        // Calculate statistics
+        Map<String, Object> stats = new HashMap<>();
+        stats.put("totalSubmissions", filteredSubmissions.size());
+        stats.put("gradedCount", filteredSubmissions.stream().filter(ExamSubmission::isGraded).count());
+        stats.put("pendingCount", filteredSubmissions.stream().filter(s -> !s.isGraded()).count());
+        stats.put("releasedCount", filteredSubmissions.stream().filter(ExamSubmission::isResultsReleased).count());
+        
+        if (!filteredSubmissions.isEmpty()) {
+            double avgScore = filteredSubmissions.stream()
+                    .filter(ExamSubmission::isGraded)
+                    .mapToInt(ExamSubmission::getFinalScore)
+                    .average()
+                    .orElse(0.0);
+            double avgPercentage = filteredSubmissions.stream()
+                    .filter(ExamSubmission::isGraded)
+                    .mapToDouble(ExamSubmission::getFinalPercentage)
+                    .average()
+                    .orElse(0.0);
+            stats.put("averageScore", String.format("%.1f", avgScore));
+            stats.put("averagePercentage", String.format("%.1f", avgPercentage));
+        } else {
+            stats.put("averageScore", "0.0");
+            stats.put("averagePercentage", "0.0");
+        }
+        
+        // Get unique exams, subjects, and students for filter dropdowns
+        List<String> uniqueExams = allSubmissions.stream()
+                .map(ExamSubmission::getExamName)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+        
+        List<String> uniqueSubjects = allSubmissions.stream()
+                .map(ExamSubmission::getSubject)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+        
+        List<String> uniqueStudents = allSubmissions.stream()
+                .map(ExamSubmission::getStudentEmail)
+                .distinct()
+                .sorted()
+                .collect(Collectors.toList());
+        
+        model.addAttribute("submissions", filteredSubmissions);
+        model.addAttribute("stats", stats);
+        model.addAttribute("uniqueExams", uniqueExams);
+        model.addAttribute("uniqueSubjects", uniqueSubjects);
+        model.addAttribute("uniqueStudents", uniqueStudents);
+        model.addAttribute("examFilter", examFilter);
+        model.addAttribute("subjectFilter", subjectFilter);
+        model.addAttribute("statusFilter", statusFilter);
+        model.addAttribute("studentFilter", studentFilter);
+
+        // Build per-student summary for the Students tab
+        List<Map<String, Object>> studentSummaryList = new ArrayList<>();
+        Map<String, List<ExamSubmission>> submissionsByStudent = allSubmissions.stream()
+                .collect(Collectors.groupingBy(ExamSubmission::getStudentEmail));
+
+        for (EnrolledStudent enrolled : enrolledStudents) {
+            String sEmail = enrolled.getStudentEmail();
+            List<ExamSubmission> subs = submissionsByStudent.getOrDefault(sEmail, new ArrayList<>());
+
+            long gradedCnt   = subs.stream().filter(ExamSubmission::isGraded).count();
+            long pendingCnt  = subs.stream().filter(s -> !s.isGraded()).count();
+            long releasedCnt = subs.stream().filter(ExamSubmission::isResultsReleased).count();
+            double avgPct    = subs.stream()
+                    .filter(ExamSubmission::isGraded)
+                    .mapToDouble(ExamSubmission::getFinalPercentage)
+                    .average()
+                    .orElse(0.0);
+
+            // Analytics averages (graded submissions only)
+            List<ExamSubmission> gradedSubs = subs.stream()
+                    .filter(ExamSubmission::isGraded).collect(Collectors.toList());
+            double avgTopicMastery       = gradedSubs.stream().mapToDouble(ExamSubmission::getTopicMastery).average().orElse(0.0);
+            double avgAccuracy           = gradedSubs.stream().mapToDouble(ExamSubmission::getAccuracy).average().orElse(0.0);
+            double avgConfidence         = gradedSubs.stream().mapToDouble(ExamSubmission::getConfidence).average().orElse(0.0);
+            double avgTimeEfficiency     = gradedSubs.stream().mapToDouble(ExamSubmission::getTimeEfficiency).average().orElse(0.0);
+            double avgDifficultyRes      = gradedSubs.stream().mapToDouble(ExamSubmission::getDifficultyResilience).average().orElse(0.0);
+            String latestCategory        = gradedSubs.isEmpty() ? "N/A" :
+                    gradedSubs.get(gradedSubs.size() - 1).getPerformanceCategory() != null ?
+                    gradedSubs.get(gradedSubs.size() - 1).getPerformanceCategory() : "N/A";
+
+            Map<String, Object> entry = new HashMap<>();
+            entry.put("studentEmail", sEmail);
+            entry.put("studentName",  enrolled.getStudentName());
+            entry.put("subjectName",  enrolled.getSubjectName());
+            entry.put("totalSubmissions", subs.size());
+            entry.put("gradedCount",   gradedCnt);
+            entry.put("pendingCount",  pendingCnt);
+            entry.put("releasedCount", releasedCnt);
+            entry.put("averageScore",  String.format("%.1f", avgPct));
+            entry.put("submissions",   subs);
+            // Analytics
+            entry.put("hasAnalytics",             !gradedSubs.isEmpty());
+            entry.put("avgTopicMastery",           String.format("%.1f", avgTopicMastery));
+            entry.put("avgAccuracy",               String.format("%.1f", avgAccuracy));
+            entry.put("avgConfidence",             String.format("%.1f", avgConfidence));
+            entry.put("avgTimeEfficiency",         String.format("%.1f", avgTimeEfficiency));
+            entry.put("avgDifficultyResilience",   String.format("%.1f", avgDifficultyRes));
+            entry.put("latestCategory",            latestCategory);
+            studentSummaryList.add(entry);
         }
 
-        model.addAttribute("exam", exam);
-        model.addAttribute("questionRows", questionRows);
-        model.addAttribute("questionSearch", questionSearch != null ? questionSearch : "");
-        return "teacher-processed-paper-detail";
+        // Sort: students with most submissions first
+        studentSummaryList.sort((a, b) ->
+                Integer.compare((Integer) b.get("totalSubmissions"), (Integer) a.get("totalSubmissions")));
+
+        model.addAttribute("studentSummaryList", studentSummaryList);
+
+        // Grade tab data — pending vs graded (same data source, already filtered to enrolled students)
+        List<ExamSubmission> pendingGrading = allSubmissions.stream()
+                .filter(s -> !s.isGraded())
+                .collect(Collectors.toList());
+        List<ExamSubmission> gradedSubmissions = allSubmissions.stream()
+                .filter(ExamSubmission::isGraded)
+                .collect(Collectors.toList());
+        model.addAttribute("pendingGrading", pendingGrading);
+        model.addAttribute("gradedSubmissions", gradedSubmissions);
+        model.addAttribute("totalPending", pendingGrading.size());
+
+        return "teacher-view-results";
     }
     
     /**
@@ -3524,10 +3348,10 @@ public class HomepageController {
      */
     @GetMapping("/view-result/{submissionId}")
     public String viewStudentResult(@PathVariable Long submissionId, Model model) {
-        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(Objects.requireNonNull(submissionId));
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
         
         if (submissionOpt.isEmpty()) {
-            return "redirect:/teacher/subjects";
+            return "redirect:/teacher/view-results";
         }
         
         ExamSubmission submission = submissionOpt.get();
@@ -3541,10 +3365,10 @@ public class HomepageController {
                     String[] parts = detail.split("\\|");
                     if (parts.length >= 4) {
                         Map<String, Object> detailMap = new HashMap<>();
-                        detailMap.put("questionNumber", Integer.valueOf(parts[0]));
+                        detailMap.put("questionNumber", Integer.parseInt(parts[0]));
                         detailMap.put("studentAnswer", parts[1]);
                         detailMap.put("correctAnswer", parts[2]);
-                        detailMap.put("isCorrect", Boolean.valueOf(parts[3]));
+                        detailMap.put("isCorrect", Boolean.parseBoolean(parts[3]));
                         answerDetails.add(detailMap);
                     }
                 }
@@ -3573,7 +3397,7 @@ public class HomepageController {
     @PostMapping("/toggle-result-release/{submissionId}")
     public String toggleResultRelease(@PathVariable Long submissionId, 
                                       @RequestParam(required = false) String redirectTo) {
-        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(Objects.requireNonNull(submissionId));
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
         
         if (submissionOpt.isPresent()) {
             ExamSubmission submission = submissionOpt.get();
@@ -3594,7 +3418,7 @@ public class HomepageController {
         if ("detail".equals(redirectTo)) {
             return "redirect:/teacher/view-result/" + submissionId;
         }
-        return "redirect:/teacher/subjects";
+        return "redirect:/teacher/view-results";
     }
     
     /**
@@ -3645,7 +3469,7 @@ public class HomepageController {
      */
     @GetMapping("/performance-analytics/{submissionId}")
     public String viewTeacherPerformanceAnalytics(@PathVariable Long submissionId, Model model) {
-        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(Objects.requireNonNull(submissionId));
+        Optional<ExamSubmission> submissionOpt = examSubmissionRepository.findById(submissionId);
         
         if (submissionOpt.isEmpty()) {
             model.addAttribute("error", "Submission not found");
