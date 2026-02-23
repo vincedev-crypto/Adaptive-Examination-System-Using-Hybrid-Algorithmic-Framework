@@ -203,6 +203,125 @@ public class StudentController {
         return "student-all-attempts";
     }
 
+    @GetMapping("/classroom/{subjectId}")
+    public String studentClassroom(@PathVariable Long subjectId, HttpSession session,
+                                   Model model, java.security.Principal principal) {
+        String studentEmail = principal.getName();
+
+        // Verify enrollment
+        List<EnrolledStudent> enrollments = enrolledStudentRepository.findByStudentEmail(studentEmail);
+        boolean enrolled = enrollments.stream()
+                .anyMatch(e -> subjectId.equals(e.getSubjectId()));
+        if (!enrolled) {
+            return "redirect:/student/dashboard";
+        }
+
+        // Load subject details
+        Optional<Subject> subjectOpt = subjectRepository.findById(subjectId);
+        if (subjectOpt.isEmpty()) {
+            return "redirect:/student/dashboard";
+        }
+        Subject subject = subjectOpt.get();
+        String subjectName = subject.getSubjectName();
+
+        model.addAttribute("subjectName", subjectName);
+        model.addAttribute("subjectDescription", subject.getDescription());
+        model.addAttribute("teacherEmail", subject.getTeacherEmail());
+
+        // Check for a pending (distributed but not yet submitted) exam for this subject
+        Map<String, Object> pendingExam = null;
+        boolean hasDistributed = getDistributedExams().containsKey(studentEmail);
+        if (hasDistributed) {
+            Map<String, Object> meta = HomepageController.getDistributedExamMetadata(studentEmail);
+            String examSubject = meta != null ? String.valueOf(meta.getOrDefault("examSubject", "")) : "";
+            if (subjectName != null && subjectName.equals(examSubject)) {
+                String examName = meta != null ? String.valueOf(meta.getOrDefault("examName", "")) : "";
+                boolean alreadySubmitted = !examName.isEmpty() &&
+                    !examSubmissionRepository.findByStudentEmailAndExamNameAndSubject(
+                            studentEmail, examName, examSubject).isEmpty();
+                if (!alreadySubmitted) {
+                    String activityType = meta != null ? String.valueOf(meta.getOrDefault("examActivityType", "Exam")) : "Exam";
+                    Object timeLimitObj = meta != null ? meta.get("examTimeLimit") : null;
+                    int timeLimit = timeLimitObj instanceof Integer ? (Integer) timeLimitObj : 60;
+                    String deadline = meta != null ? String.valueOf(meta.getOrDefault("examDeadline", "")) : "";
+                    List<String> questions = getDistributedExams().get(studentEmail);
+
+                    Map<String, Object> pe = new HashMap<>();
+                    pe.put("name", examName.isEmpty() ? "Untitled Exam" : examName);
+                    pe.put("type", activityType);
+                    pe.put("timeLimit", timeLimit);
+                    pe.put("questionCount", questions != null ? questions.size() : 0);
+                    pe.put("deadline", formatDeadline(deadline));
+                    pendingExam = pe;
+                } else {
+                    HomepageController.removeDistributedExam(studentEmail);
+                }
+            }
+        }
+        model.addAttribute("pendingExam", pendingExam);
+
+        // Load submission history for this subject
+        List<ExamSubmission> subjectSubmissions = examSubmissionRepository
+                .findByStudentEmail(studentEmail).stream()
+                .filter(s -> subjectName != null && subjectName.equals(s.getSubject()))
+                .sorted(Comparator.comparing(ExamSubmission::getSubmittedAt,
+                        Comparator.nullsLast(Comparator.reverseOrder())))
+                .collect(Collectors.toList());
+
+        model.addAttribute("subjectSubmissions", subjectSubmissions);
+        model.addAttribute("hasHistory", !subjectSubmissions.isEmpty());
+        model.addAttribute("submissionCount", subjectSubmissions.size());
+
+        return "student-classroom";
+    }
+
+    @GetMapping("/profile")
+    public String studentProfile(Model model, java.security.Principal principal) {
+        String studentEmail = principal.getName();
+
+        // Load user info
+        Optional<User> userOpt = userRepository.findByEmail(studentEmail);
+        model.addAttribute("studentEmail", studentEmail);
+        if (userOpt.isPresent()) {
+            User user = userOpt.get();
+            model.addAttribute("fullName", user.getFullName());
+        } else {
+            model.addAttribute("fullName", studentEmail);
+        }
+
+        // Load all submissions for statistics
+        List<ExamSubmission> allSubmissions = examSubmissionRepository.findByStudentEmail(studentEmail);
+        allSubmissions.sort(Comparator.comparing(ExamSubmission::getSubmittedAt,
+                Comparator.nullsLast(Comparator.reverseOrder())));
+
+        // Overall stats
+        int totalAttempts = allSubmissions.size();
+        double avgScore = allSubmissions.stream().mapToDouble(ExamSubmission::getPercentage).average().orElse(0.0);
+        long passedCount = allSubmissions.stream().filter(s -> s.getPercentage() >= 75).count();
+        long failedCount = totalAttempts - passedCount;
+
+        // Best score
+        double bestScore = allSubmissions.stream().mapToDouble(ExamSubmission::getPercentage).max().orElse(0.0);
+
+        // Recent 5 submissions
+        List<ExamSubmission> recentSubmissions = allSubmissions.stream().limit(5).collect(Collectors.toList());
+
+        // Enrolled subjects
+        List<EnrolledStudent> enrollments = enrolledStudentRepository.findByStudentEmail(studentEmail);
+
+        model.addAttribute("allSubmissions", allSubmissions);
+        model.addAttribute("recentSubmissions", recentSubmissions);
+        model.addAttribute("totalAttempts", totalAttempts);
+        model.addAttribute("avgScore", String.format("%.1f", avgScore));
+        model.addAttribute("passedCount", passedCount);
+        model.addAttribute("failedCount", failedCount);
+        model.addAttribute("bestScore", String.format("%.1f", bestScore));
+        model.addAttribute("enrollments", enrollments);
+        model.addAttribute("hasSubmissions", !allSubmissions.isEmpty());
+
+        return "student-profile";
+    }
+
     private String formatDeadline(String examDeadline) {
         if (examDeadline != null && !examDeadline.isEmpty()) {
             try {
