@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${subject.subjectName} + ' - Enrolled Students'">Enrolled Students</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link th:href="@{/css/style.css}" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/subject-classroom.css}">
+</head>
+<body>
+<div class="teacher-layout">
+    <div th:replace="teacher-nav :: teacherNav"></div>
+
+    <div class="teacher-content-wrapper">
+        <div class="main-container">
+            <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <a th:href="@{/teacher/subject-classroom/{id}(id=${subject.id})}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Classroom
+                </a>
+                <span class="badge bg-light text-dark border" th:text="${enrolledCount} + ' Enrolled Students'">0 Enrolled Students</span>
+            </div>
+
+            <div class="section-card">
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom flex-wrap gap-2">
+                    <div class="section-title mb-0" style="border-bottom:none; padding-bottom:0; margin-bottom:0;">
+                        <i class="bi bi-people-fill"></i>
+                        <span th:text="${subject.subjectName} + ' - Enrolled Students'">Enrolled Students</span>
+                    </div>
+                    <input type="text" id="enrolledStudentSearch" class="form-control form-control-sm"
+                           placeholder="🔎 Search student name or email..." style="max-width:280px;">
+                </div>
+
+                <div th:if="${#lists.isEmpty(enrolledStudents)}" class="empty-state">
+                    <i class="bi bi-inbox"></i>
+                    <p class="mb-1 fw-semibold small">No students enrolled yet.</p>
+                    <small class="text-muted">Go back to classroom and click "Enroll Students" to add students.</small>
+                </div>
+
+                <div th:if="${!#lists.isEmpty(enrolledStudents)}" class="table-responsive">
+                    <table class="student-list-table" id="enrolledStudentsTable">
+                        <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Email</th>
+                            <th>Enrolled</th>
+                            <th style="width:80px;">Actions</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="student : ${enrolledStudents}"
+                            th:attr="data-search-key=${#strings.toLowerCase(student.studentName) + ' ' + #strings.toLowerCase(student.studentEmail)}">
+                            <td><span class="fw-semibold" th:text="${student.studentName}">Name</span></td>
+                            <td class="text-muted" th:text="${student.studentEmail}">email</td>
+                            <td class="text-muted small"
+                                th:text="${#temporals.format(student.enrolledAt, 'MMM dd, yyyy')}">Date</td>
+                            <td>
+                                <form th:action="@{/teacher/remove-student}" method="post" style="display:inline;">
+                                    <input type="hidden" name="enrollmentId" th:value="${student.id}">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger"
+                                            onclick="return confirm('Remove this student from the classroom?')">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const input = document.getElementById('enrolledStudentSearch');
+        if (!input) return;
+
+        input.addEventListener('input', function () {
+            const query = this.value.toLowerCase().trim();
+            document.querySelectorAll('#enrolledStudentsTable tbody tr').forEach(row => {
+                const key = row.getAttribute('data-search-key') || '';
+                row.style.display = (!query || key.includes(query)) ? '' : 'none';
+            });
+        });
+    });
+</script>
+</body>
+</html>
