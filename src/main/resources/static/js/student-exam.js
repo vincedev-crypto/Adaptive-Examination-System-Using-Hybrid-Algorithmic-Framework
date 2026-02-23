@@ -18,6 +18,7 @@ let violationCount = 0;
 const MAX_VIOLATIONS = 5;
 let tabSwitchCount = 0;
 let isExamActive = true;
+let isSubmitting = false;
 
 /**
  * Initialize the exam from Thymeleaf data
@@ -113,8 +114,17 @@ function displayQuestion() {
     while ((imgMatch = imgPattern.exec(question)) !== null) {
         imageUrls.push(imgMatch[1]);
     }
+
+    const vidPattern = /\[VID:([^\]]+)\]/g;
+    const videoUrls = [];
+    let vidMatch;
+    while ((vidMatch = vidPattern.exec(question)) !== null) {
+        videoUrls.push(vidMatch[1]);
+    }
+
     // Remove the [IMG:...] markers from the text shown to students
     question = question.replace(/\[IMG:[^\]]+\]/g, '').trim();
+    question = question.replace(/\[VID:[^\]]+\]/g, '').trim();
 
     // Build HTML for any extracted images
     let imagesHtml = '';
@@ -122,6 +132,15 @@ function displayQuestion() {
         imagesHtml = '<div class="question-media my-3">';
         imageUrls.forEach(url => {
             imagesHtml += `<img src="${url}" alt="Question image" class="img-fluid rounded shadow-sm border" style="max-height:400px; display:block; margin:8px auto;">`;
+        });
+        videoUrls.forEach(url => {
+            imagesHtml += `<video src="${url}" controls class="img-fluid rounded shadow-sm border" style="max-height:400px; display:block; margin:8px auto; width:100%;"></video>`;
+        });
+        imagesHtml += '</div>';
+    } else if (videoUrls.length > 0) {
+        imagesHtml = '<div class="question-media my-3">';
+        videoUrls.forEach(url => {
+            imagesHtml += `<video src="${url}" controls class="img-fluid rounded shadow-sm border" style="max-height:400px; display:block; margin:8px auto; width:100%;"></video>`;
         });
         imagesHtml += '</div>';
     }
@@ -278,12 +297,18 @@ function navigateNext() {
  * Submit the exam
  */
 function submitExam() {
+    // Pause anti-cheat BEFORE confirm() so the dialog blur doesn't count as a violation
+    isExamActive = false;
+
     if (confirm('Are you sure you want to submit your exam? You cannot change your answers after submission.')) {
         // Clear timer
         if (timerInterval) {
             clearInterval(timerInterval);
         }
-        
+
+        // Mark as submitting so beforeunload doesn't show "Leave site?"
+        isSubmitting = true;
+
         // Create form and submit
         const form = document.getElementById('examForm');
         form.innerHTML = '';
@@ -300,6 +325,9 @@ function submitExam() {
         localStorage.removeItem('examAnswers');
         
         form.submit();
+    } else {
+        // Student cancelled — re-enable anti-cheat
+        isExamActive = true;
     }
 }
 
@@ -423,6 +451,9 @@ function autoSubmitExam() {
     setTimeout(() => {
         console.log('⏰ Time expired - force submitting exam');
         
+        // Suppress "Leave site?" dialog on auto-submit
+        isSubmitting = true;
+
         // Create form and submit without confirmation
         const form = document.getElementById('examForm');
         form.innerHTML = '';
@@ -491,6 +522,8 @@ function showTimesUpModal() {
  * Prevent accidental page leave
  */
 window.addEventListener('beforeunload', (e) => {
+    // Skip the guard when the student is intentionally submitting
+    if (isSubmitting) return;
     if (Object.keys(answers).length > 0 && timeRemainingSeconds > 0) {
         e.preventDefault();
         e.returnValue = '';

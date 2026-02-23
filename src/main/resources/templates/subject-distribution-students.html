@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title th:text="${subject.subjectName} + ' - Student Tracking'">Student Tracking</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link th:href="@{/css/style.css}" rel="stylesheet">
+    <link rel="stylesheet" th:href="@{/css/subject-classroom.css}">
+</head>
+<body>
+<div class="teacher-layout">
+    <div th:replace="teacher-nav :: teacherNav"></div>
+
+    <div class="teacher-content-wrapper">
+        <div class="main-container">
+            <div class="mb-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <a th:href="@{/teacher/subject-classroom/{id}(id=${subject.id})}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-left"></i> Back to Classroom
+                </a>
+                <span class="badge bg-light text-dark border" th:text="${totalTrackedCount} + ' Students Tracked'">0 Students Tracked</span>
+            </div>
+
+            <div class="classroom-header">
+                <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <h4 class="fw-bold mb-0" style="color:#7a1022;">
+                        <i class="bi bi-clipboard-check me-2"></i>
+                        <span th:text="${subject.subjectName} + ' - Student Distribution Status'">Student Distribution Status</span>
+                    </h4>
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                        <span class="badge bg-success-subtle text-success border border-success-subtle"
+                              th:text="${submittedCount} + ' Submitted'">0 Submitted</span>
+                        <span class="badge bg-warning-subtle text-warning border border-warning-subtle"
+                              th:text="${notSubmittedCount} + ' Not Submitted'">0 Not Submitted</span>
+                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle"
+                              th:text="${queuedCount} + ' Queued'">0 Queued</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <div class="d-flex justify-content-between align-items-center mb-3 pb-2 border-bottom flex-wrap gap-2">
+                    <div class="section-title mb-0" style="border-bottom:none; padding-bottom:0; margin-bottom:0;">
+                        <i class="bi bi-list-ul"></i> Student Tracking List
+                    </div>
+                    <input type="text" id="distributionSearch" class="form-control form-control-sm"
+                           placeholder="🔎 Search student name or email..." style="max-width:280px;">
+                </div>
+
+                <div th:if="${totalTrackedCount == 0}" class="empty-state">
+                    <i class="bi bi-hourglass-split"></i>
+                    <p class="mb-1 fw-semibold small">No distributed exam records yet.</p>
+                    <small class="text-muted">Once you distribute a quiz, students will appear here by status.</small>
+                </div>
+
+                <div th:if="${totalTrackedCount > 0}" class="table-responsive">
+                    <table class="student-list-table" id="distributionStudentsTable">
+                        <thead>
+                        <tr>
+                            <th>Student</th>
+                            <th>Email</th>
+                            <th>Exam</th>
+                            <th>Type</th>
+                            <th>Deadline</th>
+                            <th>Last Submitted</th>
+                            <th>Status</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr th:each="item : ${submittedStudents}"
+                            th:attr="data-search-key=${#strings.toLowerCase(item.studentName) + ' ' + #strings.toLowerCase(item.studentEmail)}">
+                            <td class="fw-semibold" th:text="${item.studentName}">Student Name</td>
+                            <td class="text-muted" th:text="${item.studentEmail}">email@example.com</td>
+                            <td th:text="${item.examName}">Exam</td>
+                            <td>
+                                <span class="badge" th:classappend="${item.activityType == 'Exam' ? 'bg-danger' : 'bg-primary'}"
+                                      th:text="${item.activityType}">Type</span>
+                            </td>
+                            <td th:text="${item.deadline}">Deadline</td>
+                            <td th:text="${item.lastSubmittedAt}">-</td>
+                            <td><span class="badge bg-success">Submitted</span></td>
+                        </tr>
+
+                        <tr th:each="item : ${notSubmittedStudents}"
+                            th:attr="data-search-key=${#strings.toLowerCase(item.studentName) + ' ' + #strings.toLowerCase(item.studentEmail)}">
+                            <td class="fw-semibold" th:text="${item.studentName}">Student Name</td>
+                            <td class="text-muted" th:text="${item.studentEmail}">email@example.com</td>
+                            <td th:text="${item.examName}">Exam</td>
+                            <td>
+                                <span class="badge" th:classappend="${item.activityType == 'Exam' ? 'bg-danger' : 'bg-primary'}"
+                                      th:text="${item.activityType}">Type</span>
+                            </td>
+                            <td th:text="${item.deadline}">Deadline</td>
+                            <td th:text="${item.lastSubmittedAt}">-</td>
+                            <td><span class="badge bg-warning text-dark">Not Submitted</span></td>
+                        </tr>
+
+                        <tr th:each="item : ${queuedStudents}"
+                            th:attr="data-search-key=${#strings.toLowerCase(item.studentName) + ' ' + #strings.toLowerCase(item.studentEmail)}">
+                            <td class="fw-semibold" th:text="${item.studentName}">Student Name</td>
+                            <td class="text-muted" th:text="${item.studentEmail}">email@example.com</td>
+                            <td th:text="${item.examName}">Exam</td>
+                            <td>
+                                <span class="badge" th:classappend="${item.activityType == 'Exam' ? 'bg-danger' : 'bg-primary'}"
+                                      th:text="${item.activityType}">Type</span>
+                            </td>
+                            <td th:text="${item.deadline}">Deadline</td>
+                            <td th:text="${item.lastSubmittedAt}">-</td>
+                            <td><span class="badge bg-secondary">Queued</span></td>
+                        </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const input = document.getElementById('distributionSearch');
+        if (!input) return;
+
+        input.addEventListener('input', function () {
+            const query = this.value.toLowerCase().trim();
+            document.querySelectorAll('#distributionStudentsTable tbody tr').forEach(row => {
+                const key = row.getAttribute('data-search-key') || '';
+                row.style.display = (!query || key.includes(query)) ? '' : 'none';
+            });
+        });
+    });
+</script>
+</body>
+</html>
