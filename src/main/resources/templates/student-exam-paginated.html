@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <title>Take Exam - ALGO</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <link th:href="@{/css/style.css}" rel="stylesheet">
     <link th:href="@{/css/student-exam.css}" rel="stylesheet">
     <!-- MathJax for equation rendering -->
     <script th:inline="none">
@@ -28,9 +30,32 @@
             border-radius: 8px;
             margin: 10px 0;
         }
+        /* EAC question text */
+        #questionContainer .question-title {
+            color: #5f0d1a;
+            font-weight: 700;
+        }
+        /* Submit button maroon */
+        #submitBtn, .btn-submit-exam {
+            background: #7a1022 !important;
+            border-color: #7a1022 !important;
+            color: #fff !important;
+        }
+        #submitBtn:hover, .btn-submit-exam:hover {
+            background: #5f0d1a !important;
+        }
+        /* Back btn hover */
+        #backBtn:not(:disabled):hover {
+            background: #7a1022 !important;
+            color: #fff !important;
+        }
+        /* Cheating modal header */
+        .cheating-modal-content h3 {
+            color: #7a1022;
+        }
     </style>
 </head>
-<body class="bg-light">
+<body class="homepage-page">
     <!-- Auto-save indicator -->
     <div id="autoSaveIndicator" class="auto-save-indicator">
         ✓ Saved
@@ -57,21 +82,23 @@
         <!-- Student Header -->
         <div class="student-header">
             <div class="row align-items-center">
-                <div class="col-md-8">
-                    <h4 class="mb-1" th:text="${userInfo.fullName}">Student Name</h4>
-                    <p class="mb-0 small" th:text="${userInfo.email}">student@email.com</p>
+                <div class="col-auto d-none d-md-block">
+                    <img th:src="@{/images/eac-emblem.png}" alt="EAC" style="height:52px; filter:brightness(0) invert(1); opacity:0.9;">
                 </div>
-                <div class="col-md-4 text-md-end">
-                    <div class="badge bg-light text-dark fs-6" th:text="${examInfo.subject}">Mathematics</div>
-                    <div class="badge bg-warning text-dark fs-6 ms-1" th:text="${examInfo.activityType}">Exam</div>
-                    <div class="mt-2">
-                        <div class="deadline-info">
-                            <i class="bi bi-calendar-event"></i> Deadline: <span id="deadlineDisplay"></span>
-                        </div>
-                        <div class="mt-1">
-                            <span class="badge bg-danger fs-6" id="timerDisplay">Time: Loading...</span>
-                        </div>
+                <div class="col-md">
+                    <div class="small mb-1" style="color:rgba(255,255,255,0.7); font-size:0.78rem; letter-spacing:0.5px;">EMILIO AGUINALDO COLLEGE &mdash; MANILA</div>
+                    <h5 class="mb-0 fw-bold" th:text="${examInfo.examName != null ? examInfo.examName : 'Examination'}">Examination</h5>
+                    <div class="mt-1 d-flex flex-wrap gap-2">
+                        <span class="badge" style="background:rgba(212,163,42,0.25); color:#ffd970; border:1px solid rgba(212,163,42,0.4);" th:text="${userInfo.fullName}">Student Name</span>
+                        <span class="badge bg-light text-dark" th:text="${examInfo.subject}">Subject</span>
+                        <span class="badge" th:classappend="${examInfo.activityType == 'Exam' ? 'bg-danger' : 'bg-primary'}" th:text="${examInfo.activityType}">Type</span>
                     </div>
+                </div>
+                <div class="col-md-4 text-md-end mt-2 mt-md-0">
+                    <div class="deadline-info mb-1">
+                        <i class="bi bi-calendar-event me-1"></i> Deadline: <span id="deadlineDisplay"></span>
+                    </div>
+                    <span class="badge fs-6" id="timerDisplay" style="background:#d4a32a; color:#3a0a10;">Time: Loading...</span>
                 </div>
             </div>
         </div>
@@ -79,11 +106,11 @@
         <!-- Progress Indicator -->
         <div class="progress-indicator text-center mb-3">
             <div class="d-flex justify-content-between align-items-center mb-2">
-                <span class="badge bg-primary" id="progressText">Question 1 of 20</span>
+                <span class="badge" style="background:#7a1022;" id="progressText">Question 1 of 20</span>
                 <span id="difficultyBadge" class="badge difficulty-medium">Medium</span>
             </div>
             <div class="progress" style="height: 8px;">
-                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 5%"></div>
+                <div id="progressBar" class="progress-bar" role="progressbar" style="width: 5%; background:#7a1022;"></div>
             </div>
         </div>
 
@@ -102,16 +129,16 @@
         <div class="container">
             <div class="row">
                 <div class="col-4">
-                    <button id="backBtn" class="btn btn-outline-secondary w-100" disabled>
-                        ← Back
+                    <button id="backBtn" class="btn w-100" style="border:2px solid #7a1022; color:#7a1022; background:#fff;" disabled>
+                        <i class="bi bi-arrow-left"></i> Back
                     </button>
                 </div>
                 <div class="col-4 text-center">
-                    <span id="questionNumber" class="d-inline-block mt-2 fw-bold">1 / 20</span>
+                    <span id="questionNumber" class="d-inline-block mt-2 fw-bold" style="color:#7a1022;">1 / 20</span>
                 </div>
                 <div class="col-4">
-                    <button id="nextBtn" class="btn btn-primary w-100">
-                        Next →
+                    <button id="nextBtn" class="btn w-100 text-white" style="background:#7a1022; border:none;">
+                        Next <i class="bi bi-arrow-right"></i>
                     </button>
                 </div>
             </div>
