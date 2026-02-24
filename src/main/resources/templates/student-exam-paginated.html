@@ -87,11 +87,11 @@
                 </div>
                 <div class="col-md">
                     <div class="small mb-1" style="color:rgba(255,255,255,0.7); font-size:0.78rem; letter-spacing:0.5px;">EMILIO AGUINALDO COLLEGE &mdash; MANILA</div>
-                    <h5 class="mb-0 fw-bold" th:text="${examInfo.examName != null ? examInfo.examName : 'Examination'}">Examination</h5>
+                    <h5 class="mb-0 fw-bold" th:text="${examInfo['examName'] != null ? examInfo['examName'] : 'Examination'}">Examination</h5>
                     <div class="mt-1 d-flex flex-wrap gap-2">
-                        <span class="badge" style="background:rgba(212,163,42,0.25); color:#ffd970; border:1px solid rgba(212,163,42,0.4);" th:text="${userInfo.fullName}">Student Name</span>
-                        <span class="badge bg-light text-dark" th:text="${examInfo.subject}">Subject</span>
-                        <span class="badge" th:classappend="${examInfo.activityType == 'Exam' ? 'bg-danger' : 'bg-primary'}" th:text="${examInfo.activityType}">Type</span>
+                        <span class="badge" style="background:rgba(212,163,42,0.25); color:#ffd970; border:1px solid rgba(212,163,42,0.4);" th:text="${userInfo['fullName']}">Student Name</span>
+                        <span class="badge bg-light text-dark" th:text="${examInfo['subject']}">Subject</span>
+                        <span class="badge" th:classappend="${examInfo['activityType'] == 'Exam' ? 'bg-danger' : 'bg-primary'}" th:text="${examInfo['activityType']}">Type</span>
                     </div>
                 </div>
                 <div class="col-md-4 text-md-end mt-2 mt-md-0">
