@@ -259,8 +259,13 @@
                                             </td>
                                             <td>
                                                 <div class="d-flex gap-1 flex-wrap">
-                                                    <a th:href="@{/teacher/view-result/{id}(id=${sub.id})}" class="btn btn-xs btn-primary" title="View">
+                                                    <a th:href="@{/teacher/view-result/{id}(id=${sub.id})}" class="btn btn-xs btn-primary" title="View Result">
                                                         <i class="bi bi-eye"></i>
+                                                    </a>
+                                                    <a th:if="${sub.performanceCategory != null}"
+                                                       th:href="@{/teacher/view-result/{id}(id=${sub.id})} + '#rfAnalytics'"
+                                                       class="btn btn-xs" style="background:#7a1022;color:#fff;border:none;" title="RF Analytics">
+                                                        <i class="bi bi-graph-up-arrow"></i>
                                                     </a>
                                                     <a th:unless="${sub.isGraded()}"
                                                        th:href="@{/teacher/grade/{id}(id=${sub.id})}"

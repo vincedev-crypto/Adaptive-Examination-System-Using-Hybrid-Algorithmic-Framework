@@ -285,6 +285,11 @@
                                            class="btn btn-sm btn-primary action-btn" title="View Details">
                                             <i class="bi bi-eye"></i> View
                                         </a>
+                                        <a th:if="${submission.performanceCategory != null}"
+                                           th:href="@{/teacher/view-result/{id}(id=${submission.id})} + '#rfAnalytics'"
+                                           class="btn btn-sm action-btn" style="background:#7a1022;color:#fff;border:none;" title="RF Analytics">
+                                            <i class="bi bi-graph-up-arrow"></i> Analytics
+                                        </a>
                                         <a th:unless="${submission.isGraded()}"
                                            th:href="@{/teacher/grade/{id}(id=${submission.id})}"
                                            class="btn btn-sm btn-warning action-btn" title="Grade Submission">
