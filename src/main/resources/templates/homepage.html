@@ -88,22 +88,24 @@
                                 });
                             </script>
                             
-                            <label class="form-label fw-bold text-primary">Select Test Questionnaire (PDF or CSV) *</label>
-                            <input class="form-control mb-3" type="file" name="examCreated" accept=".pdf,.csv" required>
+                            <label class="form-label fw-bold text-primary">Select Test Questionnaire (PDF, CSV, or Word) *</label>
+                            <input class="form-control mb-3" type="file" name="examCreated" accept=".pdf,.csv,.docx,.doc" required>
                             
-                            <label class="form-label fw-bold text-warning">Select Answer Key (PDF or CSV) - Optional</label>
-                            <input class="form-control" type="file" name="answerKeyPdf" accept=".pdf,.csv">
+                            <label class="form-label fw-bold text-warning">Select Answer Key (PDF, CSV, or Word) - Optional</label>
+                            <input class="form-control" type="file" name="answerKeyPdf" accept=".pdf,.csv,.docx,.doc">
                             <div class="form-text">
-                                <strong>Three Options:</strong><br>
-                                1. <strong>Single PDF</strong>: Questions with "Answer: ..." lines included<br>
-                                2. <strong>Two PDFs</strong>: Upload questions PDF + separate answer key PDF<br>
-                                3. <strong>CSV Format</strong>: Upload CSV file with columns: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD, Answer
+                                <strong>Four Options:</strong><br>
+                                1. <strong>Single PDF/Word</strong>: Questions with "Answer: ..." lines included<br>
+                                2. <strong>Two files</strong>: Upload questions + separate answer key (PDF, Word, or CSV)<br>
+                                3. <strong>CSV Format</strong>: Upload CSV file with columns: Question, ChoiceA, ChoiceB, ChoiceC, ChoiceD, Answer<br>
+                                4. <strong>Word (.docx)</strong>: Upload Word document with native equations and images
                                 <hr class="my-2">
-                                <strong>📐 Mathematical Equations in PDF:</strong><br>
-                                • <strong>Inline math</strong>: wrap in <code>$...$</code> → e.g. <code>$x^2 + 3x = 0$</code><br>
-                                • <strong>Display math</strong>: wrap in <code>$$...$$</code> → e.g. <code>$$\frac{a}{b}=c$$</code><br>
-                                • <strong>Unicode symbols</strong> (², √, π, ≤, α, ∫, etc.) are <em>automatically converted</em> to LaTeX<br>
-                                • <strong>Tip</strong>: Type equations as plain text in your Word/Docs file using <code>$...$</code> before exporting to PDF
+                                <strong>📐 Mathematical Equations:</strong><br>
+                                • <strong>Word (.docx)</strong>: Native Word equations (built with Insert → Equation) are <em>automatically converted</em> to LaTeX<br>
+                                • <strong>Word images</strong>: Equation images embedded in Word are also extracted and displayed<br>
+                                • <strong>Inline math (PDF)</strong>: wrap in <code>$...$</code> → e.g. <code>$x^2 + 3x = 0$</code><br>
+                                • <strong>Display math (PDF)</strong>: wrap in <code>$$...$$</code> → e.g. <code>$$\frac{a}{b}=c$$</code><br>
+                                • <strong>Unicode symbols</strong> (², √, π, ≤, α, ∫, etc.) are <em>automatically converted</em> to LaTeX
                             </div>
                         </div>
 
