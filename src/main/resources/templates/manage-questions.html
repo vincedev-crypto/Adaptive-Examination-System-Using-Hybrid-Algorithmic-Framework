@@ -236,10 +236,21 @@
                         <input type="hidden" name="returnTo" th:value="${returnTo}">
                         
                         <div class="mb-3">
-                            <label class="form-label fw-bold">Question Text *</label>
+                            <label class="form-label fw-bold d-flex justify-content-between align-items-center">
+                                <span>Question Text *</span>
+                                <div class="d-flex gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertEquationIntoManualField()">
+                                        <i class="bi bi-calculator"></i> Equation
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary" onclick="pasteEquationFromClipboard()">
+                                        <i class="bi bi-clipboard2-plus"></i> Paste Formula
+                                    </button>
+                                </div>
+                            </label>
                             <textarea class="form-control" name="questionText" id="questionTextarea" rows="4" 
                                       placeholder="Enter the question text..." required
-                                      oninput="updateMathPreview()"></textarea>
+                                      oninput="updateMathPreview()" onfocus="setEquationTarget(this)"></textarea>
+                            <small class="text-muted d-block mt-1">Inserts into the active field (Question Text, Choices, or Correct Answer)</small>
                             <div class="mq-help mt-2">
                                 <div>For multiple choice questions, include all options (A, B, C, D, etc.) in the question text.</div>
                                 <div class="mt-1"><strong>Supported formats</strong></div>
@@ -248,6 +259,7 @@
                                 <div>• Or upload media using the file pickers below</div>
                                 <div>• Equations (inline): <code>$x^2 + y^2 = r^2$</code> or <code>\(x^2\)</code></div>
                                 <div>• Equations (block): <code>$$\frac{a}{b}$$</code> or <code>\[\int_0^\infty\]</code></div>
+                                <div>• Paste Formula supports copied equation text (Google/Docs/Wikipedia) and converts common symbols</div>
                             </div>
                             <!-- Live LaTeX preview -->
                             <div id="mathPreviewContainer" class="mt-2 p-3 rounded">
@@ -267,7 +279,7 @@
                             <div class="col-md-6 mb-3" id="mcqChoicesContainer">
                                 <label class="form-label fw-bold">Choices (one per line) *</label>
                                 <textarea class="form-control" name="choicesText" id="addChoicesText" rows="3"
-                                          placeholder="Choice A&#10;Choice B&#10;Choice C&#10;Choice D"></textarea>
+                                          placeholder="Choice A&#10;Choice B&#10;Choice C&#10;Choice D" onfocus="setEquationTarget(this)"></textarea>
                             </div>
                         </div>
 
@@ -286,7 +298,7 @@
                             <div class="col-md-6 mb-3">
                                 <label class="form-label fw-bold">Correct Answer *</label>
                                 <input type="text" class="form-control" name="answer" id="addAnswerInput"
-                                       placeholder="e.g., A, B, C, D or full answer text" required>
+                                       placeholder="e.g., A, B, C, D or full answer text" required onfocus="setEquationTarget(this)">
                                 <small class="form-text text-muted" id="addAnswerHint">Enter the letter or full text of the correct answer</small>
                             </div>
                             
@@ -452,6 +464,146 @@
 
     // Live LaTeX preview
     let previewDebounce;
+    let activeEquationTargetId = 'questionTextarea';
+
+    function setEquationTarget(el) {
+        if (el && el.id) {
+            activeEquationTargetId = el.id;
+        }
+    }
+
+    function insertAtCursor(inputEl, text) {
+        if (!inputEl) return;
+
+        if (typeof inputEl.selectionStart === 'number' && typeof inputEl.selectionEnd === 'number') {
+            const start = inputEl.selectionStart;
+            const end = inputEl.selectionEnd;
+            const current = inputEl.value || '';
+            inputEl.value = current.slice(0, start) + text + current.slice(end);
+            const cursor = start + text.length;
+            inputEl.selectionStart = cursor;
+            inputEl.selectionEnd = cursor;
+        } else {
+            inputEl.value = (inputEl.value || '') + text;
+        }
+
+        inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+        inputEl.focus();
+    }
+
+    function insertEquationIntoManualField() {
+        const target = document.getElementById(activeEquationTargetId) || document.getElementById('questionTextarea');
+        if (!target) return;
+
+        const latex = window.prompt('Enter equation in LaTeX format (without $ delimiters):\nExample: \\frac{a}{b}=c');
+        if (latex === null) return;
+
+        const cleaned = latex.trim();
+        if (!cleaned) return;
+
+        insertAtCursor(target, `$${cleaned}$`);
+
+        if (target.id === 'questionTextarea') {
+            updateMathPreview();
+        }
+    }
+
+    function normalizeEquationInput(raw) {
+        if (!raw) return '';
+
+        let text = raw.trim();
+        const symbolMap = {
+            '×': '\\times',
+            '÷': '\\div',
+            '≤': '\\le',
+            '≥': '\\ge',
+            '≠': '\\ne',
+            '±': '\\pm',
+            '∞': '\\infty',
+            'π': '\\pi',
+            'θ': '\\theta',
+            'α': '\\alpha',
+            'β': '\\beta',
+            'γ': '\\gamma',
+            'Δ': '\\Delta',
+            '∫': '\\int',
+            '∑': '\\sum',
+            '∏': '\\prod',
+            '√': '\\sqrt{}'
+        };
+
+        Object.keys(symbolMap).forEach(symbol => {
+            text = text.split(symbol).join(symbolMap[symbol]);
+        });
+
+        const superscriptMap = {
+            '⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9',
+            '⁺':'+','⁻':'-','⁼':'=','⁽':'(','⁾':')','ⁿ':'n'
+        };
+        const subscriptMap = {
+            '₀':'0','₁':'1','₂':'2','₃':'3','₄':'4','₅':'5','₆':'6','₇':'7','₈':'8','₉':'9',
+            '₊':'+','₋':'-','₌':'=','₍':'(','₎':')'
+        };
+
+        text = text.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ]+/g, (group) => {
+            const converted = Array.from(group).map(ch => superscriptMap[ch] || ch).join('');
+            return `^{${converted}}`;
+        });
+
+        text = text.replace(/[₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎]+/g, (group) => {
+            const converted = Array.from(group).map(ch => subscriptMap[ch] || ch).join('');
+            return `_{${converted}}`;
+        });
+
+        return text;
+    }
+
+    function toInlineLatex(text) {
+        const cleaned = (text || '').trim();
+        if (!cleaned) return '';
+        const alreadyLatex = /^\$.*\$$/.test(cleaned) || /^\\\(.*\\\)$/.test(cleaned);
+        return alreadyLatex ? cleaned : `$${cleaned}$`;
+    }
+
+    function looksLikeEquation(text) {
+        if (!text) return false;
+        const sample = text.trim();
+        if (!sample) return false;
+
+        const mathPattern = /[=+\-*/^]|\\frac|\\sqrt|\\int|\\sum|\\pi|[≤≥≠±∞πθαβγΔ∫∑∏√]|[⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉]/;
+        const hasVariableStyle = /\b[a-zA-Z]\s*(\^|_|=|\+|\-|\*|\/)/.test(sample);
+        return mathPattern.test(sample) || hasVariableStyle;
+    }
+
+    async function pasteEquationFromClipboard() {
+        const target = document.getElementById(activeEquationTargetId) || document.getElementById('questionTextarea');
+        if (!target) return;
+
+        let source = '';
+        try {
+            if (navigator.clipboard && navigator.clipboard.readText) {
+                source = await navigator.clipboard.readText();
+            }
+        } catch (_) {
+            source = '';
+        }
+
+        if (!source || !source.trim()) {
+            const manual = window.prompt('Paste equation text here (copied formula, not image):');
+            if (manual === null) return;
+            source = manual;
+        }
+
+        const normalized = normalizeEquationInput(source);
+        const latex = toInlineLatex(normalized);
+        if (!latex) return;
+
+        insertAtCursor(target, latex);
+        if (target.id === 'questionTextarea') {
+            updateMathPreview();
+        }
+    }
+
     function goBackSmart(buttonEl) {
         const returnUrl = buttonEl ? buttonEl.getAttribute('data-return-url') : null;
         if (returnUrl) {
@@ -544,6 +696,20 @@
         document.querySelectorAll('.edit-question-type').forEach(selectEl => {
             toggleEditQuestionTypeFields(selectEl);
         });
+
+        const questionTextarea = document.getElementById('questionTextarea');
+        if (questionTextarea) {
+            questionTextarea.addEventListener('paste', function (event) {
+                const pastedText = event.clipboardData ? event.clipboardData.getData('text') : '';
+                if (!looksLikeEquation(pastedText)) return;
+
+                event.preventDefault();
+                const normalized = normalizeEquationInput(pastedText);
+                const latex = toInlineLatex(normalized);
+                insertAtCursor(questionTextarea, latex || pastedText);
+                updateMathPreview();
+            });
+        }
     });
 </script>
 
