@@ -3,7 +3,10 @@ package com.exam.Controller;
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.StringReader;
+import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,6 +30,10 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import javax.imageio.ImageIO;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
 
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.cos.COSName;
@@ -37,7 +44,12 @@ import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.apache.poi.xwpf.usermodel.XWPFPicture;
+import org.apache.poi.xwpf.usermodel.XWPFPictureData;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
+import org.apache.xmlbeans.XmlCursor;
+import org.apache.xmlbeans.XmlObject;
+import org.openxmlformats.schemas.wordprocessingml.x2006.main.CTP;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -1862,14 +1874,19 @@ public class HomepageController {
             Map<Integer, String> answerKey = new HashMap<>();
             String fileName = examCreated.getOriginalFilename();
             boolean isCsvFormat = fileName != null && fileName.toLowerCase().endsWith(".csv");
+            boolean isWordFormat = fileName != null && (fileName.toLowerCase().endsWith(".docx") || fileName.toLowerCase().endsWith(".doc"));
             
             // Check if separate answer key is provided
             if (answerKeyPdf != null && !answerKeyPdf.isEmpty()) {
                 String answerKeyFileName = answerKeyPdf.getOriginalFilename();
                 boolean isAnswerKeyCsv = answerKeyFileName != null && answerKeyFileName.toLowerCase().endsWith(".csv");
+                boolean isAnswerKeyWord = answerKeyFileName != null && 
+                    (answerKeyFileName.toLowerCase().endsWith(".docx") || answerKeyFileName.toLowerCase().endsWith(".doc"));
                 
                 if (isAnswerKeyCsv) {
                     answerKey = parseAnswerKeyCsv(answerKeyPdf);
+                } else if (isAnswerKeyWord) {
+                    answerKey = parseAnswerKeyWord(answerKeyPdf);
                 } else {
                     answerKey = parseAnswerKeyPdf(answerKeyPdf);
                 }
@@ -1884,6 +1901,14 @@ public class HomepageController {
                 CsvProcessResult csvResult = processCsvExam(examCreated, session, answerKey);
                 randomizedLines = csvResult.questions;
                 difficultyLevels = csvResult.difficulties;
+            } else if (isWordFormat) {
+                randomizedLines = processWordExam(examCreated, session, answerKey);
+                // For Word files, automatically infer difficulty per question
+                for (String block : randomizedLines) {
+                    String typeHint = block.matches("(?s).*[A-Da-d]\\)\\s+.*") ? "MULTIPLE_CHOICE" : "TEXT_INPUT";
+                    String inferred = inferDifficultyFromQuestion(block, typeHint);
+                    difficultyLevels.add(inferred);
+                }
             } else {
                 randomizedLines = processFisherYates(examCreated, session, answerKey);
                 // For PDF files (exam "paper"), automatically infer difficulty per question
@@ -1903,7 +1928,8 @@ public class HomepageController {
             String originalFilename = examCreated.getOriginalFilename();
             String fallbackName = (originalFilename != null ? originalFilename : "uploaded_exam")
                 .replaceFirst("(?i)\\.pdf$", "")
-                .replaceFirst("(?i)\\.csv$", "");
+                .replaceFirst("(?i)\\.csv$", "")
+                .replaceFirst("(?i)\\.docx?$", "");
             String examName = (quizName != null && !quizName.trim().isEmpty()) ? quizName.trim() : fallbackName;
             String examSubject = (subject != null && !subject.isEmpty()) ? subject : "General";
             String examActivityType = (activityType != null && !activityType.isEmpty()) ? activityType : "Exam";
@@ -2814,6 +2840,770 @@ public class HomepageController {
         session.setAttribute("correctAnswerKey", answerKey);
         
         return questionBlocks;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Word (DOCX) exam processing – supports native equations & images
+    // ─────────────────────────────────────────────────────────────────────
+
+    /**
+     * Process a Word (.docx) file containing exam questions.
+     * Handles:
+     * - Native Word equations (OMML) → converted to LaTeX wrapped in $...$
+     * - Embedded images → extracted and stored as [IMG:...] markers
+     * - Standard text with Unicode math symbols → normalizeEquationText
+     * - Same question/answer detection as processFisherYates
+     */
+    private List<String> processWordExam(MultipartFile file, HttpSession session,
+                                         Map<Integer, String> externalAnswerKey) throws IOException {
+        // Create a unique uploads folder for images in this exam
+        String examImgId = UUID.randomUUID().toString().replace("-", "").substring(0, 10);
+        Path uploadsDir = Paths.get("uploads", "exam-images", examImgId);
+        Files.createDirectories(uploadsDir);
+
+        List<String> rawLines = new ArrayList<>();
+        int imageCounter = 0;
+
+        try (XWPFDocument document = new XWPFDocument(file.getInputStream())) {
+
+            // ── 1. Extract all embedded images for reference ──────────────
+            Map<String, String> pictureIdToUrl = new HashMap<>();
+            for (XWPFPictureData picData : document.getAllPictures()) {
+                String ext = picData.suggestFileExtension();
+                if (ext == null || ext.isEmpty()) ext = "png";
+                String imgFile = "img_" + imageCounter + "." + ext;
+                Path imgPath = uploadsDir.resolve(imgFile);
+                Files.write(imgPath, picData.getData());
+                pictureIdToUrl.put(picData.getPackagePart().getPartName().getName(),
+                                   "/uploads/exam-images/" + examImgId + "/" + imgFile);
+                System.out.println("Extracted Word image: " + imgFile);
+                imageCounter++;
+            }
+
+            // ── 2. Walk paragraphs – extract text, equations, images ─────
+            for (XWPFParagraph paragraph : document.getParagraphs()) {
+                StringBuilder paragraphText = new StringBuilder();
+                List<String> paragraphImages = new ArrayList<>();
+
+                // Check for OMML equations in the paragraph's underlying XML
+                CTP ctp = paragraph.getCTP();
+                String paragraphXml = ctp.xmlText();
+
+                if (paragraphXml.contains("m:oMath") || paragraphXml.contains("oMath")) {
+                    // This paragraph contains Word equations – process specially
+                    paragraphText.append(extractTextWithEquations(paragraph, uploadsDir, examImgId, pictureIdToUrl));
+                } else {
+                    // Normal paragraph – extract runs
+                    for (XWPFRun run : paragraph.getRuns()) {
+                        // Check for embedded pictures in this run
+                        List<XWPFPicture> pictures = run.getEmbeddedPictures();
+                        if (pictures != null && !pictures.isEmpty()) {
+                            for (XWPFPicture pic : pictures) {
+                                XWPFPictureData picData = pic.getPictureData();
+                                if (picData != null) {
+                                    String partName = picData.getPackagePart().getPartName().getName();
+                                    String url = pictureIdToUrl.get(partName);
+                                    if (url == null) {
+                                        // Image not yet saved (rare); save now
+                                        String ext = picData.suggestFileExtension();
+                                        if (ext == null || ext.isEmpty()) ext = "png";
+                                        String imgFile = "img_" + imageCounter + "." + ext;
+                                        Path imgPath = uploadsDir.resolve(imgFile);
+                                        Files.write(imgPath, picData.getData());
+                                        url = "/uploads/exam-images/" + examImgId + "/" + imgFile;
+                                        imageCounter++;
+                                    }
+                                    paragraphImages.add(url);
+                                }
+                            }
+                        }
+                        // Append text
+                        String runText = run.getText(0);
+                        if (runText != null) {
+                            paragraphText.append(runText);
+                        }
+                    }
+                }
+
+                String lineText = paragraphText.toString().trim();
+                if (!lineText.isEmpty()) {
+                    // Normalize unicode math characters to LaTeX
+                    lineText = normalizeEquationText(lineText);
+                    rawLines.add(lineText);
+                }
+
+                // Add image markers after the text line
+                for (String imgUrl : paragraphImages) {
+                    rawLines.add("[IMG:" + imgUrl + "]");
+                }
+            }
+        }
+
+        System.out.println("=== PROCESSING WORD EXAM ===");
+        System.out.println("Total lines (incl. markers): " + rawLines.size());
+
+        // Debug: Print first 60 lines
+        System.out.println("=== FIRST 60 LINES OF WORD DOC ===");
+        for (int i = 0; i < Math.min(60, rawLines.size()); i++) {
+            System.out.println("Line " + i + ": " + rawLines.get(i));
+        }
+        System.out.println("=== END OF SAMPLE ===");
+
+        // ── Reuse the same question parsing logic as PDF ────────────────
+        Pattern skipPattern = Pattern.compile(
+            "(?i)(page\\s*\\d+|examination\\s+paper|name:|date:|confidential|date\\s+generated|instructions?|total\\s+marks)",
+            Pattern.CASE_INSENSITIVE
+        );
+
+        List<String> questionBlocks = new ArrayList<>();
+        Map<Integer, String> answerKey = new HashMap<>();
+        StringBuilder currentBlock = new StringBuilder();
+        SecureRandom rand = new SecureRandom();
+        int qID = 0;
+
+        for (String line : rawLines) {
+            String trimmed = line.trim();
+
+            // Pass-through image markers
+            if (trimmed.startsWith("[IMG:") && trimmed.endsWith("]")) {
+                if (currentBlock.length() > 0) {
+                    currentBlock.append("\n").append(trimmed);
+                }
+                continue;
+            }
+
+            // Skip headers / metadata
+            if (skipPattern.matcher(trimmed).find() || trimmed.isEmpty()) {
+                continue;
+            }
+
+            // Detect new question: "1. text", "Q1: text", "Q1 (Easy): text"
+            boolean isNewQuestion = trimmed.matches("^\\d+\\.\\s+.*")
+                || trimmed.matches("(?i)^q\\s*\\d+\\s*(\\([^)]*\\))?\\s*:.*");
+            if (isNewQuestion) {
+                // Save previous question block
+                if (currentBlock.length() > 0) {
+                    String processed = extractAnswerAndShuffle(currentBlock.toString(), rand, answerKey, qID);
+                    if (!processed.isEmpty()) {
+                        questionBlocks.add(processed);
+                        qID++;
+                    }
+                }
+                // Strip question prefix
+                String questionContent = trimmed
+                    .replaceFirst("^\\d+\\.\\s+", "")
+                    .replaceFirst("(?i)^q\\s*\\d+\\s*(\\([^)]*\\))?\\s*:\\s*", "");
+                currentBlock = new StringBuilder(questionContent);
+            } else {
+                if (currentBlock.length() > 0) {
+                    currentBlock.append("\n").append(trimmed);
+                }
+            }
+        }
+
+        // Don't forget the last question
+        if (currentBlock.length() > 0) {
+            String processed = extractAnswerAndShuffle(currentBlock.toString(), rand, answerKey, qID);
+            if (!processed.isEmpty()) {
+                questionBlocks.add(processed);
+                qID++;
+            }
+        }
+
+        System.out.println("=== WORD EXAM PARSED: " + questionBlocks.size() + " questions ===");
+
+        // Merge external answer key
+        if (externalAnswerKey != null && !externalAnswerKey.isEmpty()) {
+            answerKey.putAll(externalAnswerKey);
+        }
+
+        // Print final answer key
+        System.out.println("=== FINAL ANSWER KEY (WORD) ===");
+        for (int i = 1; i <= Math.max(questionBlocks.size(), answerKey.size()); i++) {
+            String answer = answerKey.get(i);
+            System.out.println("Q" + i + " -> " + (answer != null ? answer : "NO ANSWER FOUND!"));
+        }
+
+        session.setAttribute("correctAnswerKey", answerKey);
+
+        // Shuffle questions with their answers
+        List<QuestionWithAnswer> questionsWithAnswers = new ArrayList<>();
+        for (int i = 0; i < questionBlocks.size(); i++) {
+            String question = questionBlocks.get(i);
+            String answer = answerKey.get(i + 1);
+            if (answer == null) answer = "Not Set";
+            questionsWithAnswers.add(new QuestionWithAnswer(question, answer, "Medium", i + 1));
+        }
+
+        Collections.shuffle(questionsWithAnswers, rand);
+
+        questionBlocks.clear();
+        answerKey.clear();
+        for (int i = 0; i < questionsWithAnswers.size(); i++) {
+            QuestionWithAnswer qa = questionsWithAnswers.get(i);
+            questionBlocks.add(qa.question);
+            answerKey.put(i + 1, qa.answer);
+        }
+
+        session.setAttribute("correctAnswerKey", answerKey);
+        return questionBlocks;
+    }
+
+    /**
+     * Extract text from a Word paragraph that may contain OMML (Office MathML) equations.
+     * Equations are converted to LaTeX and wrapped in $...$ delimiters.
+     * Images within the paragraph are also handled.
+     */
+    private String extractTextWithEquations(XWPFParagraph paragraph, Path uploadsDir,
+                                            String examImgId, Map<String, String> pictureIdToUrl) {
+        StringBuilder result = new StringBuilder();
+        CTP ctp = paragraph.getCTP();
+
+        try {
+            // Use XmlCursor to walk the paragraph's child elements in order
+            XmlCursor cursor = ctp.newCursor();
+            if (cursor.toFirstChild()) {
+                do {
+                    String localName = cursor.getName().getLocalPart();
+
+                    if ("oMath".equals(localName) || "oMathPara".equals(localName)) {
+                        // This is an equation – convert OMML XML to LaTeX
+                        XmlObject mathXml = cursor.getObject();
+                        String latex = convertOmmlToLatex(mathXml);
+                        if (latex != null && !latex.trim().isEmpty()) {
+                            result.append(" $").append(latex.trim()).append("$ ");
+                        }
+                    } else if ("r".equals(localName)) {
+                        // Regular text run
+                        XmlObject runXml = cursor.getObject();
+                        String runText = extractTextFromRun(runXml);
+                        if (runText != null) {
+                            result.append(runText);
+                        }
+                        // Check for drawings/images in this run
+                        String drawingImg = extractImageFromRunXml(runXml, uploadsDir, examImgId, pictureIdToUrl);
+                        if (drawingImg != null) {
+                            result.append("\n[IMG:").append(drawingImg).append("]");
+                        }
+                    } else if ("hyperlink".equals(localName)) {
+                        // Hyperlinked text
+                        XmlCursor hCursor = cursor.getObject().newCursor();
+                        if (hCursor.toFirstChild()) {
+                            do {
+                                if ("r".equals(hCursor.getName().getLocalPart())) {
+                                    String t = extractTextFromRun(hCursor.getObject());
+                                    if (t != null) result.append(t);
+                                }
+                            } while (hCursor.toNextSibling());
+                        }
+                        hCursor.dispose();
+                    }
+                } while (cursor.toNextSibling());
+            }
+            cursor.dispose();
+        } catch (Exception e) {
+            System.out.println("Warning: Error processing Word paragraph equations: " + e.getMessage());
+            // Fallback: return paragraph text without equation processing
+            return paragraph.getText();
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Extract plain text from a w:r (run) XmlObject.
+     */
+    private String extractTextFromRun(XmlObject runXml) {
+        StringBuilder sb = new StringBuilder();
+        try {
+            XmlCursor c = runXml.newCursor();
+            if (c.toFirstChild()) {
+                do {
+                    String ln = c.getName().getLocalPart();
+                    if ("t".equals(ln)) {
+                        sb.append(c.getTextValue());
+                    } else if ("tab".equals(ln)) {
+                        sb.append("\t");
+                    } else if ("br".equals(ln)) {
+                        sb.append("\n");
+                    }
+                } while (c.toNextSibling());
+            }
+            c.dispose();
+        } catch (Exception e) {
+            // ignore
+        }
+        return sb.length() > 0 ? sb.toString() : null;
+    }
+
+    /**
+     * Check if a run XML contains a drawing (image) and extract it.
+     */
+    private String extractImageFromRunXml(XmlObject runXml, Path uploadsDir,
+                                           String examImgId, Map<String, String> pictureIdToUrl) {
+        try {
+            String xml = runXml.xmlText();
+            if (xml.contains("w:drawing") || xml.contains("w:pict")) {
+                // Image is present, but it's already handled by the picture extraction
+                // in processWordExam. Return null to avoid duplicates.
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        return null;
+    }
+
+    /**
+     * Convert an OMML (Office MathML) XmlObject to LaTeX notation.
+     * Uses a recursive descent approach to handle common OMML elements:
+     * fractions, superscripts, subscripts, radicals, etc.
+     */
+    private String convertOmmlToLatex(XmlObject ommlXml) {
+        try {
+            // First try XSLT-based conversion if the stylesheet is available
+            String xsltResult = convertOmmlViaXslt(ommlXml);
+            if (xsltResult != null && !xsltResult.trim().isEmpty()) {
+                return xsltResult;
+            }
+        } catch (Exception e) {
+            // XSLT not available, fall back to manual conversion
+        }
+
+        // Manual recursive conversion for common OMML structures
+        try {
+            return parseOmmlNode(ommlXml);
+        } catch (Exception e) {
+            System.out.println("Warning: Could not convert OMML to LaTeX: " + e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Attempt XSLT-based OMML to MathML to LaTeX conversion.
+     * Returns null if the XSLT stylesheet is not available.
+     */
+    private String convertOmmlViaXslt(XmlObject ommlXml) {
+        try {
+            // Try to load the OMML2MathML stylesheet from classpath
+            InputStream xsltStream = getClass().getResourceAsStream("/OMML2MathML.XSL");
+            if (xsltStream == null) {
+                xsltStream = getClass().getResourceAsStream("/omml2mathml.xsl");
+            }
+            if (xsltStream == null) return null;
+
+            TransformerFactory factory = TransformerFactory.newInstance();
+            Transformer transformer = factory.newTransformer(new StreamSource(xsltStream));
+
+            StringWriter writer = new StringWriter();
+            transformer.transform(
+                new StreamSource(new StringReader(ommlXml.xmlText())),
+                new StreamResult(writer)
+            );
+            xsltStream.close();
+
+            String mathml = writer.toString();
+            // Convert MathML to LaTeX (simple extraction)
+            return convertMathMLToLatex(mathml);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Simple MathML to LaTeX converter for common elements.
+     */
+    private String convertMathMLToLatex(String mathml) {
+        if (mathml == null || mathml.trim().isEmpty()) return "";
+
+        // Strip XML declaration and namespace prefixes
+        String cleaned = mathml.replaceAll("<\\?xml[^>]*\\?>", "")
+                               .replaceAll("xmlns[^\"]*\"[^\"]*\"", "")
+                               .trim();
+
+        // Extract text content from MathML (basic approach)
+        String text = cleaned.replaceAll("<[^>]+>", " ").replaceAll("\\s+", " ").trim();
+        return text.isEmpty() ? null : text;
+    }
+
+    /**
+     * Recursively parse OMML XML nodes and produce LaTeX.
+     * Handles: m:f (fraction), m:sup (superscript), m:sub (subscript),
+     * m:rad (radical), m:d (delimiter/parentheses), m:r (run/text),
+     * m:nary (summation/integral), m:sSup, m:sSub, m:sSubSup, m:func
+     */
+    private String parseOmmlNode(XmlObject node) {
+        if (node == null) return "";
+
+        StringBuilder latex = new StringBuilder();
+        XmlCursor cursor = node.newCursor();
+
+        try {
+            if (cursor.toFirstChild()) {
+                do {
+                    String localName = cursor.getName().getLocalPart();
+                    XmlObject child = cursor.getObject();
+
+                    switch (localName) {
+                        case "f": // Fraction
+                            latex.append(parseOmmlFraction(child));
+                            break;
+                        case "sSup": // Superscript
+                            latex.append(parseOmmlSuperscript(child));
+                            break;
+                        case "sSub": // Subscript
+                            latex.append(parseOmmlSubscript(child));
+                            break;
+                        case "sSubSup": // Sub-superscript
+                            latex.append(parseOmmlSubSup(child));
+                            break;
+                        case "rad": // Radical/square root
+                            latex.append(parseOmmlRadical(child));
+                            break;
+                        case "d": // Delimiters (parentheses, brackets)
+                            latex.append(parseOmmlDelimiter(child));
+                            break;
+                        case "nary": // N-ary (sum, product, integral)
+                            latex.append(parseOmmlNary(child));
+                            break;
+                        case "func": // Function (sin, cos, log, etc.)
+                            latex.append(parseOmmlFunc(child));
+                            break;
+                        case "r": // Text run
+                            latex.append(getOmmlRunText(child));
+                            break;
+                        case "oMath": // Nested math
+                            latex.append(parseOmmlNode(child));
+                            break;
+                        case "e": // Element (base of sup/sub/frac)
+                            latex.append(parseOmmlNode(child));
+                            break;
+                        case "fPr": case "sSupPr": case "sSubPr": case "radPr":
+                        case "dPr": case "naryPr": case "funcPr": case "sSubSupPr":
+                        case "oMathParaPr": case "rPr":
+                            // Properties – skip
+                            break;
+                        default:
+                            // Recurse into unknown elements
+                            String nested = parseOmmlNode(child);
+                            if (!nested.isEmpty()) latex.append(nested);
+                            break;
+                    }
+                } while (cursor.toNextSibling());
+            } else {
+                // Leaf text node
+                String text = cursor.getTextValue();
+                if (text != null && !text.trim().isEmpty()) {
+                    latex.append(text.trim());
+                }
+            }
+        } finally {
+            cursor.dispose();
+        }
+
+        return latex.toString();
+    }
+
+    private String getOmmlRunText(XmlObject runNode) {
+        StringBuilder sb = new StringBuilder();
+        XmlCursor c = runNode.newCursor();
+        try {
+            if (c.toFirstChild()) {
+                do {
+                    String ln = c.getName().getLocalPart();
+                    if ("t".equals(ln)) {
+                        String val = c.getTextValue();
+                        if (val != null) sb.append(val);
+                    }
+                } while (c.toNextSibling());
+            }
+        } finally {
+            c.dispose();
+        }
+        return sb.toString();
+    }
+
+    private String getOmmlChildContent(XmlObject parent, String childName) {
+        XmlCursor c = parent.newCursor();
+        try {
+            if (c.toFirstChild()) {
+                do {
+                    if (childName.equals(c.getName().getLocalPart())) {
+                        return parseOmmlNode(c.getObject());
+                    }
+                } while (c.toNextSibling());
+            }
+        } finally {
+            c.dispose();
+        }
+        return "";
+    }
+
+    private String parseOmmlFraction(XmlObject node) {
+        String num = getOmmlChildContent(node, "num");
+        String den = getOmmlChildContent(node, "den");
+        return "\\frac{" + num + "}{" + den + "}";
+    }
+
+    private String parseOmmlSuperscript(XmlObject node) {
+        String base = getOmmlChildContent(node, "e");
+        String sup = getOmmlChildContent(node, "sup");
+        return base + "^{" + sup + "}";
+    }
+
+    private String parseOmmlSubscript(XmlObject node) {
+        String base = getOmmlChildContent(node, "e");
+        String sub = getOmmlChildContent(node, "sub");
+        return base + "_{" + sub + "}";
+    }
+
+    private String parseOmmlSubSup(XmlObject node) {
+        String base = getOmmlChildContent(node, "e");
+        String sub = getOmmlChildContent(node, "sub");
+        String sup = getOmmlChildContent(node, "sup");
+        return base + "_{" + sub + "}^{" + sup + "}";
+    }
+
+    private String parseOmmlRadical(XmlObject node) {
+        String deg = getOmmlChildContent(node, "deg");
+        String base = getOmmlChildContent(node, "e");
+        if (deg.isEmpty() || "2".equals(deg.trim())) {
+            return "\\sqrt{" + base + "}";
+        }
+        return "\\sqrt[" + deg + "]{" + base + "}";
+    }
+
+    private String parseOmmlDelimiter(XmlObject node) {
+        // Get delimiter characters from properties
+        String begChar = "(";
+        String endChar = ")";
+
+        XmlCursor c = node.newCursor();
+        try {
+            if (c.toFirstChild()) {
+                do {
+                    String ln = c.getName().getLocalPart();
+                    if ("dPr".equals(ln)) {
+                        XmlCursor dc = c.getObject().newCursor();
+                        if (dc.toFirstChild()) {
+                            do {
+                                String pln = dc.getName().getLocalPart();
+                                if ("begChr".equals(pln)) {
+                                    String xml = dc.getObject().xmlText();
+                                    java.util.regex.Matcher m = Pattern.compile("m:val=\"([^\"]+)\"").matcher(xml);
+                                    if (m.find()) begChar = m.group(1);
+                                } else if ("endChr".equals(pln)) {
+                                    String xml = dc.getObject().xmlText();
+                                    java.util.regex.Matcher m = Pattern.compile("m:val=\"([^\"]+)\"").matcher(xml);
+                                    if (m.find()) endChar = m.group(1);
+                                }
+                            } while (dc.toNextSibling());
+                        }
+                        dc.dispose();
+                    }
+                } while (c.toNextSibling());
+            }
+        } finally {
+            c.dispose();
+        }
+
+        // Map special delimiters
+        String leftDelim = mapDelimiter(begChar, true);
+        String rightDelim = mapDelimiter(endChar, false);
+
+        String content = getOmmlChildContent(node, "e");
+        return "\\left" + leftDelim + content + "\\right" + rightDelim;
+    }
+
+    private String mapDelimiter(String ch, boolean isLeft) {
+        if (ch == null || ch.isEmpty()) return isLeft ? "(" : ")";
+        return switch (ch) {
+            case "(", ")" -> ch;
+            case "[", "]" -> ch;
+            case "{" -> "\\{";
+            case "}" -> "\\}";
+            case "|" -> "|";
+            case "‖" -> "\\|";
+            default -> ch;
+        };
+    }
+
+    private String parseOmmlNary(XmlObject node) {
+        // Determine the nary operator (sum, prod, int, etc.)
+        String operator = "\\sum";
+        String subContent = "";
+        String supContent = "";
+
+        XmlCursor c = node.newCursor();
+        try {
+            if (c.toFirstChild()) {
+                do {
+                    String ln = c.getName().getLocalPart();
+                    if ("naryPr".equals(ln)) {
+                        String xml = c.getObject().xmlText();
+                        if (xml.contains("∑") || xml.contains("\\u2211")) operator = "\\sum";
+                        else if (xml.contains("∏") || xml.contains("\\u220F")) operator = "\\prod";
+                        else if (xml.contains("∫") || xml.contains("\\u222B")) operator = "\\int";
+                        else if (xml.contains("∬")) operator = "\\iint";
+                        else if (xml.contains("∮")) operator = "\\oint";
+                    } else if ("sub".equals(ln)) {
+                        subContent = parseOmmlNode(c.getObject());
+                    } else if ("sup".equals(ln)) {
+                        supContent = parseOmmlNode(c.getObject());
+                    }
+                } while (c.toNextSibling());
+            }
+        } finally {
+            c.dispose();
+        }
+
+        String base = getOmmlChildContent(node, "e");
+        StringBuilder sb = new StringBuilder(operator);
+        if (!subContent.isEmpty()) sb.append("_{").append(subContent).append("}");
+        if (!supContent.isEmpty()) sb.append("^{").append(supContent).append("}");
+        sb.append("{").append(base).append("}");
+        return sb.toString();
+    }
+
+    private String parseOmmlFunc(XmlObject node) {
+        String funcName = getOmmlChildContent(node, "fName");
+        String arg = getOmmlChildContent(node, "e");
+
+        // Wrap known function names
+        String latexFunc = switch (funcName.trim().toLowerCase()) {
+            case "sin" -> "\\sin";
+            case "cos" -> "\\cos";
+            case "tan" -> "\\tan";
+            case "log" -> "\\log";
+            case "ln" -> "\\ln";
+            case "lim" -> "\\lim";
+            case "max" -> "\\max";
+            case "min" -> "\\min";
+            default -> "\\mathrm{" + funcName + "}";
+        };
+        return latexFunc + "\\left(" + arg + "\\right)";
+    }
+
+    /**
+     * Parse a Word document used as a separate answer key.
+     * Handles same formats as parseAnswerKeyPdf but for .docx files.
+     */
+    private Map<Integer, String> parseAnswerKeyWord(MultipartFile file) throws IOException {
+        Map<Integer, String> answerKey = new HashMap<>();
+        List<String> lines = new ArrayList<>();
+
+        try (XWPFDocument document = new XWPFDocument(file.getInputStream())) {
+            for (XWPFParagraph paragraph : document.getParagraphs()) {
+                CTP ctp = paragraph.getCTP();
+                String paragraphXml = ctp.xmlText();
+                String lineText;
+
+                if (paragraphXml.contains("m:oMath") || paragraphXml.contains("oMath")) {
+                    lineText = extractTextWithEquations(paragraph,
+                        Paths.get("uploads", "exam-images", "temp"), "temp",
+                        new HashMap<>());
+                } else {
+                    lineText = paragraph.getText();
+                }
+
+                if (lineText != null && !lineText.trim().isEmpty()) {
+                    lines.add(normalizeEquationText(lineText.trim()));
+                }
+            }
+        }
+
+        System.out.println("=== PARSING ANSWER KEY WORD ===");
+        System.out.println("Total lines: " + lines.size());
+
+        // Use the same parsing patterns as the PDF answer key parser
+        Pattern skipPattern = Pattern.compile(
+            "(?i)(page\\s*\\d+|examination\\s+paper|name:|date:|answer\\s+key|confidential)",
+            Pattern.CASE_INSENSITIVE
+        );
+        Pattern questionHeaderPattern = Pattern.compile(
+            "(?i)^(?:question|q)\\s*(\\d+)\\s*(?:\\([^)]*\\))?\\s*:(.*)");
+        Pattern numberedPattern = Pattern.compile("^(\\d+)[.)]\\s+(.+)");
+        Pattern answerLinePattern = Pattern.compile(
+            "(?i)^(?:correct\\s+)?answer\\s*:\\s*(.+)");
+
+        boolean hasDedicatedAnswerLines = lines.stream()
+            .anyMatch(l -> answerLinePattern.matcher(l.trim()).find());
+
+        if (hasDedicatedAnswerLines) {
+            int currentQNum = 0;
+            for (String line : lines) {
+                String trimmed = line.trim();
+                if (skipPattern.matcher(trimmed).find()) continue;
+                if (trimmed.length() < 2) continue;
+
+                Matcher ansMatcher = answerLinePattern.matcher(trimmed);
+                if (ansMatcher.find() && currentQNum > 0) {
+                    String answer = ansMatcher.group(1).trim()
+                        .replaceFirst("^[A-Da-d][.)\\s]\\s*", "").trim();
+                    if (!answer.isEmpty()) answerKey.put(currentQNum, answer);
+                    continue;
+                }
+
+                Matcher qMatcher = questionHeaderPattern.matcher(trimmed);
+                if (qMatcher.find()) {
+                    try { currentQNum = Integer.parseInt(qMatcher.group(1)); }
+                    catch (NumberFormatException ignored) {}
+                    continue;
+                }
+
+                Matcher numMatcher = numberedPattern.matcher(trimmed);
+                if (numMatcher.matches()) {
+                    int qNum = Integer.parseInt(numMatcher.group(1));
+                    String answer = numMatcher.group(2).trim()
+                        .replaceFirst("^[A-Da-d][.)\\s]\\s*", "").trim();
+                    if (!answer.isEmpty()) answerKey.put(qNum, answer);
+                }
+            }
+        } else {
+            int lastQNum = 0;
+            StringBuilder currentAnswer = new StringBuilder();
+            for (String line : lines) {
+                String trimmed = line.trim();
+                if (skipPattern.matcher(trimmed).find()) continue;
+                if (trimmed.length() < 2) continue;
+
+                int qNum = 0;
+                String answer = null;
+                boolean isNewQ = false;
+
+                Matcher qMatcher = questionHeaderPattern.matcher(trimmed);
+                if (qMatcher.find()) {
+                    try { qNum = Integer.parseInt(qMatcher.group(1)); } catch (NumberFormatException e) { continue; }
+                    answer = qMatcher.group(2).trim()
+                        .replaceFirst("^[A-Da-d][.)\\s]\\s*", "").trim();
+                    isNewQ = true;
+                } else {
+                    Matcher numMatcher = numberedPattern.matcher(trimmed);
+                    if (numMatcher.matches()) {
+                        qNum = Integer.parseInt(numMatcher.group(1));
+                        answer = numMatcher.group(2).trim()
+                            .replaceFirst("^[A-Da-d][.)\\s]\\s*", "").trim();
+                        isNewQ = true;
+                    }
+                }
+
+                if (isNewQ) {
+                    if (lastQNum > 0 && currentAnswer.length() > 0) {
+                        answerKey.put(lastQNum, currentAnswer.toString().trim());
+                    }
+                    lastQNum = qNum;
+                    currentAnswer = new StringBuilder(answer != null ? answer : "");
+                } else if (lastQNum > 0) {
+                    currentAnswer.append(" ").append(trimmed);
+                    answerKey.put(lastQNum, currentAnswer.toString().trim());
+                }
+            }
+            if (lastQNum > 0 && currentAnswer.length() > 0) {
+                answerKey.put(lastQNum, currentAnswer.toString().trim());
+            }
+        }
+
+        System.out.println("=== ANSWER KEY PARSED (WORD): " + answerKey.size() + " answers ===");
+        return answerKey;
     }
 
     private String extractAnswerAndShuffle(String block, SecureRandom rand, Map<Integer, String> key, int id) {
