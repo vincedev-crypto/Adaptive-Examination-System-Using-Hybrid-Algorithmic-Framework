@@ -153,6 +153,42 @@
             margin-bottom: 8px;
             border: 1px solid #e3d8c9;
         }
+        .formula-template-btn {
+            width: 100%;
+            text-align: left;
+            border: 1px solid #dfe3ea;
+            background: #fff;
+            border-radius: 10px;
+            padding: 0.55rem 0.7rem;
+        }
+        .formula-template-btn:hover {
+            border-color: #adb5bd;
+            background: #f8f9fa;
+        }
+        .formula-label {
+            display: block;
+            font-size: 0.78rem;
+            color: #495057;
+            margin-bottom: 0.2rem;
+            font-weight: 600;
+        }
+        .formula-preview {
+            display: block;
+            color: #212529;
+            min-height: 1.15rem;
+        }
+        .formula-section-title {
+            font-size: 0.84rem;
+            font-weight: 700;
+            color: #6c757d;
+            margin-bottom: 0.55rem;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+        .formula-palette-note {
+            font-size: 0.8rem;
+            color: #6c757d;
+        }
     </style>
 </head>
 <body class="homepage-page">
@@ -239,8 +275,8 @@
                             <label class="form-label fw-bold d-flex justify-content-between align-items-center">
                                 <span>Question Text *</span>
                                 <div class="d-flex gap-2">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="insertEquationIntoManualField()">
-                                        <i class="bi bi-calculator"></i> Equation
+                                    <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#formulaPaletteModal">
+                                        <i class="bi bi-grid-3x3-gap"></i> Formula Table
                                     </button>
                                     <button type="button" class="btn btn-sm btn-outline-primary" onclick="pasteEquationFromClipboard()">
                                         <i class="bi bi-clipboard2-plus"></i> Paste Formula
@@ -317,6 +353,23 @@
                             <i class="bi bi-plus-lg"></i> Add Question to Exam
                         </button>
                     </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="formulaPaletteModal" tabindex="-1" aria-labelledby="formulaPaletteModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="formulaPaletteModalLabel"><i class="bi bi-grid-3x3-gap me-1"></i>Formula Table</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="formula-palette-note mb-3">
+                        Click any formula to insert it into the active field. Replace placeholders like <strong>a</strong>, <strong>b</strong>, <strong>x</strong>, <strong>n</strong> as needed.
+                    </div>
+                    <div id="formulaPaletteGrid"></div>
                 </div>
             </div>
         </div>
@@ -465,6 +518,74 @@
     // Live LaTeX preview
     let previewDebounce;
     let activeEquationTargetId = 'questionTextarea';
+    const formulaPaletteSections = [
+        {
+            title: 'Structures',
+            items: [
+                { label: 'Fraction', latex: '\\frac{a}{b}' },
+                { label: 'Power', latex: 'a^{n}' },
+                { label: 'Subscript', latex: 'a_{n}' },
+                { label: 'Square Root', latex: '\\sqrt{x}' },
+                { label: 'Nth Root', latex: '\\sqrt[n]{x}' },
+                { label: 'Absolute Value', latex: '\\left|x\\right|' }
+            ]
+        },
+        {
+            title: 'Algebra',
+            items: [
+                { label: 'Quadratic Formula', latex: 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}' },
+                { label: 'Binomial Theorem', latex: '(a+b)^n = \\sum_{k=0}^{n} \\binom{n}{k}a^{n-k}b^k' },
+                { label: 'Difference of Squares', latex: 'a^2-b^2=(a-b)(a+b)' },
+                { label: 'Slope Formula', latex: 'm=\\frac{y_2-y_1}{x_2-x_1}' },
+                { label: 'Distance Formula', latex: 'd=\\sqrt{(x_2-x_1)^2+(y_2-y_1)^2}' },
+                { label: 'Pythagorean Theorem', latex: 'a^2+b^2=c^2' }
+            ]
+        },
+        {
+            title: 'Trigonometry',
+            items: [
+                { label: 'Sine Rule', latex: '\\frac{a}{\\sin A}=\\frac{b}{\\sin B}=\\frac{c}{\\sin C}' },
+                { label: 'Cosine Rule', latex: 'c^2=a^2+b^2-2ab\\cos C' },
+                { label: 'Identity', latex: '\\sin^2x+\\cos^2x=1' },
+                { label: 'Tangent Identity', latex: '\\tan x=\\frac{\\sin x}{\\cos x}' },
+                { label: 'Double Angle', latex: '\\sin(2x)=2\\sin x\\cos x' },
+                { label: 'Euler Formula', latex: 'e^{ix}=\\cos x+i\\sin x' }
+            ]
+        },
+        {
+            title: 'Calculus',
+            items: [
+                { label: 'Derivative', latex: '\\frac{d}{dx}x^n=nx^{n-1}' },
+                { label: 'Product Rule', latex: '(uv)^{\\prime}=u^{\\prime}v+uv^{\\prime}' },
+                { label: 'Quotient Rule', latex: '\\left(\\frac{u}{v}\\right)^{\\prime}=\\frac{u^{\\prime}v-uv^{\\prime}}{v^2}' },
+                { label: 'Chain Rule', latex: '\\frac{dy}{dx}=\\frac{dy}{du}\\cdot\\frac{du}{dx}' },
+                { label: 'Definite Integral', latex: '\\int_a^b f(x)\\,dx' },
+                { label: 'Integration by Parts', latex: '\\int u\\,dv=uv-\\int v\\,du' }
+            ]
+        },
+        {
+            title: 'Statistics & Probability',
+            items: [
+                { label: 'Mean', latex: '\\bar{x}=\\frac{1}{n}\\sum_{i=1}^{n}x_i' },
+                { label: 'Variance', latex: '\\sigma^2=\\frac{1}{N}\\sum_{i=1}^{N}(x_i-\\mu)^2' },
+                { label: 'Standard Deviation', latex: '\\sigma=\\sqrt{\\frac{1}{N}\\sum_{i=1}^{N}(x_i-\\mu)^2}' },
+                { label: 'Combination', latex: '\\binom{n}{r}=\\frac{n!}{r!(n-r)!}' },
+                { label: 'Permutation', latex: 'P(n,r)=\\frac{n!}{(n-r)!}' },
+                { label: 'Normal Distribution', latex: 'f(x)=\\frac{1}{\\sigma\\sqrt{2\\pi}}e^{-\\frac{(x-\\mu)^2}{2\\sigma^2}}' }
+            ]
+        },
+        {
+            title: 'Greek & Symbols',
+            items: [
+                { label: 'Pi', latex: '\\pi' },
+                { label: 'Theta', latex: '\\theta' },
+                { label: 'Alpha', latex: '\\alpha' },
+                { label: 'Beta', latex: '\\beta' },
+                { label: 'Summation', latex: '\\sum_{i=1}^{n}' },
+                { label: 'Infinity', latex: '\\infty' }
+            ]
+        }
+    ];
 
     function setEquationTarget(el) {
         if (el && el.id) {
@@ -489,6 +610,60 @@
 
         inputEl.dispatchEvent(new Event('input', { bubbles: true }));
         inputEl.focus();
+    }
+
+    function renderFormulaPalette() {
+        const grid = document.getElementById('formulaPaletteGrid');
+        if (!grid) return;
+        grid.innerHTML = '';
+
+        formulaPaletteSections.forEach(section => {
+            const sectionWrap = document.createElement('div');
+            sectionWrap.className = 'mb-3';
+
+            const title = document.createElement('div');
+            title.className = 'formula-section-title';
+            title.textContent = section.title;
+            sectionWrap.appendChild(title);
+
+            const row = document.createElement('div');
+            row.className = 'row g-2';
+
+            section.items.forEach(item => {
+                const col = document.createElement('div');
+                col.className = 'col-12 col-md-6 col-lg-4';
+
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'formula-template-btn';
+                btn.setAttribute('data-latex', item.latex);
+                btn.innerHTML = `<span class="formula-label">${item.label}</span><span class="formula-preview">$${item.latex}$</span>`;
+                btn.addEventListener('click', function () {
+                    const target = document.getElementById(activeEquationTargetId) || document.getElementById('questionTextarea');
+                    if (!target) return;
+                    insertAtCursor(target, `$${item.latex}$`);
+                    if (target.id === 'questionTextarea') {
+                        updateMathPreview();
+                    }
+                    const modalEl = document.getElementById('formulaPaletteModal');
+                    const modalInstance = modalEl ? bootstrap.Modal.getInstance(modalEl) : null;
+                    if (modalInstance) {
+                        modalInstance.hide();
+                    }
+                });
+
+                col.appendChild(btn);
+                row.appendChild(col);
+            });
+
+            sectionWrap.appendChild(row);
+            grid.appendChild(sectionWrap);
+        });
+
+        if (window.MathJax && MathJax.typesetPromise) {
+            MathJax.typesetClear([grid]);
+            MathJax.typesetPromise([grid]).catch(err => console.warn('MathJax formula table error:', err));
+        }
     }
 
     function insertEquationIntoManualField() {
@@ -696,6 +871,21 @@
         document.querySelectorAll('.edit-question-type').forEach(selectEl => {
             toggleEditQuestionTypeFields(selectEl);
         });
+
+        renderFormulaPalette();
+
+        const formulaPaletteModal = document.getElementById('formulaPaletteModal');
+        if (formulaPaletteModal) {
+            formulaPaletteModal.addEventListener('shown.bs.modal', function () {
+                if (window.MathJax && MathJax.typesetPromise) {
+                    const grid = document.getElementById('formulaPaletteGrid');
+                    if (grid) {
+                        MathJax.typesetClear([grid]);
+                        MathJax.typesetPromise([grid]).catch(err => console.warn('MathJax formula table refresh error:', err));
+                    }
+                }
+            });
+        }
 
         const questionTextarea = document.getElementById('questionTextarea');
         if (questionTextarea) {
