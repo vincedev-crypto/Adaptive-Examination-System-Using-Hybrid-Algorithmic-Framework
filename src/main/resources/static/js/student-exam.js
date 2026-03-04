@@ -91,6 +91,38 @@ function showSaveIndicator() {
     }, 1500);
 }
 
+function hasMathDelimiters(text) {
+    return /\$|\\\(|\\\[/.test(text || '');
+}
+
+function looksLikeFormulaText(text) {
+    if (!text) return false;
+    const sample = text.trim();
+    if (!sample) return false;
+
+    const hasLatexCommand = /\\[a-zA-Z]+/.test(sample);
+    const hasUnicodeMath = /[≤≥≠±∞πθαβγΔ∫∑∏√⇒→∘⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉]/.test(sample);
+    const hasMathPattern = /[=+\-*/^_]/.test(sample);
+    const hasVariableStyle = /\b[a-zA-Z]\s*(\^|_|=|\+|\-|\*|\/)/.test(sample);
+
+    const tokenCount = sample.split(/\s+/).filter(Boolean).length;
+    const operatorCount = (sample.match(/[=+\-*/^_]/g) || []).length;
+    const sentenceLike = tokenCount > 10 && operatorCount < 3 && !hasLatexCommand && !hasUnicodeMath;
+
+    if (sentenceLike) return false;
+    return hasLatexCommand || hasUnicodeMath || hasMathPattern || hasVariableStyle;
+}
+
+function renderMathIfNeeded(text) {
+    const cleaned = (text || '').trim();
+    if (!cleaned) return '';
+    if (hasMathDelimiters(cleaned)) return cleaned;
+    if (looksLikeFormulaText(cleaned)) {
+        return `\\(${cleaned}\\)`;
+    }
+    return cleaned;
+}
+
 /**
  * Display current question
  */
@@ -150,7 +182,7 @@ function displayQuestion() {
     if (isTextInput) {
         // Text-input question (prefix hidden from student)
         html += `
-            <p class="lead mb-2">${question}</p>
+            <p class="lead mb-2">${renderMathIfNeeded(question)}</p>
             ${imagesHtml}
             <div class="form-group">
                 <label class="form-label fw-bold">Your Answer:</label>
@@ -165,10 +197,11 @@ function displayQuestion() {
         // Multiple-choice question
         const lines = question.split('\n');
         const questionText = lines[0];
+        const renderedQuestionText = renderMathIfNeeded(questionText);
         const choices = lines.slice(1).filter(line => line.trim());
         
         html += `
-            <p class="lead mb-2">${questionText}</p>
+            <p class="lead mb-2">${renderedQuestionText}</p>
             ${imagesHtml}
             <div class="choices">
         `;
@@ -176,12 +209,13 @@ function displayQuestion() {
         choices.forEach((choice, idx) => {
             const choiceLetter = choice.split(')')[0].trim();
             const choiceText = choice.substring(choice.indexOf(')') + 1).trim();
+            const renderedChoiceText = renderMathIfNeeded(choiceText);
             const isSelected = answers['q' + questionNumber] === choiceText;
             
             html += `
                 <button type="button" class="btn choice-btn w-100 ${isSelected ? 'selected' : ''}" 
                         onclick="selectAnswer(${questionNumber}, '${choiceText.replace(/'/g, "\\'")}', this)">
-                    <strong>${choiceLetter})</strong> ${choiceText}
+                    <strong>${choiceLetter})</strong> ${renderedChoiceText}
                 </button>
             `;
         });

@@ -285,15 +285,15 @@
                             </label>
                             <textarea class="form-control" name="questionText" id="questionTextarea" rows="4" 
                                       placeholder="Enter the question text..." required
-                                      oninput="updateMathPreview()" onfocus="setEquationTarget(this)"></textarea>
-                            <small class="text-muted d-block mt-1">Inserts into the active field (Question Text, Choices, or Correct Answer)</small>
+                                      oninput="updateMathPreview()" onfocus="setEquationTarget(this)" spellcheck="false"></textarea>
+                            <small class="text-muted d-block mt-1">Inserts into the active field (Question Text, Choices, or Correct Answer). You can also paste formula directly with Ctrl+V.</small>
                             <div class="mq-help mt-2">
                                 <div>For multiple choice questions, include all options (A, B, C, D, etc.) in the question text.</div>
                                 <div class="mt-1"><strong>Supported formats</strong></div>
                                 <div>• Images: <code>&lt;img src="URL" alt="description"&gt;</code></div>
                                 <div>• Videos: <code>&lt;video src="URL" controls&gt;&lt;/video&gt;</code></div>
                                 <div>• Or upload media using the file pickers below</div>
-                                <div>• Equations (inline): <code>$x^2 + y^2 = r^2$</code> or <code>\(x^2\)</code></div>
+                                <div>• Equations (inline): <code>x^2 + y^2 = r^2</code>, <code>$x^2 + y^2 = r^2$</code> or <code>\(x^2\)</code></div>
                                 <div>• Equations (block): <code>$$\frac{a}{b}$$</code> or <code>\[\int_0^\infty\]</code></div>
                                 <div>• Paste Formula supports copied equation text (Google/Docs/Wikipedia) and converts common symbols</div>
                             </div>
@@ -451,7 +451,7 @@
 
                                         <div class="col-12">
                                             <label class="form-label small fw-semibold mb-1">Question Text</label>
-                                            <textarea class="form-control form-control-sm" name="questionText" rows="3" required th:text="${question}"></textarea>
+                                            <textarea class="form-control form-control-sm" name="questionText" rows="3" required th:text="${question}" spellcheck="false"></textarea>
                                         </div>
 
                                         <div class="col-md-4">
@@ -518,6 +518,7 @@
     // Live LaTeX preview
     let previewDebounce;
     let activeEquationTargetId = 'questionTextarea';
+    let activeEquationTarget = null;
     const formulaPaletteSections = [
         {
             title: 'Structures',
@@ -588,13 +589,41 @@
     ];
 
     function setEquationTarget(el) {
-        if (el && el.id) {
+        if (!el) return;
+        activeEquationTarget = el;
+        if (el.id) {
             activeEquationTargetId = el.id;
         }
     }
 
+    function getActiveEquationTarget() {
+        if (activeEquationTarget && document.body.contains(activeEquationTarget)) {
+            return activeEquationTarget;
+        }
+        return document.getElementById(activeEquationTargetId) || document.getElementById('questionTextarea');
+    }
+
     function insertAtCursor(inputEl, text) {
         if (!inputEl) return;
+
+        if (inputEl.isContentEditable) {
+            inputEl.focus();
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                range.deleteContents();
+                const textNode = document.createTextNode(text);
+                range.insertNode(textNode);
+                range.setStartAfter(textNode);
+                range.setEndAfter(textNode);
+                selection.removeAllRanges();
+                selection.addRange(range);
+            } else {
+                inputEl.textContent = (inputEl.textContent || '') + text;
+            }
+            inputEl.dispatchEvent(new Event('input', { bubbles: true }));
+            return;
+        }
 
         if (typeof inputEl.selectionStart === 'number' && typeof inputEl.selectionEnd === 'number') {
             const start = inputEl.selectionStart;
@@ -639,9 +668,9 @@
                 btn.setAttribute('data-latex', item.latex);
                 btn.innerHTML = `<span class="formula-label">${item.label}</span><span class="formula-preview">$${item.latex}$</span>`;
                 btn.addEventListener('click', function () {
-                    const target = document.getElementById(activeEquationTargetId) || document.getElementById('questionTextarea');
+                    const target = getActiveEquationTarget();
                     if (!target) return;
-                    insertAtCursor(target, `$${item.latex}$`);
+                    insertAtCursor(target, item.latex);
                     if (target.id === 'questionTextarea') {
                         updateMathPreview();
                     }
@@ -667,7 +696,7 @@
     }
 
     function insertEquationIntoManualField() {
-        const target = document.getElementById(activeEquationTargetId) || document.getElementById('questionTextarea');
+        const target = getActiveEquationTarget();
         if (!target) return;
 
         const latex = window.prompt('Enter equation in LaTeX format (without $ delimiters):\nExample: \\frac{a}{b}=c');
@@ -676,7 +705,7 @@
         const cleaned = latex.trim();
         if (!cleaned) return;
 
-        insertAtCursor(target, `$${cleaned}$`);
+        insertAtCursor(target, cleaned);
 
         if (target.id === 'questionTextarea') {
             updateMathPreview();
@@ -686,58 +715,30 @@
     function normalizeEquationInput(raw) {
         if (!raw) return '';
 
-        let text = raw.trim();
-        const symbolMap = {
-            '×': '\\times',
-            '÷': '\\div',
-            '≤': '\\le',
-            '≥': '\\ge',
-            '≠': '\\ne',
-            '±': '\\pm',
-            '∞': '\\infty',
-            'π': '\\pi',
-            'θ': '\\theta',
-            'α': '\\alpha',
-            'β': '\\beta',
-            'γ': '\\gamma',
-            'Δ': '\\Delta',
-            '∫': '\\int',
-            '∑': '\\sum',
-            '∏': '\\prod',
-            '√': '\\sqrt{}'
-        };
-
-        Object.keys(symbolMap).forEach(symbol => {
-            text = text.split(symbol).join(symbolMap[symbol]);
-        });
-
-        const superscriptMap = {
-            '⁰':'0','¹':'1','²':'2','³':'3','⁴':'4','⁵':'5','⁶':'6','⁷':'7','⁸':'8','⁹':'9',
-            '⁺':'+','⁻':'-','⁼':'=','⁽':'(','⁾':')','ⁿ':'n'
-        };
-        const subscriptMap = {
-            '₀':'0','₁':'1','₂':'2','₃':'3','₄':'4','₅':'5','₆':'6','₇':'7','₈':'8','₉':'9',
-            '₊':'+','₋':'-','₌':'=','₍':'(','₎':')'
-        };
-
-        text = text.replace(/[⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿ]+/g, (group) => {
-            const converted = Array.from(group).map(ch => superscriptMap[ch] || ch).join('');
-            return `^{${converted}}`;
-        });
-
-        text = text.replace(/[₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎]+/g, (group) => {
-            const converted = Array.from(group).map(ch => subscriptMap[ch] || ch).join('');
-            return `_{${converted}}`;
-        });
-
-        return text;
+        return raw
+            .trim()
+            .replace(/\u00A0/g, ' ')
+            .replace(/\u200B/g, '');
     }
 
     function toInlineLatex(text) {
         const cleaned = (text || '').trim();
         if (!cleaned) return '';
-        const alreadyLatex = /^\$.*\$$/.test(cleaned) || /^\\\(.*\\\)$/.test(cleaned);
-        return alreadyLatex ? cleaned : `$${cleaned}$`;
+        return cleaned;
+    }
+
+    function hasMathDelimiters(text) {
+        return /\$|\\\(|\\\[/.test(text || '');
+    }
+
+    function toPreviewMath(text) {
+        const cleaned = (text || '').trim();
+        if (!cleaned) return '';
+        if (hasMathDelimiters(cleaned)) return cleaned;
+        if (looksLikeEquation(cleaned)) {
+            return `\\(${cleaned}\\)`;
+        }
+        return cleaned;
     }
 
     function looksLikeEquation(text) {
@@ -745,13 +746,27 @@
         const sample = text.trim();
         if (!sample) return false;
 
-        const mathPattern = /[=+\-*/^]|\\frac|\\sqrt|\\int|\\sum|\\pi|[≤≥≠±∞πθαβγΔ∫∑∏√]|[⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉]/;
+        const hasLatexCommand = /\\[a-zA-Z]+/.test(sample);
+        const hasUnicodeMath = /[≤≥≠±∞πθαβγΔ∫∑∏√⇒→∘⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉]/.test(sample);
+        const mathPattern = /[=+\-*/^_]|\\frac|\\sqrt|\\int|\\sum|\\pi|\\theta|\\alpha|\\beta|\\gamma/;
         const hasVariableStyle = /\b[a-zA-Z]\s*(\^|_|=|\+|\-|\*|\/)/.test(sample);
-        return mathPattern.test(sample) || hasVariableStyle;
+        const tokenCount = sample.split(/\s+/).filter(Boolean).length;
+        const operatorCount = (sample.match(/[=+\-*/^_]/g) || []).length;
+        const sentenceLike = tokenCount > 10 && operatorCount < 3 && !hasLatexCommand && !hasUnicodeMath;
+
+        if (sentenceLike) return false;
+        return hasLatexCommand || hasUnicodeMath || mathPattern.test(sample) || hasVariableStyle;
+    }
+
+    function shouldAutoConvertFormulaPaste(text) {
+        if (!text || !text.trim()) return false;
+        const sample = text.trim();
+        if (sample.length > 300) return false;
+        return looksLikeEquation(sample);
     }
 
     async function pasteEquationFromClipboard() {
-        const target = document.getElementById(activeEquationTargetId) || document.getElementById('questionTextarea');
+        const target = getActiveEquationTarget();
         if (!target) return;
 
         let source = '';
@@ -797,15 +812,15 @@
         clearTimeout(previewDebounce);
         previewDebounce = setTimeout(function() {
             const raw = document.getElementById('questionTextarea').value;
-            const hasLatex = /\$|\\\(|\\\[/.test(raw);
+            const shouldRender = hasMathDelimiters(raw) || looksLikeEquation(raw);
             const container = document.getElementById('mathPreviewContainer');
             const preview = document.getElementById('mathPreview');
-            if (!hasLatex || !raw.trim()) {
+            if (!raw.trim() || !shouldRender) {
                 container.style.display = 'none';
                 return;
             }
             container.style.display = 'block';
-            preview.innerHTML = raw;
+            preview.innerHTML = toPreviewMath(raw);
             if (window.MathJax && MathJax.typesetPromise) {
                 MathJax.typesetClear([preview]);
                 MathJax.typesetPromise([preview]).catch(err => console.warn('MathJax preview error:', err));
@@ -887,19 +902,30 @@
             });
         }
 
-        const questionTextarea = document.getElementById('questionTextarea');
-        if (questionTextarea) {
-            questionTextarea.addEventListener('paste', function (event) {
-                const pastedText = event.clipboardData ? event.clipboardData.getData('text') : '';
-                if (!looksLikeEquation(pastedText)) return;
+        document.addEventListener('focusin', function (event) {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            if (target.matches('textarea[name="questionText"], #questionTextarea, #addChoicesText, #addAnswerInput, input[name="answer"], [contenteditable="true"]')) {
+                setEquationTarget(target);
+            }
+        });
 
-                event.preventDefault();
-                const normalized = normalizeEquationInput(pastedText);
-                const latex = toInlineLatex(normalized);
-                insertAtCursor(questionTextarea, latex || pastedText);
+        document.addEventListener('paste', function (event) {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            if (!target.matches('textarea[name="questionText"], #questionTextarea, [contenteditable="true"]')) return;
+
+            const pastedText = event.clipboardData ? event.clipboardData.getData('text') : '';
+            if (!shouldAutoConvertFormulaPaste(pastedText)) return;
+
+            event.preventDefault();
+            const normalized = normalizeEquationInput(pastedText);
+            const latex = toInlineLatex(normalized);
+            insertAtCursor(target, latex || pastedText);
+            if (target.id === 'questionTextarea') {
                 updateMathPreview();
-            });
-        }
+            }
+        });
     });
 </script>
 

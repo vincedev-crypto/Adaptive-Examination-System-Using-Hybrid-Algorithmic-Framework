@@ -904,14 +904,73 @@ public class HomepageController {
             return "";
         }
 
-        String formatted = questionText
-            .replaceFirst("(?i)^\\[TEXT_INPUT\\]\\s*", "")
+        String normalized = questionText
+            .replaceFirst("(?i)^\\[TEXT_INPUT\\]\\s*", "");
+
+        String rendered = Arrays.stream(normalized.split("\\r?\\n", -1))
+            .map(this::wrapLineForMathJaxIfNeeded)
+            .collect(Collectors.joining("\n"));
+
+        String formatted = rendered
             .replaceAll("(?i)\\[IMG:([^\\]]+)\\]",
                 "<div class=\"question-media my-2\"><img src=\"$1\" alt=\"Question image\" class=\"img-fluid rounded border\"/></div>")
             .replaceAll("(?i)\\[VID:([^\\]]+)\\]",
                 "<div class=\"question-media my-2\"><video src=\"$1\" controls class=\"w-100 rounded border\" style=\"max-height:320px;\"></video></div>");
 
         return formatted.replace("\n", "<br>");
+    }
+
+    private String wrapLineForMathJaxIfNeeded(String line) {
+        if (line == null) {
+            return "";
+        }
+
+        String trimmed = line.trim();
+        if (trimmed.isEmpty()) {
+            return line;
+        }
+        if (trimmed.matches("(?i)^\\[(IMG|VID):.*\\]$")) {
+            return line;
+        }
+        if (containsMathDelimiters(trimmed)) {
+            return line;
+        }
+        if (!looksLikeFormulaLine(trimmed)) {
+            return line;
+        }
+
+        int start = line.indexOf(trimmed);
+        if (start < 0) {
+            return "$" + trimmed + "$";
+        }
+        int end = start + trimmed.length();
+        return line.substring(0, start) + "$" + trimmed + "$" + line.substring(end);
+    }
+
+    private boolean containsMathDelimiters(String text) {
+        return text.contains("$") || text.contains("\\(") || text.contains("\\[");
+    }
+
+    private boolean looksLikeFormulaLine(String text) {
+        if (text == null || text.isBlank()) {
+            return false;
+        }
+
+        boolean hasLatexCommand = Pattern.compile("\\\\[a-zA-Z]+", Pattern.CASE_INSENSITIVE).matcher(text).find();
+        boolean hasUnicodeMath = Pattern.compile("[≤≥≠±∞πθαβγΔ∫∑∏√⇒→∘⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉]").matcher(text).find();
+        boolean hasMathSymbol = Pattern.compile("[=+\\-*/^_]").matcher(text).find();
+        boolean hasVariablePattern = Pattern.compile("\\b[a-zA-Z]\\s*(\\^|_|=|\\+|\\-|\\*|/)").matcher(text).find();
+
+        String[] tokens = text.trim().split("\\s+");
+        int tokenCount = tokens.length;
+        long operatorCount = text.chars().filter(ch -> "=+-*/^_".indexOf(ch) >= 0).count();
+        boolean sentenceLike = tokenCount > 10 && operatorCount < 3 && !hasLatexCommand && !hasUnicodeMath;
+
+        if (sentenceLike) {
+            return false;
+        }
+
+        return hasLatexCommand || hasUnicodeMath || hasMathSymbol || hasVariablePattern;
     }
 
     @PostMapping("/enroll-student")
